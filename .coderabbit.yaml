@@ -10,6 +10,9 @@ reviews:
     base_branches:
       - main
 
+  # Auto-resolve comments when the related code is updated
+  auto_resolve_threads: true
+
   # Review profile - balanced between thoroughness and noise
   profile: chill
 
