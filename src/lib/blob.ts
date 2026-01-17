@@ -3,8 +3,8 @@ import { list } from '@vercel/blob';
 // Cache for blob content to avoid repeated fetches
 const blobCache = new Map<string, string>();
 
-// Content files are stored under the content/ prefix in Vercel Blob
-const BLOB_PATH_PREFIX = 'content/';
+// Content files are stored under damilola.tech/content/ in Vercel Blob
+const BLOB_PATH_PREFIX = 'damilola.tech/content/';
 
 export interface FetchBlobOptions {
   /** If true, throws an error when the blob is not found. Build will fail. */
