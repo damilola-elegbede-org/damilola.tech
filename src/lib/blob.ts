@@ -1,5 +1,10 @@
+import { list } from '@vercel/blob';
+
 // Cache for blob content to avoid repeated fetches
 const blobCache = new Map<string, string>();
+
+// Content files are stored under the content/ prefix in Vercel Blob
+const BLOB_PATH_PREFIX = 'content/';
 
 export interface FetchBlobOptions {
   /** If true, throws an error when the blob is not found. Build will fail. */
@@ -7,9 +12,8 @@ export interface FetchBlobOptions {
 }
 
 /**
- * Fetch content from Vercel Blob storage
- * Note: For local development, content files should be uploaded to Vercel Blob
- * or you can use a local API route to serve the content
+ * Fetch content from Vercel Blob storage using the @vercel/blob SDK.
+ * Files are stored under the content/ prefix (e.g., content/chatbot-system-prompt.md)
  */
 export async function fetchBlob(
   filename: string,
@@ -20,36 +24,48 @@ export async function fetchBlob(
     return blobCache.get(filename)!;
   }
 
-  // Fetch from Vercel Blob
-  try {
-    const blobStoreId = process.env.VERCEL_BLOB_STORE_ID;
-    const token = process.env.BLOB_READ_WRITE_TOKEN;
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
 
-    if (!blobStoreId || !token) {
-      const message = `Blob configuration missing for ${filename}`;
+  if (!token) {
+    const message = `BLOB_READ_WRITE_TOKEN not configured for ${filename}`;
+    if (options?.required) {
+      throw new Error(`${message}. Build cannot proceed.`);
+    }
+    console.warn(message);
+    return '';
+  }
+
+  try {
+    // List blobs with the specific prefix to find our file
+    const blobPath = `${BLOB_PATH_PREFIX}${filename}`;
+    const { blobs } = await list({
+      prefix: blobPath,
+      token,
+    });
+
+    // Find exact match (list returns all files with prefix)
+    const blob = blobs.find((b) => b.pathname === blobPath);
+
+    if (!blob) {
+      const message = `Blob not found: ${blobPath}`;
       if (options?.required) {
-        throw new Error(`${message}. Build cannot proceed.`);
+        throw new Error(`Required blob file not found: ${filename}. Build cannot proceed.`);
       }
       console.warn(message);
       return '';
     }
 
-    const blobUrl = `https://${blobStoreId}.blob.vercel-storage.com/${filename}`;
+    // Fetch the content from the blob's public URL
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    const response = await fetch(blobUrl, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      signal: controller.signal,
-    });
+    const response = await fetch(blob.url, { signal: controller.signal });
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      const message = `Blob not found or error: ${filename} (${response.status})`;
+      const message = `Failed to fetch blob content: ${filename} (${response.status})`;
       if (options?.required) {
-        throw new Error(`Required blob file not found: ${filename}. Build cannot proceed.`);
+        throw new Error(message);
       }
       console.warn(message);
       return '';

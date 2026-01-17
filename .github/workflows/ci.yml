@@ -53,7 +53,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      VERCEL_BLOB_STORE_ID: ${{ secrets.VERCEL_BLOB_STORE_ID }}
       BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
     steps:
       - uses: actions/checkout@v4
