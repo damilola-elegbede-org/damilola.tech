@@ -52,13 +52,16 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
   });
 
   // Load stored messages after hydration (fixes SSR mismatch)
+  // Uses queueMicrotask to batch state updates and avoid cascading render warnings
   useEffect(() => {
     const stored = loadSession();
-    if (stored && stored.length > 0) {
-      setMessages(stored);
-      setHasInteracted(true);
-    }
-    setIsHydrated(true);
+    queueMicrotask(() => {
+      if (stored && stored.length > 0) {
+        setMessages(stored);
+        setHasInteracted(true);
+      }
+      setIsHydrated(true);
+    });
   }, [setMessages]);
 
   // Persist messages to localStorage only when not streaming (avoids excessive writes)
