@@ -1,3 +1,10 @@
+export interface AiContext {
+  situation: string;
+  approach: string;
+  technicalWork?: string;
+  lessonsLearned: string;
+}
+
 export interface Experience {
   id: string;
   company: string;
@@ -7,6 +14,7 @@ export interface Experience {
   endDate: string;
   highlights: string[];
   expanded?: boolean;
+  aiContext?: AiContext;
 }
 
 export interface Skill {

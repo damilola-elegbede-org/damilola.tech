@@ -54,47 +54,71 @@ export function ExperienceCard({ experience }: ExperienceCardProps) {
         </button>
       )}
 
-      {/* AI Context Toggle */}
-      <button
-        type="button"
-        onClick={() => setIsAiContextOpen(!isAiContextOpen)}
-        className="mt-6 flex items-center gap-2 text-sm text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-accent)]"
-        aria-expanded={isAiContextOpen}
-        aria-controls={`ai-context-${experience.id}`}
-      >
-        <span className="text-[var(--color-accent)]">✨</span>
-        <span>View AI Context</span>
-        <svg
-          className={cn(
-            'h-4 w-4 transition-transform',
-            isAiContextOpen && 'rotate-180'
-          )}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 9l-7 7-7-7"
-          />
-        </svg>
-      </button>
+      {/* AI Context Toggle - only shown if aiContext data exists */}
+      {experience.aiContext && (
+        <>
+          <button
+            type="button"
+            onClick={() => setIsAiContextOpen(!isAiContextOpen)}
+            className="mt-6 flex items-center gap-2 text-sm text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-accent)]"
+            aria-expanded={isAiContextOpen}
+            aria-controls={`ai-context-${experience.id}`}
+          >
+            <span className="text-[var(--color-accent)]">✨</span>
+            <span>View AI Context</span>
+            <svg
+              className={cn(
+                'h-4 w-4 transition-transform',
+                isAiContextOpen && 'rotate-180'
+              )}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          </button>
 
-      {/* AI Context Content */}
-      {isAiContextOpen && (
-        <div
-          id={`ai-context-${experience.id}`}
-          className="mt-4 rounded-lg bg-[var(--color-bg-alt)] p-4 text-sm text-[var(--color-text-muted)]"
-        >
-          <p>
-            Ask the AI chatbot for deeper insights about this role, including
-            specific projects, challenges overcome, technologies used, and
-            impact metrics. The AI has access to detailed STAR stories and
-            context not shown here.
-          </p>
-        </div>
+          {/* AI Context Content */}
+          {isAiContextOpen && (
+            <div
+              id={`ai-context-${experience.id}`}
+              className="mt-4 space-y-4 rounded-lg bg-[var(--color-bg-alt)] p-4 text-sm"
+            >
+              <div>
+                <h4 className="font-semibold text-[var(--color-text)]">Situation</h4>
+                <p className="mt-1 text-[var(--color-text-muted)]">
+                  {experience.aiContext.situation}
+                </p>
+              </div>
+              <div>
+                <h4 className="font-semibold text-[var(--color-text)]">Approach</h4>
+                <p className="mt-1 text-[var(--color-text-muted)]">
+                  {experience.aiContext.approach}
+                </p>
+              </div>
+              {experience.aiContext.technicalWork && (
+                <div>
+                  <h4 className="font-semibold text-[var(--color-text)]">Technical Work</h4>
+                  <p className="mt-1 text-[var(--color-text-muted)]">
+                    {experience.aiContext.technicalWork}
+                  </p>
+                </div>
+              )}
+              <div>
+                <h4 className="font-semibold text-[var(--color-text)]">Lessons Learned</h4>
+                <p className="mt-1 text-[var(--color-text-muted)]">
+                  {experience.aiContext.lessonsLearned}
+                </p>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
