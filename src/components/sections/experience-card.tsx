@@ -34,7 +34,7 @@ export function ExperienceCard({ experience }: ExperienceCardProps) {
       {/* Highlights */}
       <ul className="space-y-3">
         {displayedHighlights.map((highlight, i) => (
-          <li key={i} className="flex items-start text-[var(--color-text)]">
+          <li key={`${experience.id}-highlight-${i}`} className="flex items-start text-[var(--color-text)]">
             <span className="mr-3 mt-0.5 flex-shrink-0 text-[var(--color-accent)]">›</span>
             <span>{highlight}</span>
           </li>
@@ -74,6 +74,7 @@ export function ExperienceCard({ experience }: ExperienceCardProps) {
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
+              aria-hidden="true"
             >
               <path
                 strokeLinecap="round"
