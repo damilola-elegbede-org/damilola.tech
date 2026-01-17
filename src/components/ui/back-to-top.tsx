@@ -44,7 +44,6 @@ export function BackToTop({ className, showAfter = 400 }: BackToTopProps) {
         className
       )}
       aria-label="Back to top"
-      aria-hidden={!isVisible}
       tabIndex={isVisible ? 0 : -1}
     >
       <svg

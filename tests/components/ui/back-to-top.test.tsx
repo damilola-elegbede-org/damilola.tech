@@ -19,6 +19,7 @@ describe('BackToTop', () => {
     render(<BackToTop />);
     const button = screen.getByRole('button', { name: /back to top/i });
     expect(button).toHaveClass('opacity-0');
+    expect(button).toHaveAttribute('tabindex', '-1');
   });
 
   it('becomes visible when scrolled past threshold', () => {
