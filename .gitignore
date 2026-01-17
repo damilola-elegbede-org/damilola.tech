@@ -49,6 +49,9 @@ yarn-error.log*
 # private career content (stored in Vercel Blob)
 /content/
 
+# generated files (built at deploy time)
+src/lib/generated/
+
 # vercel
 .vercel
 

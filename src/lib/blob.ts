@@ -1,12 +1,20 @@
 // Cache for blob content to avoid repeated fetches
 const blobCache = new Map<string, string>();
 
+export interface FetchBlobOptions {
+  /** If true, throws an error when the blob is not found. Build will fail. */
+  required?: boolean;
+}
+
 /**
  * Fetch content from Vercel Blob storage
  * Note: For local development, content files should be uploaded to Vercel Blob
  * or you can use a local API route to serve the content
  */
-export async function fetchBlob(filename: string): Promise<string> {
+export async function fetchBlob(
+  filename: string,
+  options?: FetchBlobOptions
+): Promise<string> {
   // Check cache first
   if (blobCache.has(filename)) {
     return blobCache.get(filename)!;
@@ -18,7 +26,11 @@ export async function fetchBlob(filename: string): Promise<string> {
     const token = process.env.BLOB_READ_WRITE_TOKEN;
 
     if (!blobStoreId || !token) {
-      console.warn(`Blob configuration missing for ${filename}`);
+      const message = `Blob configuration missing for ${filename}`;
+      if (options?.required) {
+        throw new Error(`${message}. Build cannot proceed.`);
+      }
+      console.warn(message);
       return '';
     }
 
@@ -35,7 +47,11 @@ export async function fetchBlob(filename: string): Promise<string> {
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      console.warn(`Blob not found or error: ${filename} (${response.status})`);
+      const message = `Blob not found or error: ${filename} (${response.status})`;
+      if (options?.required) {
+        throw new Error(`Required blob file not found: ${filename}. Build cannot proceed.`);
+      }
+      console.warn(message);
       return '';
     }
 
@@ -43,6 +59,9 @@ export async function fetchBlob(filename: string): Promise<string> {
     blobCache.set(filename, content);
     return content;
   } catch (error) {
+    if (options?.required) {
+      throw error;
+    }
     console.error(`Error fetching blob ${filename}:`, error);
     return '';
   }
@@ -56,7 +75,8 @@ export function clearBlobCache(): void {
 }
 
 /**
- * Fetch all reference materials for the AI chatbot
+ * Fetch all reference materials for the AI chatbot (legacy)
+ * @deprecated Use fetchPromptTemplate() and fetchAllContent() instead
  */
 export async function fetchAllReferenceMaterials(): Promise<{
   resume: string;
@@ -72,4 +92,52 @@ export async function fetchAllReferenceMaterials(): Promise<{
   ]);
 
   return { resume, starStories, leadership, technical };
+}
+
+/**
+ * Fetch the system prompt template from Vercel Blob.
+ * This is a REQUIRED file - build will fail if it's missing.
+ */
+export async function fetchPromptTemplate(): Promise<string> {
+  return fetchBlob('chatbot-system-prompt.md', { required: true });
+}
+
+export interface ContentFiles {
+  starStories: string;
+  resume: string;
+  leadershipPhilosophy: string;
+  technicalExpertise: string;
+  verilyFeedback: string;
+  anecdotes: string;
+}
+
+/**
+ * Fetch all content files for placeholder replacement.
+ * These files are optional - graceful degradation if missing.
+ */
+export async function fetchAllContent(): Promise<ContentFiles> {
+  const [
+    starStories,
+    resume,
+    leadershipPhilosophy,
+    technicalExpertise,
+    verilyFeedback,
+    anecdotes,
+  ] = await Promise.all([
+    fetchBlob('star-stories.json'),
+    fetchBlob('resume-full.json'),
+    fetchBlob('leadership-philosophy.md'),
+    fetchBlob('technical-expertise.md'),
+    fetchBlob('verily-feedback.md'),
+    fetchBlob('anecdotes.md'),
+  ]);
+
+  return {
+    starStories,
+    resume,
+    leadershipPhilosophy,
+    technicalExpertise,
+    verilyFeedback,
+    anecdotes,
+  };
 }
