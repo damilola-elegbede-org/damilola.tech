@@ -1,0 +1,96 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+language: en-US
+
+reviews:
+  # Enable automatic reviews on PRs
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+
+  # Auto-resolve comments when the related code is updated
+  auto_resolve_threads: true
+
+  # Review profile - balanced between thoroughness and noise
+  profile: chill
+
+  # Request changes for high-severity issues only
+  request_changes_workflow: false
+
+  # Focus areas for this project
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  sequence_diagrams: false
+
+  # Path-based review instructions
+  path_instructions:
+    - path: "src/app/api/**"
+      instructions: |
+        Focus on:
+        - Input validation and sanitization
+        - Error handling and appropriate status codes
+        - Rate limiting considerations
+        - Security vulnerabilities (injection, auth issues)
+        - Edge runtime compatibility
+
+    - path: "src/components/**"
+      instructions: |
+        Focus on:
+        - Accessibility (ARIA attributes, keyboard navigation, screen reader support)
+        - React best practices (hooks usage, memo optimization)
+        - Component prop types and defaults
+        - Responsive design considerations
+
+    - path: "src/lib/**"
+      instructions: |
+        Focus on:
+        - Type safety and error handling
+        - Performance implications
+        - Proper async/await patterns
+        - Edge cases and null checks
+
+    - path: "**/*.test.{ts,tsx}"
+      instructions: |
+        Focus on:
+        - Test coverage for edge cases
+        - Proper mocking and isolation
+        - Readable test descriptions
+        - Avoid testing implementation details
+
+    - path: "e2e/**"
+      instructions: |
+        Focus on:
+        - User journey completeness
+        - Appropriate selectors (prefer data-testid, roles)
+        - Flakiness prevention (proper waits, stable selectors)
+
+  # Files/patterns to ignore
+  path_filters:
+    - "!**/*.lock"
+    - "!**/package-lock.json"
+    - "!**/*.svg"
+    - "!**/node_modules/**"
+    - "!**/.next/**"
+    - "!**/coverage/**"
+    - "!**/*.ico"
+
+# Chat configuration for interactive reviews
+chat:
+  auto_reply: true
+
+# Early access features
+early_access: false
+
+# Knowledge base for project context
+knowledge_base:
+  opt_out: false
+  learnings:
+    scope: auto
+  issues:
+    scope: auto
+  pull_requests:
+    scope: auto
