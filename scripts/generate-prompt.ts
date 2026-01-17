@@ -66,8 +66,12 @@ async function generatePrompt(): Promise<void> {
 
   let prompt = template;
   for (const [placeholder, value] of Object.entries(replacements)) {
-    // Use global regex to replace all occurrences of each placeholder
-    prompt = prompt.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), value);
+    // Use global regex with replacer function to avoid $-pattern substitution issues
+    // (e.g., "$100" in content would be corrupted if using string replacement)
+    prompt = prompt.replace(
+      new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'),
+      () => value
+    );
   }
   console.log('   ✓ Placeholders replaced\n');
 

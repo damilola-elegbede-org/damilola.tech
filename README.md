@@ -15,7 +15,7 @@ Personal career landing page with an AI chatbot. Recruiters and hiring managers 
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20.9.0+
 - npm
 
 ### Installation

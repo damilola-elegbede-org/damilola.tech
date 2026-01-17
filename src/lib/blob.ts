@@ -59,21 +59,24 @@ export async function fetchBlob(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    const response = await fetch(blob.url, { signal: controller.signal });
-    clearTimeout(timeoutId);
+    try {
+      const response = await fetch(blob.url, { signal: controller.signal });
 
-    if (!response.ok) {
-      const message = `Failed to fetch blob content: ${filename} (${response.status})`;
-      if (options?.required) {
-        throw new Error(message);
+      if (!response.ok) {
+        const message = `Failed to fetch blob content: ${filename} (${response.status})`;
+        if (options?.required) {
+          throw new Error(message);
+        }
+        console.warn(message);
+        return '';
       }
-      console.warn(message);
-      return '';
-    }
 
-    const content = await response.text();
-    blobCache.set(filename, content);
-    return content;
+      const content = await response.text();
+      blobCache.set(filename, content);
+      return content;
+    } finally {
+      clearTimeout(timeoutId);
+    }
   } catch (error) {
     if (options?.required) {
       throw error;
