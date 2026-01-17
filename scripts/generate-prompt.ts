@@ -21,13 +21,64 @@ const OUTPUT_FILE = path.join(GENERATED_DIR, 'system-prompt.ts');
 async function generatePrompt(): Promise<void> {
   console.log('=== System Prompt Generation ===\n');
 
-  // Step 1: Fetch the template (REQUIRED)
+  // Step 1: Fetch the template (REQUIRED in production, optional in development)
   console.log('1. Fetching system prompt template...');
   let template: string;
   try {
     template = await fetchPromptTemplate();
     console.log('   ✓ Template fetched successfully\n');
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    // Check if this is a missing token error (development mode)
+    if (errorMessage.includes('BLOB_READ_WRITE_TOKEN not configured')) {
+      console.warn('   ⚠ Blob token not configured - using development placeholder');
+      console.warn('   → In production, ensure BLOB_READ_WRITE_TOKEN is set\n');
+
+      // Ensure directory exists and placeholder file is in place
+      await fs.mkdir(GENERATED_DIR, { recursive: true });
+
+      // Check if placeholder already exists
+      try {
+        await fs.access(OUTPUT_FILE);
+        console.log('   ✓ Development placeholder already exists\n');
+      } catch {
+        // Create placeholder file
+        const placeholder = `// AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
+// Generated at: ${new Date().toISOString()}
+// Status: Development placeholder (no Blob token configured)
+//
+// To regenerate: npm run generate-prompt
+// This file is automatically regenerated during build.
+
+export const SYSTEM_PROMPT: string = '__DEVELOPMENT_PLACEHOLDER__';
+
+// Prompt statistics
+export const PROMPT_STATS = {
+  generatedAt: '${new Date().toISOString()}',
+  templateSize: 0,
+  finalSize: 0,
+  contentIncluded: {
+    starStories: false,
+    resume: false,
+    leadershipPhilosophy: false,
+    technicalExpertise: false,
+    verilyFeedback: false,
+    anecdotes: false,
+  },
+};
+`;
+        await fs.writeFile(OUTPUT_FILE, placeholder, 'utf-8');
+        console.log(`   ✓ Development placeholder created at ${OUTPUT_FILE}\n`);
+      }
+
+      console.log('=== Development Mode ===');
+      console.log('Chat will use runtime blob fetch as fallback.');
+      console.log('Set BLOB_READ_WRITE_TOKEN in .env.local for full functionality.\n');
+      return; // Exit successfully for development
+    }
+
+    // For other errors, re-throw
     console.error('   ✗ Failed to fetch template');
     throw error;
   }
@@ -84,7 +135,7 @@ async function generatePrompt(): Promise<void> {
 // To regenerate: npm run generate-prompt
 // This file is automatically regenerated during build.
 
-export const SYSTEM_PROMPT = ${JSON.stringify(prompt)};
+export const SYSTEM_PROMPT: string = ${JSON.stringify(prompt)};
 
 // Prompt statistics
 export const PROMPT_STATS = {

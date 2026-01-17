@@ -15,6 +15,12 @@ import { ChatMessage } from './chat-message';
 import { Button } from '@/components/ui';
 import { suggestedQuestions } from '@/lib/resume-data';
 import { cn } from '@/lib/utils';
+import {
+  loadSession,
+  saveSession,
+  clearSession,
+  type StoredMessage,
+} from '@/lib/chat-storage';
 
 const MAX_MESSAGE_LENGTH = 2000;
 
@@ -24,24 +30,66 @@ interface ChatPanelProps {
 }
 
 export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
+  const [isHydrated, setIsHydrated] = useState(false);
   const [hasInteracted, setHasInteracted] = useState(false);
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const lastSavedRef = useRef<string>('');
 
   const transport = useMemo(
     () => new DefaultChatTransport({ api: '/api/chat' }),
     []
   );
 
-  const { messages, sendMessage, status } = useChat({
+  const { messages, sendMessage, status, setMessages } = useChat({
     transport,
     onFinish: () => {
       setHasInteracted(true);
     },
   });
+
+  // Load stored messages after hydration (fixes SSR mismatch)
+  // Uses queueMicrotask to batch state updates and avoid cascading render warnings
+  useEffect(() => {
+    const stored = loadSession();
+    queueMicrotask(() => {
+      if (stored && stored.length > 0) {
+        setMessages(stored);
+        setHasInteracted(true);
+      }
+      setIsHydrated(true);
+    });
+  }, [setMessages]);
+
+  // Persist messages to localStorage only when not streaming (avoids excessive writes)
+  useEffect(() => {
+    if (!isHydrated || status === 'streaming') return;
+    if (messages.length === 0) return;
+
+    // Convert to StoredMessage format
+    const toStore: StoredMessage[] = messages.map((m) => ({
+      id: m.id,
+      role: m.role as 'user' | 'assistant',
+      parts: m.parts?.filter((p): p is { type: 'text'; text: string } => p.type === 'text') || [],
+    }));
+
+    // Only save if content changed (avoid redundant writes)
+    const serialized = JSON.stringify(toStore);
+    if (serialized !== lastSavedRef.current) {
+      saveSession(toStore);
+      lastSavedRef.current = serialized;
+    }
+  }, [messages, status, isHydrated]);
+
+  // Handle clearing the chat
+  const handleClearChat = useCallback(() => {
+    clearSession();
+    setMessages([]);
+    setHasInteracted(false);
+  }, [setMessages]);
 
   const isLoading = status === 'streaming' || status === 'submitted';
 
@@ -148,26 +196,51 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
               AI-powered career assistant
             </p>
           </div>
-          <button
-            ref={closeButtonRef}
-            onClick={onClose}
-            className="rounded-full p-2 transition-colors hover:bg-[var(--color-bg-alt)] md:hidden"
-            aria-label="Close chat"
-          >
-            <svg
-              className="h-5 w-5 text-[var(--color-text-muted)]"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+          <div className="flex items-center gap-2">
+            {/* Clear chat button - only show when there are messages */}
+            {messages.length > 0 && (
+              <button
+                onClick={handleClearChat}
+                className="rounded-full p-2 text-xs text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-alt)] hover:text-[var(--color-text)]"
+                aria-label="Clear chat history"
+                title="Clear chat"
+              >
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                  />
+                </svg>
+              </button>
+            )}
+            <button
+              ref={closeButtonRef}
+              onClick={onClose}
+              className="rounded-full p-2 transition-colors hover:bg-[var(--color-bg-alt)] md:hidden"
+              aria-label="Close chat"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
+              <svg
+                className="h-5 w-5 text-[var(--color-text-muted)]"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Messages area */}
@@ -205,9 +278,9 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
                 />
               ))}
               {isLoading && messages[messages.length - 1]?.role === 'user' && (
-                <div className="flex justify-start">
+                <div className="flex justify-start" role="status" aria-live="polite">
                   <div className="rounded-2xl bg-[var(--color-bg-alt)] px-4 py-3">
-                    <div className="flex space-x-1">
+                    <div className="flex space-x-1" aria-hidden="true">
                       <div className="h-2 w-2 animate-bounce rounded-full bg-[var(--color-text-muted)]" />
                       <div
                         className="h-2 w-2 animate-bounce rounded-full bg-[var(--color-text-muted)]"
@@ -218,6 +291,7 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
                         style={{ animationDelay: '0.2s' }}
                       />
                     </div>
+                    <span className="sr-only">Assistant is typing...</span>
                   </div>
                 </div>
               )}
@@ -231,44 +305,53 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
           onSubmit={onSubmit}
           className="border-t border-[var(--color-border)] p-4"
         >
-          <div className="flex gap-2">
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask a question..."
-              aria-label="Type your message"
-              aria-invalid={isInputTooLong}
-              maxLength={MAX_MESSAGE_LENGTH + 100}
-              className={cn(
-                'flex-1 rounded-full border px-4 py-2 text-sm focus:outline-none focus:ring-1',
-                isInputTooLong
-                  ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
-                  : 'border-[var(--color-border)] focus:border-[var(--color-accent)] focus:ring-[var(--color-accent)]'
-              )}
-              disabled={isLoading}
-            />
-            <Button
-              type="submit"
-              size="sm"
-              disabled={isLoading || !input.trim() || isInputTooLong}
-              className="rounded-full"
-            >
-              <svg
-                className="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <input
+                ref={inputRef}
+                id="chat-input"
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask a question..."
+                aria-label="Type your message"
+                aria-invalid={isInputTooLong}
+                aria-describedby={isInputTooLong ? 'input-error' : undefined}
+                maxLength={MAX_MESSAGE_LENGTH + 100}
+                className={cn(
+                  'flex-1 rounded-full border px-4 py-2 text-sm focus:outline-none focus:ring-1',
+                  isInputTooLong
+                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                    : 'border-[var(--color-border)] focus:border-[var(--color-accent)] focus:ring-[var(--color-accent)]'
+                )}
+                disabled={isLoading}
+              />
+              <Button
+                type="submit"
+                size="sm"
+                disabled={isLoading || !input.trim() || isInputTooLong}
+                className="rounded-full"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                />
-              </svg>
-            </Button>
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                  />
+                </svg>
+              </Button>
+            </div>
+            {isInputTooLong && (
+              <p id="input-error" role="alert" className="text-xs text-red-500">
+                Message exceeds {MAX_MESSAGE_LENGTH} character limit
+              </p>
+            )}
           </div>
         </form>
       </div>

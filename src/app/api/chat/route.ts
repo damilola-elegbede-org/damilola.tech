@@ -1,11 +1,17 @@
 import { anthropic } from '@ai-sdk/anthropic';
 import { streamText } from 'ai';
+import { SYSTEM_PROMPT } from '@/lib/generated/system-prompt';
 import { getFullSystemPrompt } from '@/lib/system-prompt';
 
 export const runtime = 'edge';
 
+// Use generated prompt in production, fall back to runtime fetch in development
+const isGeneratedPromptAvailable = SYSTEM_PROMPT !== '__DEVELOPMENT_PLACEHOLDER__';
+
 const MAX_MESSAGE_LENGTH = 2000;
 const MAX_MESSAGES = 50;
+// Maximum request body size: 50 messages * 2000 chars + overhead ≈ 150KB
+const MAX_BODY_SIZE = 150 * 1024;
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -28,6 +34,15 @@ function validateMessages(messages: unknown): messages is ChatMessage[] {
 
 export async function POST(req: Request) {
   try {
+    // Check content-length to prevent DoS via large payloads
+    const contentLength = req.headers.get('content-length');
+    if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
+      return new Response(
+        JSON.stringify({ error: 'Request body too large.' }),
+        { status: 413, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
     const { messages } = await req.json();
 
     if (!validateMessages(messages)) {
@@ -37,9 +52,10 @@ export async function POST(req: Request) {
       );
     }
 
-    // Get full system prompt (resume + STAR stories + guidelines)
-    // This is fetched from Vercel Blob and cached in memory
-    const systemPrompt = await getFullSystemPrompt();
+    // Use build-time generated prompt (production) or fetch at runtime (development)
+    const systemPrompt = isGeneratedPromptAvailable
+      ? SYSTEM_PROMPT
+      : await getFullSystemPrompt();
 
     // Stream response
     const result = streamText({
