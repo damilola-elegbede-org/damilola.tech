@@ -51,7 +51,7 @@ async function generatePrompt(): Promise<void> {
 // To regenerate: npm run generate-prompt
 // This file is automatically regenerated during build.
 
-export const SYSTEM_PROMPT = '__DEVELOPMENT_PLACEHOLDER__';
+export const SYSTEM_PROMPT: string = '__DEVELOPMENT_PLACEHOLDER__';
 
 // Prompt statistics
 export const PROMPT_STATS = {
@@ -135,7 +135,7 @@ export const PROMPT_STATS = {
 // To regenerate: npm run generate-prompt
 // This file is automatically regenerated during build.
 
-export const SYSTEM_PROMPT = ${JSON.stringify(prompt)};
+export const SYSTEM_PROMPT: string = ${JSON.stringify(prompt)};
 
 // Prompt statistics
 export const PROMPT_STATS = {
