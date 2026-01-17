@@ -40,6 +40,36 @@ function isLocalStorageAvailable(): boolean {
 }
 
 /**
+ * Runtime type guard for StoredSession
+ * Validates parsed JSON matches expected structure
+ */
+function isStoredSession(obj: unknown): obj is StoredSession {
+  if (typeof obj !== 'object' || obj === null) return false;
+
+  const session = obj as Record<string, unknown>;
+
+  if (typeof session.timestamp !== 'number') return false;
+  if (!Array.isArray(session.messages)) return false;
+
+  return session.messages.every((msg: unknown) => {
+    if (typeof msg !== 'object' || msg === null) return false;
+    const m = msg as Record<string, unknown>;
+    return (
+      typeof m.id === 'string' &&
+      (m.role === 'user' || m.role === 'assistant') &&
+      Array.isArray(m.parts) &&
+      m.parts.every(
+        (p: unknown) =>
+          typeof p === 'object' &&
+          p !== null &&
+          (p as Record<string, unknown>).type === 'text' &&
+          typeof (p as Record<string, unknown>).text === 'string'
+      )
+    );
+  });
+}
+
+/**
  * Save chat messages to localStorage
  */
 export function saveSession(messages: StoredMessage[]): void {
@@ -69,15 +99,23 @@ export function loadSession(): StoredMessage[] | null {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) return null;
 
-    const session: StoredSession = JSON.parse(stored);
-    const age = Date.now() - session.timestamp;
+    const parsed: unknown = JSON.parse(stored);
+
+    // Validate structure before using
+    if (!isStoredSession(parsed)) {
+      console.warn('Invalid session structure, clearing');
+      clearSession();
+      return null;
+    }
+
+    const age = Date.now() - parsed.timestamp;
 
     if (age > SESSION_TTL_MS) {
       clearSession();
       return null;
     }
 
-    return session.messages;
+    return parsed.messages;
   } catch (error) {
     // If parsing fails, clear corrupted data
     console.warn('Failed to load chat session:', error);

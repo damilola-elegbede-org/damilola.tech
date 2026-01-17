@@ -30,21 +30,14 @@ interface ChatPanelProps {
 }
 
 export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
-  // Load stored messages on mount (lazy initialization)
-  const [initialMessages] = useState<StoredMessage[]>(() => {
-    // Only run on client
-    if (typeof window === 'undefined') return [];
-    return loadSession() || [];
-  });
-
-  const [hasInteracted, setHasInteracted] = useState(
-    () => initialMessages.length > 0
-  );
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [hasInteracted, setHasInteracted] = useState(false);
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const lastSavedRef = useRef<string>('');
 
   const transport = useMemo(
     () => new DefaultChatTransport({ api: '/api/chat' }),
@@ -53,24 +46,40 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
 
   const { messages, sendMessage, status, setMessages } = useChat({
     transport,
-    messages: initialMessages,
     onFinish: () => {
       setHasInteracted(true);
     },
   });
 
-  // Persist messages to localStorage whenever they change
+  // Load stored messages after hydration (fixes SSR mismatch)
   useEffect(() => {
-    if (messages.length > 0) {
-      // Convert to StoredMessage format
-      const toStore: StoredMessage[] = messages.map((m) => ({
-        id: m.id,
-        role: m.role as 'user' | 'assistant',
-        parts: m.parts?.filter((p): p is { type: 'text'; text: string } => p.type === 'text') || [],
-      }));
-      saveSession(toStore);
+    const stored = loadSession();
+    if (stored && stored.length > 0) {
+      setMessages(stored);
+      setHasInteracted(true);
     }
-  }, [messages]);
+    setIsHydrated(true);
+  }, [setMessages]);
+
+  // Persist messages to localStorage only when not streaming (avoids excessive writes)
+  useEffect(() => {
+    if (!isHydrated || status === 'streaming') return;
+    if (messages.length === 0) return;
+
+    // Convert to StoredMessage format
+    const toStore: StoredMessage[] = messages.map((m) => ({
+      id: m.id,
+      role: m.role as 'user' | 'assistant',
+      parts: m.parts?.filter((p): p is { type: 'text'; text: string } => p.type === 'text') || [],
+    }));
+
+    // Only save if content changed (avoid redundant writes)
+    const serialized = JSON.stringify(toStore);
+    if (serialized !== lastSavedRef.current) {
+      saveSession(toStore);
+      lastSavedRef.current = serialized;
+    }
+  }, [messages, status, isHydrated]);
 
   // Handle clearing the chat
   const handleClearChat = useCallback(() => {
@@ -266,9 +275,9 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
                 />
               ))}
               {isLoading && messages[messages.length - 1]?.role === 'user' && (
-                <div className="flex justify-start">
+                <div className="flex justify-start" role="status" aria-live="polite">
                   <div className="rounded-2xl bg-[var(--color-bg-alt)] px-4 py-3">
-                    <div className="flex space-x-1">
+                    <div className="flex space-x-1" aria-hidden="true">
                       <div className="h-2 w-2 animate-bounce rounded-full bg-[var(--color-text-muted)]" />
                       <div
                         className="h-2 w-2 animate-bounce rounded-full bg-[var(--color-text-muted)]"
@@ -279,6 +288,7 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
                         style={{ animationDelay: '0.2s' }}
                       />
                     </div>
+                    <span className="sr-only">Assistant is typing...</span>
                   </div>
                 </div>
               )}
@@ -292,44 +302,53 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
           onSubmit={onSubmit}
           className="border-t border-[var(--color-border)] p-4"
         >
-          <div className="flex gap-2">
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask a question..."
-              aria-label="Type your message"
-              aria-invalid={isInputTooLong}
-              maxLength={MAX_MESSAGE_LENGTH + 100}
-              className={cn(
-                'flex-1 rounded-full border px-4 py-2 text-sm focus:outline-none focus:ring-1',
-                isInputTooLong
-                  ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
-                  : 'border-[var(--color-border)] focus:border-[var(--color-accent)] focus:ring-[var(--color-accent)]'
-              )}
-              disabled={isLoading}
-            />
-            <Button
-              type="submit"
-              size="sm"
-              disabled={isLoading || !input.trim() || isInputTooLong}
-              className="rounded-full"
-            >
-              <svg
-                className="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <input
+                ref={inputRef}
+                id="chat-input"
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask a question..."
+                aria-label="Type your message"
+                aria-invalid={isInputTooLong}
+                aria-describedby={isInputTooLong ? 'input-error' : undefined}
+                maxLength={MAX_MESSAGE_LENGTH + 100}
+                className={cn(
+                  'flex-1 rounded-full border px-4 py-2 text-sm focus:outline-none focus:ring-1',
+                  isInputTooLong
+                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                    : 'border-[var(--color-border)] focus:border-[var(--color-accent)] focus:ring-[var(--color-accent)]'
+                )}
+                disabled={isLoading}
+              />
+              <Button
+                type="submit"
+                size="sm"
+                disabled={isLoading || !input.trim() || isInputTooLong}
+                className="rounded-full"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                />
-              </svg>
-            </Button>
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                  />
+                </svg>
+              </Button>
+            </div>
+            {isInputTooLong && (
+              <p id="input-error" role="alert" className="text-xs text-red-500">
+                Message exceeds {MAX_MESSAGE_LENGTH} character limit
+              </p>
+            )}
           </div>
         </form>
       </div>

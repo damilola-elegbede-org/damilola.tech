@@ -10,6 +10,8 @@ const isGeneratedPromptAvailable = SYSTEM_PROMPT !== '__DEVELOPMENT_PLACEHOLDER_
 
 const MAX_MESSAGE_LENGTH = 2000;
 const MAX_MESSAGES = 50;
+// Maximum request body size: 50 messages * 2000 chars + overhead ≈ 150KB
+const MAX_BODY_SIZE = 150 * 1024;
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -32,6 +34,15 @@ function validateMessages(messages: unknown): messages is ChatMessage[] {
 
 export async function POST(req: Request) {
   try {
+    // Check content-length to prevent DoS via large payloads
+    const contentLength = req.headers.get('content-length');
+    if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
+      return new Response(
+        JSON.stringify({ error: 'Request body too large.' }),
+        { status: 413, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
     const { messages } = await req.json();
 
     if (!validateMessages(messages)) {
