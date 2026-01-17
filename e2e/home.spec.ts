@@ -54,9 +54,9 @@ test.describe('Home Page', () => {
   });
 
   test('should display skills assessment cards', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: 'Strong' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Moderate' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Gaps' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Expert' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Proficient' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Familiar' })).toBeVisible();
   });
 
   test('should display education entries', async ({ page }) => {

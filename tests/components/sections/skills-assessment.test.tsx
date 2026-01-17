@@ -8,22 +8,22 @@ describe('SkillsAssessment', () => {
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Skills Assessment');
   });
 
-  it('renders strong skills card', () => {
+  it('renders expert skills card', () => {
     render(<SkillsAssessment />);
-    expect(screen.getByRole('heading', { name: 'Strong' })).toBeInTheDocument();
-    expect(screen.getByText('Platform/Infrastructure Architecture')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Expert' })).toBeInTheDocument();
+    expect(screen.getByText('Cloud Infrastructure & Platform Engineering')).toBeInTheDocument();
   });
 
-  it('renders moderate skills card', () => {
+  it('renders proficient skills card', () => {
     render(<SkillsAssessment />);
-    expect(screen.getByRole('heading', { name: 'Moderate' })).toBeInTheDocument();
-    expect(screen.getByText('Data Engineering')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Proficient' })).toBeInTheDocument();
+    expect(screen.getByText('CI/CD & Release Engineering')).toBeInTheDocument();
   });
 
-  it('renders gaps skills card', () => {
+  it('renders familiar skills card', () => {
     render(<SkillsAssessment />);
-    expect(screen.getByRole('heading', { name: 'Gaps' })).toBeInTheDocument();
-    expect(screen.getByText('Consumer Product')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Familiar' })).toBeInTheDocument();
+    expect(screen.getByText('Programming (Python, C++, Go, Java)')).toBeInTheDocument();
   });
 
   it('has correct section id for navigation', () => {

@@ -15,9 +15,9 @@ export interface Skill {
 }
 
 export interface SkillsAssessment {
-  strong: string[];
-  moderate: string[];
-  gaps: string[];
+  expert: string[];
+  proficient: string[];
+  familiar: string[];
 }
 
 export interface Education {

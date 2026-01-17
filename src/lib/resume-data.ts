@@ -136,23 +136,25 @@ export const resumeData: ResumeData = {
     },
   ],
   skillsAssessment: {
-    strong: [
-      'Platform/Infrastructure Architecture',
-      'API Design & Versioning',
-      'Technical Strategy',
-      'Cross-functional Leadership',
-      'Technical Debt Cleanup',
-      'Developer Experience',
+    expert: [
+      'Cloud Infrastructure & Platform Engineering',
+      'Team Leadership & Organization Building',
+      'Developer Experience & Productivity',
+      'Cross-Functional Stakeholder Management',
+      'Enterprise System Migration',
     ],
-    moderate: [
-      'Data Engineering',
-      'Security & Compliance',
-      'Team Building',
+    proficient: [
+      'CI/CD & Release Engineering',
+      'Agile/Scrum/Kanban',
+      'Distributed Systems & High Availability',
+      'Observability & Monitoring',
+      'SRE Practices',
     ],
-    gaps: [
-      'Consumer Product',
-      'Mobile Development',
-      'Growth/Experimentation',
+    familiar: [
+      'Programming (Python, C++, Go, Java)',
+      'Healthcare & Regulatory Compliance',
+      'Telecom Systems (5G/4G/3G)',
+      'Data Analytics & Splunk',
     ],
   },
   education: [

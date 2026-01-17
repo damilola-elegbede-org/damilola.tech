@@ -7,21 +7,21 @@ import { cn } from '@/lib/utils';
 interface SkillCardProps {
   title: string;
   items: string[];
-  variant: 'strong' | 'moderate' | 'gaps';
+  variant: 'expert' | 'proficient' | 'familiar';
 }
 
 function SkillCard({ title, items, variant }: SkillCardProps) {
   const variantStyles = {
-    strong: {
-      border: 'border-[var(--color-accent-green)]',
-      bg: 'bg-[var(--color-card-strong)]',
-      hoverBorder: 'hover:border-[var(--color-accent-green)]',
-      hoverShadow: 'hover:shadow-[0_0_20px_rgba(34,197,94,0.2)]',
+    expert: {
+      border: 'border-[var(--color-skill-expert)]',
+      bg: 'bg-[var(--color-card-expert)]',
+      hoverBorder: 'hover:border-[var(--color-skill-expert)]',
+      hoverShadow: 'hover:shadow-[0_0_20px_rgba(96,165,250,0.2)]',
       icon: (
         <svg
           aria-hidden="true"
           focusable="false"
-          className="h-5 w-5 text-[var(--color-accent-green)]"
+          className="h-5 w-5 text-[var(--color-skill-expert)]"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -34,18 +34,18 @@ function SkillCard({ title, items, variant }: SkillCardProps) {
           />
         </svg>
       ),
-      titleColor: 'text-[var(--color-accent-green)]',
+      titleColor: 'text-[var(--color-skill-expert)]',
     },
-    moderate: {
-      border: 'border-[var(--color-accent-mustard)]',
-      bg: 'bg-[var(--color-card-moderate)]',
-      hoverBorder: 'hover:border-[var(--color-accent-mustard)]',
-      hoverShadow: 'hover:shadow-[0_0_20px_rgba(234,179,8,0.2)]',
+    proficient: {
+      border: 'border-[var(--color-skill-proficient)]',
+      bg: 'bg-[var(--color-card-proficient)]',
+      hoverBorder: 'hover:border-[var(--color-skill-proficient)]',
+      hoverShadow: 'hover:shadow-[0_0_20px_rgba(100,116,139,0.2)]',
       icon: (
         <svg
           aria-hidden="true"
           focusable="false"
-          className="h-5 w-5 text-[var(--color-accent-mustard)]"
+          className="h-5 w-5 text-[var(--color-skill-proficient)]"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -53,18 +53,18 @@ function SkillCard({ title, items, variant }: SkillCardProps) {
           <circle cx="12" cy="12" r="3" strokeWidth={2} />
         </svg>
       ),
-      titleColor: 'text-[var(--color-accent-mustard)]',
+      titleColor: 'text-[var(--color-skill-proficient)]',
     },
-    gaps: {
-      border: 'border-[var(--color-accent-red)]',
-      bg: 'bg-[var(--color-card-gaps)]',
-      hoverBorder: 'hover:border-[var(--color-accent-red)]',
-      hoverShadow: 'hover:shadow-[0_0_20px_rgba(239,68,68,0.2)]',
+    familiar: {
+      border: 'border-[var(--color-skill-familiar)]',
+      bg: 'bg-[var(--color-card-familiar)]',
+      hoverBorder: 'hover:border-[var(--color-skill-familiar)]',
+      hoverShadow: 'hover:shadow-[0_0_20px_rgba(71,85,105,0.2)]',
       icon: (
         <svg
           aria-hidden="true"
           focusable="false"
-          className="h-5 w-5 text-[var(--color-accent-red)]"
+          className="h-5 w-5 text-[var(--color-skill-familiar)]"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -73,11 +73,11 @@ function SkillCard({ title, items, variant }: SkillCardProps) {
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeWidth={2}
-            d="M6 18L18 6M6 6l12 12"
+            d="M12 6v6m0 0v6m0-6h6m-6 0H6"
           />
         </svg>
       ),
-      titleColor: 'text-[var(--color-accent-red)]',
+      titleColor: 'text-[var(--color-skill-familiar)]',
     },
   };
 
@@ -127,19 +127,19 @@ export function SkillsAssessment() {
         </h2>
         <div className="grid gap-6 md:grid-cols-3">
           <SkillCard
-            title="Strong"
-            items={skillsAssessment.strong}
-            variant="strong"
+            title="Expert"
+            items={skillsAssessment.expert}
+            variant="expert"
           />
           <SkillCard
-            title="Moderate"
-            items={skillsAssessment.moderate}
-            variant="moderate"
+            title="Proficient"
+            items={skillsAssessment.proficient}
+            variant="proficient"
           />
           <SkillCard
-            title="Gaps"
-            items={skillsAssessment.gaps}
-            variant="gaps"
+            title="Familiar"
+            items={skillsAssessment.familiar}
+            variant="familiar"
           />
         </div>
       </div>
