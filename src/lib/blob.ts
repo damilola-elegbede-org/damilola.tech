@@ -128,6 +128,7 @@ export interface ContentFiles {
   technicalExpertise: string;
   verilyFeedback: string;
   anecdotes: string;
+  chatbotArchitecture: string;
 }
 
 /**
@@ -142,6 +143,7 @@ export async function fetchAllContent(): Promise<ContentFiles> {
     technicalExpertise,
     verilyFeedback,
     anecdotes,
+    chatbotArchitecture,
   ] = await Promise.all([
     fetchBlob('star-stories.json'),
     fetchBlob('resume-full.json'),
@@ -149,6 +151,7 @@ export async function fetchAllContent(): Promise<ContentFiles> {
     fetchBlob('technical-expertise.md'),
     fetchBlob('verily-feedback.md'),
     fetchBlob('anecdotes.md'),
+    fetchBlob('chatbot-architecture.md'),
   ]);
 
   return {
@@ -158,5 +161,6 @@ export async function fetchAllContent(): Promise<ContentFiles> {
     technicalExpertise,
     verilyFeedback,
     anecdotes,
+    chatbotArchitecture,
   };
 }

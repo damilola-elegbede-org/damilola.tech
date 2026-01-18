@@ -65,6 +65,7 @@ export const PROMPT_STATS = {
     technicalExpertise: false,
     verilyFeedback: false,
     anecdotes: false,
+    chatbotArchitecture: false,
   },
 };
 `;
@@ -94,6 +95,7 @@ export const PROMPT_STATS = {
     technicalExpertise: content.technicalExpertise ? '✓' : '○',
     verilyFeedback: content.verilyFeedback ? '✓' : '○',
     anecdotes: content.anecdotes ? '✓' : '○',
+    chatbotArchitecture: content.chatbotArchitecture ? '✓' : '○',
   };
 
   console.log(`   ${contentStatus.starStories} star-stories.json`);
@@ -102,6 +104,7 @@ export const PROMPT_STATS = {
   console.log(`   ${contentStatus.technicalExpertise} technical-expertise.md`);
   console.log(`   ${contentStatus.verilyFeedback} verily-feedback.md`);
   console.log(`   ${contentStatus.anecdotes} anecdotes.md`);
+  console.log(`   ${contentStatus.chatbotArchitecture} chatbot-architecture.md`);
   console.log('');
 
   // Step 3: Replace placeholders (use global regex for all occurrences)
@@ -113,6 +116,7 @@ export const PROMPT_STATS = {
     '{{TECHNICAL_EXPERTISE}}': content.technicalExpertise || '*Technical expertise details not available in current build.*',
     '{{VERILY_FEEDBACK}}': content.verilyFeedback || '*Performance feedback not available in current build.*',
     '{{ANECDOTES}}': content.anecdotes || '*Additional context and anecdotes not available in current build.*',
+    '{{CHATBOT_ARCHITECTURE}}': content.chatbotArchitecture || '*Chatbot architecture details not available.*',
   };
 
   let prompt = template;
@@ -149,6 +153,7 @@ export const PROMPT_STATS = {
     technicalExpertise: ${!!content.technicalExpertise},
     verilyFeedback: ${!!content.verilyFeedback},
     anecdotes: ${!!content.anecdotes},
+    chatbotArchitecture: ${!!content.chatbotArchitecture},
   },
 };
 `;
