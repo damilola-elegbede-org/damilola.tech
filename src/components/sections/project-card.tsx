@@ -140,9 +140,9 @@ export function ProjectCard({ project }: ProjectCardProps) {
                 {project.stats.label}
               </h4>
               <ul className="mt-2 space-y-2">
-                {project.stats.items.map((item, i) => (
+                {project.stats.items.map((item) => (
                   <li
-                    key={`${project.id}-stat-${i}`}
+                    key={`${project.id}-stat-${item.slice(0, 30)}`}
                     className="flex items-start text-sm text-[var(--color-text-muted)]"
                   >
                     <span className="mr-3 mt-0.5 flex-shrink-0 text-[var(--color-accent)]">
@@ -162,9 +162,9 @@ export function ProjectCard({ project }: ProjectCardProps) {
                 {category.title}
               </h4>
               <ul className="mt-2 space-y-2">
-                {category.items.map((item, i) => (
+                {category.items.map((item) => (
                   <li
-                    key={`${project.id}-${category.title}-${i}`}
+                    key={`${project.id}-${category.title}-${item.slice(0, 30)}`}
                     className="flex items-start text-sm text-[var(--color-text-muted)]"
                   >
                     <span className="mr-3 mt-0.5 flex-shrink-0 text-[var(--color-accent)]">
@@ -182,9 +182,9 @@ export function ProjectCard({ project }: ProjectCardProps) {
             <div>
               <h4 className="font-semibold text-[var(--color-text)]">Highlights</h4>
               <ul className="mt-2 space-y-2">
-                {project.highlights.map((item, i) => (
+                {project.highlights.map((item) => (
                   <li
-                    key={`${project.id}-highlight-${i}`}
+                    key={`${project.id}-highlight-${item.slice(0, 30)}`}
                     className="flex items-start text-sm text-[var(--color-text-muted)]"
                   >
                     <span className="mr-3 mt-0.5 flex-shrink-0 text-[var(--color-accent)]">
