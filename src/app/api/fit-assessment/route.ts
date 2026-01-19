@@ -63,25 +63,49 @@ export async function POST(req: Request) {
     const systemPrompt = sharedContext + '\n\n---\n\n' + fitInstructions;
     console.log('[fit-assessment] System prompt ready, total length:', systemPrompt.length);
 
-    console.log('[fit-assessment] Calling Anthropic API...');
+    console.log('[fit-assessment] Calling Anthropic API (streaming)...');
 
-    // Direct Anthropic SDK call - non-streaming for simpler debugging
-    const message = await client.messages.create({
+    // Streaming API call for progressive text display
+    const stream = client.messages.stream({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 4096,
       system: systemPrompt,
       messages: [
         {
           role: 'user',
-          content: `Generate an Executive Fit Report for this job description:\n\n${jobDescription}`,
+          content: `Generate a CONCISE Executive Fit Report (under 1000 words). Focus on top 3-5 alignments and gaps.\n\n${jobDescription}`,
         },
       ],
     });
 
-    const text = message.content[0].type === 'text' ? message.content[0].text : '';
-    console.log('[fit-assessment] Response received, length:', text.length);
-
-    return Response.json({ text });
+    // Return streaming response
+    return new Response(
+      new ReadableStream({
+        async start(controller) {
+          try {
+            for await (const event of stream) {
+              if (
+                event.type === 'content_block_delta' &&
+                event.delta.type === 'text_delta'
+              ) {
+                controller.enqueue(new TextEncoder().encode(event.delta.text));
+              }
+            }
+            controller.close();
+            console.log('[fit-assessment] Stream completed');
+          } catch (streamError) {
+            console.error('[fit-assessment] Stream error:', streamError);
+            controller.error(streamError);
+          }
+        },
+      }),
+      {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Transfer-Encoding': 'chunked',
+        },
+      }
+    );
   } catch (error) {
     console.error('[fit-assessment] Error:', error);
     console.error('[fit-assessment] Stack:', error instanceof Error ? error.stack : 'No stack');

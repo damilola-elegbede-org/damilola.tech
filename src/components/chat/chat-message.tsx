@@ -31,6 +31,20 @@ export function ChatMessage({ role, content }: ChatMessageProps) {
             <ReactMarkdown
               disallowedElements={DISALLOWED_ELEMENTS}
               unwrapDisallowed
+              components={{
+                h1: ({ children }) => (
+                  <p className="mt-3 mb-1 text-sm font-semibold">{children}</p>
+                ),
+                h2: ({ children }) => (
+                  <p className="mt-3 mb-1 text-sm font-semibold">{children}</p>
+                ),
+                h3: ({ children }) => (
+                  <p className="mt-2 mb-1 text-sm font-medium">{children}</p>
+                ),
+                h4: ({ children }) => (
+                  <p className="mt-2 mb-1 text-sm font-medium">{children}</p>
+                ),
+              }}
             >
               {content}
             </ReactMarkdown>

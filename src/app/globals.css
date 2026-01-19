@@ -106,3 +106,41 @@ html {
   background: var(--color-accent);
   color: white;
 }
+
+/* Fit assessment markdown styles */
+.fit-assessment-result .prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  margin: 1rem 0;
+}
+
+.fit-assessment-result .prose th,
+.fit-assessment-result .prose td {
+  border: 1px solid var(--color-border);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.fit-assessment-result .prose th {
+  background: var(--color-bg-alt);
+  font-weight: 600;
+}
+
+.fit-assessment-result .prose h1 {
+  font-size: 1.5rem;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.fit-assessment-result .prose h2 {
+  font-size: 1.25rem;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.fit-assessment-result .prose h3 {
+  font-size: 1rem;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}

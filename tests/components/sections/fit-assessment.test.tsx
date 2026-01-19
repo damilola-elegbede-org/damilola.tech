@@ -8,9 +8,25 @@ const mockExamples = {
   weak: '# Staff Frontend Engineer\nThis is a weak fit example...',
 };
 
-const mockFitResponse = {
-  text: '# Fit Assessment: Engineering Manager\n\n**Fit Rating: Strong Match**',
-};
+const mockFitResponseText = '# Fit Assessment: Engineering Manager\n\n**Fit Rating: Strong Match**';
+
+// Helper to create a mock streaming response
+function createMockStreamResponse(text: string, delay = 0) {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      if (delay > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+      controller.enqueue(encoder.encode(text));
+      controller.close();
+    },
+  });
+  return {
+    ok: true,
+    body: stream,
+  };
+}
 
 describe('FitAssessment', () => {
   beforeEach(() => {
@@ -25,10 +41,7 @@ describe('FitAssessment', () => {
         });
       }
       if (url === '/api/fit-assessment') {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(mockFitResponse),
-        });
+        return Promise.resolve(createMockStreamResponse(mockFitResponseText));
       }
       return Promise.reject(new Error('Unknown URL'));
     });
@@ -131,7 +144,7 @@ describe('FitAssessment', () => {
   });
 
   it('shows loading state during analysis', async () => {
-    // Mock a slow response
+    // Mock a slow response using streaming with delay
     global.fetch = vi.fn().mockImplementation((url: string) => {
       if (url === '/api/fit-examples') {
         return Promise.resolve({
@@ -140,12 +153,7 @@ describe('FitAssessment', () => {
         });
       }
       if (url === '/api/fit-assessment') {
-        return new Promise((resolve) =>
-          setTimeout(() => resolve({
-            ok: true,
-            json: () => Promise.resolve(mockFitResponse),
-          }), 1000)
-        );
+        return Promise.resolve(createMockStreamResponse(mockFitResponseText, 1000));
       }
       return Promise.reject(new Error('Unknown URL'));
     });
@@ -176,7 +184,7 @@ describe('FitAssessment', () => {
   });
 
   it('shows placeholder text during loading', async () => {
-    // Mock a slow response
+    // Mock a slow response using streaming with delay
     global.fetch = vi.fn().mockImplementation((url: string) => {
       if (url === '/api/fit-examples') {
         return Promise.resolve({
@@ -185,12 +193,7 @@ describe('FitAssessment', () => {
         });
       }
       if (url === '/api/fit-assessment') {
-        return new Promise((resolve) =>
-          setTimeout(() => resolve({
-            ok: true,
-            json: () => Promise.resolve(mockFitResponse),
-          }), 1000)
-        );
+        return Promise.resolve(createMockStreamResponse(mockFitResponseText, 1000));
       }
       return Promise.reject(new Error('Unknown URL'));
     });

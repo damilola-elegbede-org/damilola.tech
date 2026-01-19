@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { useScrollReveal } from '@/hooks/use-scroll-reveal';
@@ -56,13 +57,24 @@ export function FitAssessment() {
         body: JSON.stringify({ prompt: jobDescription }),
       });
 
-      const data = await res.json();
-
       if (!res.ok) {
+        const data = await res.json();
         throw new Error(data.error || 'Failed to analyze fit');
       }
 
-      setCompletion(data.text);
+      // Stream the response for progressive display
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('No reader available');
+
+      const decoder = new TextDecoder();
+      let text = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        text += decoder.decode(value, { stream: true });
+        setCompletion(text);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -108,8 +120,12 @@ export function FitAssessment() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => setJobDescription('')}
-            disabled={!jobDescription}
+            onClick={() => {
+              setJobDescription('');
+              setCompletion('');
+              setError(null);
+            }}
+            disabled={!jobDescription && !completion}
           >
             Clear
           </Button>
@@ -144,12 +160,14 @@ export function FitAssessment() {
         {/* Assessment Result */}
         {(completion || isLoading) && (
           <div
-            className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-6"
+            className="fit-assessment-result rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-6"
             aria-live="polite"
             aria-atomic="true"
           >
             <div className="prose prose-invert max-w-none">
-              <ReactMarkdown>{completion || 'Analyzing job fit...'}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {completion || 'Analyzing job fit...'}
+              </ReactMarkdown>
             </div>
           </div>
         )}
