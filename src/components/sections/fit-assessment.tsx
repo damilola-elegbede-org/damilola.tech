@@ -23,13 +23,29 @@ export function FitAssessment() {
   const { ref, isVisible } = useScrollReveal();
   const resultRef = useRef<HTMLDivElement>(null);
 
+  // Extract role title from the assessment (looks for "Fit Assessment: [Title]" pattern)
+  const extractRoleTitle = (text: string): string => {
+    // Look for "Fit Assessment: Role Title" in the markdown h1
+    const titleMatch = text.match(/^#\s*Fit Assessment:\s*(.+?)(?:\n|$)/m);
+    if (titleMatch && titleMatch[1]) {
+      return titleMatch[1]
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')  // Replace non-alphanumeric with hyphens
+        .replace(/^-+|-+$/g, '')       // Remove leading/trailing hyphens
+        .slice(0, 50);                  // Limit length
+    }
+    return 'fit-assessment';
+  };
+
   const handleDownloadMD = useCallback(() => {
     if (!completion) return;
+    const roleTitle = extractRoleTitle(completion);
     const blob = new Blob([completion], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'fit-assessment.md';
+    a.download = `${roleTitle}.md`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -42,6 +58,17 @@ export function FitAssessment() {
 
     // Clone the element and apply print-friendly styles
     const clone = resultRef.current.cloneNode(true) as HTMLElement;
+
+    // Apply print-friendly styles to clone (NOT to DOM)
+    // Don't use position: fixed or opacity: 0 - these cause blank PDFs
+    clone.style.cssText = `
+      background: white !important;
+      color: #1a1a1a !important;
+      padding: 20px !important;
+      font-size: 12px !important;
+      line-height: 1.5 !important;
+      width: 8.5in !important;
+    `;
 
     // Apply dark text to all child elements
     clone.querySelectorAll('*').forEach((el) => {
@@ -102,38 +129,23 @@ export function FitAssessment() {
       element.style.fontSize = '12px';
     });
 
-    // Add clone to DOM with visibility hidden but in viewport for html2canvas capture
-    // Using opacity: 0 instead of off-screen positioning because html2canvas
-    // cannot capture content positioned outside the viewport
-    clone.style.cssText = `
-      position: fixed !important;
-      top: 0 !important;
-      left: 0 !important;
-      width: 8.5in !important;
-      opacity: 0 !important;
-      pointer-events: none !important;
-      z-index: -1 !important;
-      background: white !important;
-      color: #1a1a1a !important;
-      padding: 20px !important;
-      font-size: 12px !important;
-      line-height: 1.5 !important;
-    `;
-    document.body.appendChild(clone);
-
-    // Wait for browser to complete layout/paint
-    await new Promise(resolve => setTimeout(resolve, 100));
+    const roleTitle = extractRoleTitle(completion);
 
     const opt = {
       margin: [0.5, 0.5, 0.5, 0.5] as [number, number, number, number],
-      filename: 'fit-assessment.pdf',
+      filename: `${roleTitle}.pdf`,
       image: { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas: { scale: 2, backgroundColor: '#ffffff' },
+      html2canvas: {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        allowTaint: true,
+      },
       jsPDF: { unit: 'in' as const, format: 'letter' as const, orientation: 'portrait' as const },
     };
 
+    // Pass clone directly to html2pdf - NO DOM insertion
     await html2pdf().set(opt).from(clone).save();
-    document.body.removeChild(clone);
   }, [completion]);
 
   // Fetch example JDs on mount
