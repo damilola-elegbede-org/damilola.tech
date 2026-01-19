@@ -28,7 +28,12 @@ const CONTENT_FILES = [
   'fit-example-weak.md',
 ];
 
-async function fetchFile(filename: string): Promise<string | null> {
+type FetchResult =
+  | { status: 'ok'; content: string }
+  | { status: 'not_found' }
+  | { status: 'error'; error: unknown };
+
+async function fetchFile(filename: string): Promise<FetchResult> {
   const url = `${BLOB_BASE_URL}/${BLOB_PATH_PREFIX}/${filename}`;
 
   try {
@@ -37,15 +42,15 @@ async function fetchFile(filename: string): Promise<string | null> {
     if (!response.ok) {
       if (response.status === 404) {
         console.warn(`  [SKIP] ${filename} - not found in blob storage`);
-        return null;
+        return { status: 'not_found' };
       }
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    return await response.text();
+    return { status: 'ok', content: await response.text() };
   } catch (error) {
     console.error(`  [ERROR] ${filename}:`, error);
-    return null;
+    return { status: 'error', error };
   }
 }
 
@@ -59,18 +64,25 @@ async function main() {
 
   let successCount = 0;
   let skipCount = 0;
-  const errorCount = 0;
+  let errorCount = 0;
 
   for (const filename of CONTENT_FILES) {
-    const content = await fetchFile(filename);
+    const result = await fetchFile(filename);
 
-    if (content !== null) {
-      const localPath = join(LOCAL_CONTENT_DIR, filename);
-      await writeFile(localPath, content, 'utf-8');
-      console.log(`  [OK] ${filename}`);
-      successCount++;
-    } else {
-      skipCount++;
+    switch (result.status) {
+      case 'ok': {
+        const localPath = join(LOCAL_CONTENT_DIR, filename);
+        await writeFile(localPath, result.content, 'utf-8');
+        console.log(`  [OK] ${filename}`);
+        successCount++;
+        break;
+      }
+      case 'not_found':
+        skipCount++;
+        break;
+      case 'error':
+        errorCount++;
+        break;
     }
   }
 

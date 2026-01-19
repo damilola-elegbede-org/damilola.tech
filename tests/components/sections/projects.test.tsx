@@ -52,8 +52,8 @@ describe('Projects', () => {
     expect(screen.getByText('JavaScript')).toBeInTheDocument();
     expect(screen.getByText('Next.js')).toBeInTheDocument();
     expect(screen.getByText('Stripe')).toBeInTheDocument();
-    // Claude API appears in multiple projects
-    expect(screen.getAllByText('Claude API').length).toBeGreaterThan(0);
+    // Claude API appears in 2 projects (damilola.tech and Pipedream)
+    expect(screen.getAllByText('Claude API')).toHaveLength(2);
   });
 
   it('renders project links', () => {
