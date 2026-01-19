@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui';
@@ -21,6 +21,34 @@ export function FitAssessment() {
   const [examplesLoading, setExamplesLoading] = useState(true);
   const [examplesError, setExamplesError] = useState(false);
   const { ref, isVisible } = useScrollReveal();
+  const resultRef = useRef<HTMLDivElement>(null);
+
+  const handleDownloadMD = useCallback(() => {
+    if (!completion) return;
+    const blob = new Blob([completion], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'fit-assessment.md';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [completion]);
+
+  const handleDownloadPDF = useCallback(async () => {
+    if (!resultRef.current || !completion) return;
+    const html2pdf = (await import('html2pdf.js')).default;
+    const element = resultRef.current;
+    const opt = {
+      margin: [0.5, 0.5, 0.5, 0.5] as [number, number, number, number],
+      filename: 'fit-assessment.pdf',
+      image: { type: 'jpeg' as const, quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'in' as const, format: 'letter' as const, orientation: 'portrait' as const },
+    };
+    html2pdf().set(opt).from(element).save();
+  }, [completion]);
 
   // Fetch example JDs on mount
   useEffect(() => {
@@ -164,7 +192,18 @@ export function FitAssessment() {
             aria-live="polite"
             aria-atomic="true"
           >
-            <div className="prose prose-invert max-w-none">
+            {/* Download Buttons - only show when result is complete */}
+            {completion && !isLoading && (
+              <div className="mb-4 flex gap-2">
+                <Button variant="secondary" size="sm" onClick={handleDownloadMD}>
+                  Download MD
+                </Button>
+                <Button variant="secondary" size="sm" onClick={handleDownloadPDF}>
+                  Download PDF
+                </Button>
+              </div>
+            )}
+            <div ref={resultRef} className="prose prose-invert max-w-none">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {completion || 'Analyzing job fit...'}
               </ReactMarkdown>

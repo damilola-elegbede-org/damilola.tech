@@ -53,3 +53,18 @@ Required in `.env.local` (never commit):
 - Full context window approach (no RAG)
 - Prompt caching enabled for cost/latency optimization
 - System prompt includes resume, STAR stories, leadership philosophy
+
+## Section Background Pattern
+Sections alternate backgrounds for visual rhythm:
+- Odd sections (1, 3, 5): Default `var(--color-bg)`
+- Even sections (2, 4, 6): Alternate `bg-[var(--color-bg-alt)]`
+
+Current order (1-indexed):
+1. Hero - default
+2. Experience - default
+3. SkillsAssessment - alternate (bg-[var(--color-bg-alt)])
+4. Education - default
+5. FitAssessment - alternate (bg-[var(--color-bg-alt)])
+6. Contact - default
+
+When adding new sections, maintain this alternation.

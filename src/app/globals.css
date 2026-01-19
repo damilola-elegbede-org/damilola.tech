@@ -144,3 +144,22 @@ html {
   margin-top: 1rem;
   margin-bottom: 0.5rem;
 }
+
+.fit-assessment-result .prose p {
+  margin-bottom: 1rem;
+}
+
+.fit-assessment-result .prose ul,
+.fit-assessment-result .prose ol {
+  margin-top: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.fit-assessment-result .prose li {
+  margin-bottom: 0.5rem;
+}
+
+.fit-assessment-result .prose hr {
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}

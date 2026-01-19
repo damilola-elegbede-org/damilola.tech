@@ -6,8 +6,8 @@ import { cn } from '@/lib/utils';
 const navItems = [
   { label: 'Experience', href: '#experience' },
   { label: 'Skills', href: '#skills-assessment' },
-  { label: 'Fit Check', href: '#fit-assessment' },
   { label: 'Education', href: '#education' },
+  { label: 'Fit Check', href: '#fit-assessment' },
 ];
 
 interface NavMenuProps {

@@ -20,16 +20,16 @@ describe('ChatFab', () => {
     expect(screen.getByLabelText('Open chat')).toBeInTheDocument();
   });
 
-  it('shows close icon when open', () => {
-    render(<ChatFab onClick={() => {}} isOpen={true} />);
-    expect(screen.getByLabelText('Close chat')).toBeInTheDocument();
+  it('renders nothing when open', () => {
+    const { container } = render(<ChatFab onClick={() => {}} isOpen={true} />);
+    expect(container.firstChild).toBeNull();
   });
 
-  it('applies different styles when open vs closed', () => {
-    const { rerender } = render(<ChatFab onClick={() => {}} isOpen={false} />);
-    expect(screen.getByRole('button')).toHaveClass('bg-[var(--color-accent)]');
+  it('only renders when closed', () => {
+    const { rerender, container } = render(<ChatFab onClick={() => {}} isOpen={false} />);
+    expect(screen.getByRole('button')).toBeInTheDocument();
 
     rerender(<ChatFab onClick={() => {}} isOpen={true} />);
-    expect(screen.getByRole('button')).toHaveClass('bg-[var(--color-text-muted)]');
+    expect(container.firstChild).toBeNull();
   });
 });
