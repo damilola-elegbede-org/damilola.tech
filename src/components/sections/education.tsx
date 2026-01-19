@@ -23,7 +23,7 @@ export function Education() {
         </h2>
         <div className="space-y-4">
           {resumeData.education.map((edu) => (
-            <Card key={edu.id} className="bg-[var(--color-card-elevated)]">
+            <Card key={edu.id} className="bg-[var(--color-bg)]">
               <CardContent>
                 <h3 className="text-lg font-semibold text-[var(--color-text)]">
                   {edu.degree}
