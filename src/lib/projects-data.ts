@@ -7,25 +7,25 @@ export const projectsData: Project[] = [
     subtitle: 'Full-stack event management platform for Latin dance festivals',
     description:
       'Complete ticketing and event management system built from scratch to handle multi-tier pricing, payment processing, and attendee check-in.',
-    techStack: ['JavaScript', 'Node.js', 'Vercel', 'Stripe', 'Brevo'],
+    techStack: ['JavaScript', 'Node.js', 'Vercel', 'Stripe', 'Brevo', 'Turso'],
     links: [
       {
         label: 'Live Site',
-        url: 'https://alocubanoboulder.com',
+        url: 'https://alocubanoboulderfest.org',
         icon: 'external',
       },
       {
         label: 'GitHub',
-        url: 'https://github.com/damilola-elegbede/alo-cubano-boulder-fest',
+        url: 'https://github.com/damilola-elegbede/alocubano.boulderfest',
         icon: 'github',
       },
     ],
     stats: {
-      label: 'First Event Results',
+      label: 'Technical Achievements',
       items: [
-        '$3,850 gross revenue across 47 tickets sold',
-        'QR code check-in system processed all attendees with zero issues',
-        '100% email delivery rate via Brevo transactional emails',
+        '3,229 tests across 104 files with 92% coverage',
+        '333 pull requests merged during development',
+        '$3,850 revenue processed at first event (47 tickets)',
       ],
     },
     categories: [
@@ -74,12 +74,20 @@ export const projectsData: Project[] = [
           'Mobile-responsive admin interface',
         ],
       },
+      {
+        title: 'Mobile & Security',
+        items: [
+          'Apple Wallet and Google Wallet pass generation',
+          'JWT-based QR codes with dual caching (24h HTTP + 7d client)',
+          'Three-tier database backup strategy with Turso PITR',
+        ],
+      },
     ],
   },
   {
     id: 'damilola-tech',
     name: 'damilola.tech',
-    subtitle: 'AI-powered career landing page',
+    subtitle: 'This site — AI-powered career landing page',
     description:
       'Personal portfolio with an AI chatbot that answers recruiter questions about experience, skills, and role fit using Claude with full context.',
     techStack: ['Next.js', 'TypeScript', 'Tailwind CSS', 'Claude API', 'Vercel'],
@@ -95,44 +103,59 @@ export const projectsData: Project[] = [
         icon: 'github',
       },
     ],
+    stats: {
+      label: 'Technical Metrics',
+      items: [
+        '490+ test assertions with 61% test-to-code ratio',
+        '35+ ARIA attributes for WCAG accessibility compliance',
+        '3,455 lines of TypeScript in strict mode',
+      ],
+    },
     highlights: [
-      'Full context window approach - no RAG, entire resume and STAR stories in prompt',
-      'Prompt caching enabled for cost and latency optimization',
-      'Fit Assessment feature analyzes job descriptions and provides honest match analysis',
-      'TDD development with Vitest, React Testing Library, and Playwright',
-      'McKinsey-inspired design system with dark mode and accessibility focus',
+      'Streaming AI responses with ReadableStream chunked delivery',
+      'Full context window approach — 100K+ tokens of career data, no RAG',
+      'Real-time Fit Assessment with PDF export and role title extraction',
+      'Session persistence via localStorage with 50-message history',
+      'Build-time prompt compilation with split-template architecture',
     ],
   },
   {
     id: 'pipedream-automation',
     name: 'Pipedream Automation Suite',
-    subtitle: 'Serverless workflow automation for personal productivity',
+    subtitle: 'AI-powered productivity automation with bidirectional sync',
     description:
-      'Collection of automated workflows connecting various APIs and services to streamline recurring tasks and data synchronization.',
-    techStack: ['Pipedream', 'Node.js', 'REST APIs', 'Cron'],
+      '5 production workflows automating task management across Gmail, Notion, and Google Tasks with Claude AI scoring.',
+    techStack: ['Pipedream', 'Node.js', 'Claude API', 'Notion API', 'Gmail API'],
     links: [
       {
-        label: 'Pipedream',
-        url: 'https://pipedream.com',
-        icon: 'external',
+        label: 'GitHub',
+        url: 'https://github.com/damilola-elegbede/pipedream-automation',
+        icon: 'github',
       },
     ],
+    stats: {
+      label: 'Automation Metrics',
+      items: [
+        '5 deployed workflows with 2,349 lines of automation code',
+        '19 pull requests refining workflow logic and error handling',
+        'Parallel execution with 6-10 concurrent workers',
+      ],
+    },
     highlights: [
-      'Automated expense tracking from email receipts to spreadsheet',
-      'Calendar sync between personal and work accounts with conflict detection',
-      'Social media cross-posting with platform-specific formatting',
-      'Webhook endpoints for custom integrations with IoT devices',
-      'Scheduled data backups with error notification via SMS',
-      'API rate limiting and retry logic for reliable execution',
+      'Gmail → Notion task creation with HTML extraction and deduplication',
+      'Bidirectional sync between Notion tasks and Google Tasks',
+      'AI-powered Horizon scoring (0-100) using Claude for task prioritization',
+      'Exponential backoff with rate limit handling for API reliability',
+      'Multi-threaded execution for scoring 100+ tasks in parallel',
     ],
   },
   {
     id: 'claude-config',
     name: 'Claude Configuration System',
-    subtitle: 'Structured AI assistant customization framework',
+    subtitle: 'Enterprise-grade AI assistant customization framework',
     description:
-      'Personal CLAUDE.md configuration system that defines operating principles, delegation frameworks, and quality standards for Claude Code.',
-    techStack: ['Markdown', 'Claude Code', 'Git'],
+      'Comprehensive Claude Code configuration powering 550 PRs and 39 issues (77% resolved) across 16 repositories.',
+    techStack: ['YAML', 'Markdown', 'Claude Code', 'Shell', 'Git'],
     links: [
       {
         label: 'GitHub',
@@ -140,12 +163,21 @@ export const projectsData: Project[] = [
         icon: 'github',
       },
     ],
+    stats: {
+      label: 'Scale & Impact',
+      items: [
+        '550 pull requests generated across 16 active repositories',
+        '39 issues tracked with 77% resolution rate (30 closed, 9 open)',
+        '1,743 versioned backups tracking configuration evolution',
+      ],
+    },
     highlights: [
-      'Binary delegation framework for task classification (direct vs agent delegation)',
-      'Orchestration patterns for parallel, pipeline, and analyze-then-execute workflows',
-      'Quality gates enforcement - never bypass git hooks or skip tests',
-      'Specialized agent routing based on task complexity and domain',
-      'Consistent file organization with .tmp/ for working documents',
+      '20 custom slash commands (/ship-it, /review, /commit, /debug, /pr, etc.)',
+      '12 specialized agents with domain expertise routing',
+      '17 integrated skills for career, coding, and automation tasks',
+      'Three orchestration patterns: Parallel, Pipeline, Analyze-Then-Execute',
+      'Binary delegation framework for optimal task classification',
+      'Quality gates enforcement — never bypass hooks or skip tests',
     ],
   },
 ];
