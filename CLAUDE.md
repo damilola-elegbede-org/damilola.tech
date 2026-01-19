@@ -74,8 +74,8 @@ blob token, files are read from `.tmp/content/` fallback.
 
 ## Section Background Pattern
 Sections alternate backgrounds for visual rhythm:
-- Odd sections (1, 3, 5): Default `var(--color-bg)`
-- Even sections (2, 4, 6): Alternate `bg-[var(--color-bg-alt)]`
+- Odd sections (1, 3, 5): Default `var(--color-bg)` (#0D1117)
+- Even sections (2, 4, 6): Alternate `bg-[var(--color-bg-alt)]` (#161B22)
 
 Current order (1-indexed):
 1. Hero - default
@@ -88,3 +88,18 @@ Current order (1-indexed):
 Note: The footer (Contact component) is not a section and uses default bg.
 
 When adding new sections, maintain this alternation.
+
+### Card Contrast Rules
+Cards within sections must have **minimum 10 RGB units** difference from section background.
+
+| Section Background | Card Background | Contrast |
+|--------------------|-----------------|----------|
+| `--color-bg` (#0D1117) | `--color-card` (#1C2128) | ✓ Card is lighter |
+| `--color-bg-alt` (#161B22) | `--color-bg` (#0D1117) | ✓ Card is darker |
+
+**Never use:**
+- `--color-card` on `--color-bg-alt` sections (only 6 RGB units - insufficient)
+- Same color for section and card
+
+Nested panels (like AI Context) use the section's color to create alternating contrast:
+Section → Card → Nested panel alternates colors.

@@ -17,7 +17,7 @@ export function ExperienceCard({ experience }: ExperienceCardProps) {
     : experience.highlights.slice(0, 3);
 
   return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-6 transition-all duration-200 hover:border-[var(--color-accent)] hover:shadow-[0_0_20px_rgba(96,165,250,0.2)]">
+    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-6 transition-all duration-200 hover:border-[var(--color-accent)] hover:shadow-[0_0_20px_rgba(96,165,250,0.2)]">
       {/* Header */}
       <div className="mb-4">
         <h3 className="text-xl font-semibold text-[var(--color-text)]">
