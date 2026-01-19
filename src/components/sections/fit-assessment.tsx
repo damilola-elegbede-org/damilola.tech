@@ -17,6 +17,7 @@ export function FitAssessment() {
   const [completion, setCompletion] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const [examples, setExamples] = useState<ExampleJDs | null>(null);
   const [examplesLoading, setExamplesLoading] = useState(true);
   const [examplesError, setExamplesError] = useState(false);
@@ -147,9 +148,10 @@ export function FitAssessment() {
     // Pass clone directly to html2pdf - NO DOM insertion
     try {
       await html2pdf().set(opt).from(clone).save();
+      setDownloadError(null);
     } catch (err) {
       console.error('PDF generation failed:', err);
-      setError('Failed to generate PDF. Please try the Markdown download instead.');
+      setDownloadError('Failed to generate PDF. Please try the Markdown download instead.');
     }
   }, [completion]);
 
@@ -329,24 +331,31 @@ export function FitAssessment() {
           >
             {/* Download Buttons - only show when result is complete */}
             {completion && !isLoading && (
-              <div className="mb-4 flex gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleDownloadMD}
-                  aria-label="Download fit assessment as Markdown file"
-                >
-                  Download MD
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleDownloadPDF}
-                  aria-label="Download fit assessment as PDF file"
-                >
-                  Download PDF
-                </Button>
-              </div>
+              <>
+                <div className="mb-4 flex gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleDownloadMD}
+                    aria-label="Download fit assessment as Markdown file"
+                  >
+                    Download MD
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleDownloadPDF}
+                    aria-label="Download fit assessment as PDF file"
+                  >
+                    Download PDF
+                  </Button>
+                </div>
+                {downloadError && (
+                  <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-amber-400 text-sm">
+                    {downloadError}
+                  </div>
+                )}
+              </>
             )}
             <div ref={resultRef} className="prose prose-invert max-w-none">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>

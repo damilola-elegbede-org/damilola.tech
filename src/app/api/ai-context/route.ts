@@ -5,7 +5,7 @@ import type { AiContext } from '@/types';
 
 export const runtime = 'nodejs';
 
-export async function GET(): Promise<NextResponse<Record<string, AiContext>>> {
+export async function GET(): Promise<NextResponse<Record<string, AiContext> | { error: string }>> {
   try {
     const markdown = await fetchAiContext();
     const contextMap = parseAiContext(markdown);
@@ -23,6 +23,9 @@ export async function GET(): Promise<NextResponse<Record<string, AiContext>>> {
     });
   } catch (error) {
     console.error('Error fetching AI context:', error);
-    return NextResponse.json({});
+    return NextResponse.json(
+      { error: 'Failed to fetch AI context' },
+      { status: 500 }
+    );
   }
 }
