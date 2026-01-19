@@ -1,8 +1,7 @@
 export interface AiContext {
-  situation: string;
-  approach: string;
-  technicalWork?: string;
-  lessonsLearned: string;
+  strategicContext: string;
+  leadershipChallenge: string;
+  keyInsight: string;
 }
 
 export interface Experience {
@@ -61,4 +60,30 @@ export interface ChatMessage {
 export interface SuggestedQuestion {
   label: string;
   question: string;
+}
+
+export interface ProjectLink {
+  label: string;
+  url: string;
+  icon: 'external' | 'github';
+}
+
+export interface ProjectCategory {
+  title: string;
+  items: string[];
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  subtitle: string;
+  description: string;
+  techStack: string[];
+  links: ProjectLink[];
+  highlights?: string[];
+  categories?: ProjectCategory[];
+  stats?: {
+    label: string;
+    items: string[];
+  };
 }

@@ -17,6 +17,7 @@ export function FitAssessment() {
   const [completion, setCompletion] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const [examples, setExamples] = useState<ExampleJDs | null>(null);
   const [examplesLoading, setExamplesLoading] = useState(true);
   const [examplesError, setExamplesError] = useState(false);
@@ -145,7 +146,13 @@ export function FitAssessment() {
     };
 
     // Pass clone directly to html2pdf - NO DOM insertion
-    await html2pdf().set(opt).from(clone).save();
+    try {
+      await html2pdf().set(opt).from(clone).save();
+      setDownloadError(null);
+    } catch (err) {
+      console.error('PDF generation failed:', err);
+      setDownloadError('Failed to generate PDF. Please try the Markdown download instead.');
+    }
   }, [completion]);
 
   // Fetch example JDs on mount
@@ -169,7 +176,7 @@ export function FitAssessment() {
     loadExamples();
   }, []);
 
-  const handleAnalyze = useCallback(async () => {
+  const handleAnalyze = useCallback(async (signal?: AbortSignal) => {
     if (!jobDescription.trim()) return;
 
     setIsLoading(true);
@@ -181,6 +188,7 @@ export function FitAssessment() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: jobDescription }),
+        signal,
       });
 
       if (!res.ok) {
@@ -195,21 +203,44 @@ export function FitAssessment() {
       const decoder = new TextDecoder();
       let text = '';
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        text += decoder.decode(value, { stream: true });
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          text += decoder.decode(value, { stream: true });
+          setCompletion(text);
+        }
+        // Flush any remaining buffered bytes
+        text += decoder.decode();
         setCompletion(text);
+      } finally {
+        reader.releaseLock();
       }
-      // Flush any remaining buffered bytes
-      text += decoder.decode();
-      setCompletion(text);
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        return; // Silently handle abort
+      }
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setIsLoading(false);
     }
   }, [jobDescription]);
+
+  // Cleanup stream on unmount
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleAnalyzeClick = useCallback(() => {
+    // Abort any existing request
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+    handleAnalyze(abortControllerRef.current.signal);
+  }, [handleAnalyze]);
+
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   return (
     <section id="fit-assessment" className="bg-[var(--color-bg-alt)] px-6 py-20">
@@ -270,13 +301,13 @@ export function FitAssessment() {
           value={jobDescription}
           onChange={(e) => setJobDescription(e.target.value)}
           placeholder="Paste job description here..."
-          className="mb-4 h-[30rem] w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-4 text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+          className="mb-4 h-[30rem] w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-4 text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
           aria-label="Job description"
         />
 
         {/* Submit Button */}
         <Button
-          onClick={handleAnalyze}
+          onClick={handleAnalyzeClick}
           disabled={isLoading || !jobDescription.trim()}
           className="mb-8"
         >
@@ -294,20 +325,37 @@ export function FitAssessment() {
         {/* Assessment Result */}
         {(completion || isLoading) && (
           <div
-            className="fit-assessment-result rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-6"
+            className="fit-assessment-result rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-6"
             aria-live="polite"
             aria-atomic="true"
           >
             {/* Download Buttons - only show when result is complete */}
             {completion && !isLoading && (
-              <div className="mb-4 flex gap-2">
-                <Button variant="secondary" size="sm" onClick={handleDownloadMD}>
-                  Download MD
-                </Button>
-                <Button variant="secondary" size="sm" onClick={handleDownloadPDF}>
-                  Download PDF
-                </Button>
-              </div>
+              <>
+                <div className="mb-4 flex gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleDownloadMD}
+                    aria-label="Download fit assessment as Markdown file"
+                  >
+                    Download MD
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleDownloadPDF}
+                    aria-label="Download fit assessment as PDF file"
+                  >
+                    Download PDF
+                  </Button>
+                </div>
+                {downloadError && (
+                  <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-amber-400 text-sm">
+                    {downloadError}
+                  </div>
+                )}
+              </>
             )}
             <div ref={resultRef} className="prose prose-invert max-w-none">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>

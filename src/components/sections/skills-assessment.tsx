@@ -117,7 +117,7 @@ export function SkillsAssessment() {
       id="skills-assessment"
       ref={ref as React.RefObject<HTMLElement>}
       className={cn(
-        'bg-[var(--color-bg-alt)] px-6 py-20 transition-all duration-700 ease-out',
+        'px-6 py-20 transition-all duration-700 ease-out',
         isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
       )}
     >

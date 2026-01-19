@@ -17,7 +17,7 @@ export function ExperienceCard({ experience }: ExperienceCardProps) {
     : experience.highlights.slice(0, 3);
 
   return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-6 transition-all duration-200 hover:border-[var(--color-accent)] hover:shadow-[0_0_20px_rgba(96,165,250,0.2)]">
+    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-6 transition-all duration-200 hover:border-[var(--color-accent)] hover:shadow-[0_0_20px_rgba(96,165,250,0.2)]">
       {/* Header */}
       <div className="mb-4">
         <h3 className="text-xl font-semibold text-[var(--color-text)]">
@@ -92,29 +92,21 @@ export function ExperienceCard({ experience }: ExperienceCardProps) {
               className="mt-4 space-y-4 rounded-lg bg-[var(--color-bg-alt)] p-4 text-sm"
             >
               <div>
-                <h4 className="font-semibold text-[var(--color-text)]">Situation</h4>
+                <h4 className="font-semibold text-[var(--color-text)]">Strategic Context</h4>
                 <p className="mt-1 text-[var(--color-text-muted)]">
-                  {experience.aiContext.situation}
+                  {experience.aiContext.strategicContext}
                 </p>
               </div>
               <div>
-                <h4 className="font-semibold text-[var(--color-text)]">Approach</h4>
+                <h4 className="font-semibold text-[var(--color-text)]">Leadership Challenge</h4>
                 <p className="mt-1 text-[var(--color-text-muted)]">
-                  {experience.aiContext.approach}
+                  {experience.aiContext.leadershipChallenge}
                 </p>
               </div>
-              {experience.aiContext.technicalWork && (
-                <div>
-                  <h4 className="font-semibold text-[var(--color-text)]">Technical Work</h4>
-                  <p className="mt-1 text-[var(--color-text-muted)]">
-                    {experience.aiContext.technicalWork}
-                  </p>
-                </div>
-              )}
               <div>
-                <h4 className="font-semibold text-[var(--color-text)]">Lessons Learned</h4>
-                <p className="mt-1 text-[var(--color-text-muted)]">
-                  {experience.aiContext.lessonsLearned}
+                <h4 className="font-semibold text-[var(--color-text)]">Key Insight</h4>
+                <p className="mt-1 italic text-[var(--color-text-muted)]">
+                  {experience.aiContext.keyInsight}
                 </p>
               </div>
             </div>

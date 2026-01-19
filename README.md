@@ -61,6 +61,8 @@ Open [http://localhost:3000](http://localhost:3000) to view the site.
 | `npm run test:e2e` | Run E2E tests (Playwright) |
 | `npm run test:e2e:ui` | Run E2E tests with UI |
 | `npm run generate-prompt` | Generate system prompt from template |
+| `npm run content:pull` | Download content from Vercel Blob to `.tmp/content/` |
+| `npm run content:push` | Upload local content changes to Vercel Blob |
 
 ## Project Structure
 
@@ -80,6 +82,7 @@ src/
 ├── lib/
 │   ├── generated/      # Auto-generated files (gitignored)
 │   ├── blob.ts         # Vercel Blob fetching
+│   ├── projects-data.ts # Project portfolio data
 │   ├── resume-data.ts  # Resume data
 │   ├── system-prompt.ts # AI system prompt builder
 │   └── utils.ts        # General utilities
@@ -87,7 +90,9 @@ src/
 
 scripts/                # Build scripts
 ├── generate-prompt.ts  # System prompt generator
-content/                # Local dev content (mirrored to Vercel Blob)
+├── content-pull.ts     # Download content from Vercel Blob
+├── content-push.ts     # Upload content to Vercel Blob
+.tmp/content/           # Local content files (gitignored)
 tests/                  # Unit tests
 e2e/                    # Playwright E2E tests
 ```
@@ -114,6 +119,15 @@ The system prompt is assembled at build time using a split-template architecture
    - `CHATBOT_SYSTEM_PROMPT`: Shared context + chatbot instructions (used by Chat)
 
 This architecture ensures the Fit Assessment feature gets clean profile data without chatbot-specific instructions leaking in.
+
+### Content Management
+
+Content files (system prompts, STAR stories, feedback) are stored in Vercel Blob for security:
+
+1. **Pull content**: `npm run content:pull` downloads all files to `.tmp/content/`
+2. **Edit locally**: Modify files in `.tmp/content/`
+3. **Push changes**: `npm run content:push` uploads changes to Vercel Blob
+4. **Rebuild**: Run `npm run build` to regenerate cached prompts
 
 ### Content Security
 

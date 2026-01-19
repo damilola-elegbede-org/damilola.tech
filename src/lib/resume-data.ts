@@ -29,12 +29,6 @@ export const resumeData: ResumeData = {
         'Delivered complex multi-phase production launches including T1D platform (20+ systems, 5 deployment phases), managing cross-functional dependencies and security compliance requirements.',
         'Established Cumulus Office Hours support model and SLA framework, transforming infrastructure support from reactive to proactive while maintaining sub-4-hour resolution times for critical issues.',
       ],
-      aiContext: {
-        situation: 'Joined during a critical transition period. The organization was migrating from G3 to GCP with 30+ production systems needing cloud infrastructure. Multiple product launches (L\'Oreal LDP, T1D) were on aggressive timelines. No established cloud infrastructure team or developer experience function existed.',
-        approach: 'Built the Cumulus squad charter and Cloud Infrastructure function from scratch. Established Cumulus Office Hours as a proactive support model with defined SLAs (sub-4-hour resolution for critical issues). Created standardized onboarding processes and partnered closely with PECO, VEGA, Foundations, and Verily Security teams.',
-        technicalWork: 'Led cloud environment actuations across dev-unstable, dev-stable, test, staging, and production. Established CI/CD pipelines using GitHub Actions (reduced usage by 30%). Enabled multi-cloud AWS/GCP communications. Supported T1D production launches across 5 deployment phases with 20+ systems.',
-        lessonsLearned: 'Enterprise cloud transformation is fundamentally a people and process challenge. Success came from building trust across organizations, establishing clear support SLAs, and creating self-service capabilities. The Cumulus Office Hours model was key - transforming infrastructure support from reactive firefighting to proactive partnership.',
-      },
     },
     {
       id: 'qualcomm-staff-manager',
@@ -49,12 +43,6 @@ export const resumeData: ResumeData = {
         'Led data-driven performance optimization using Splunk analytics, identifying and resolving signal-to-noise ratio issues across 40+ customer sites, directly improving chipset performance metrics.',
         'Established Release Engineering function compressing multi-day software deployment cycles to same-day delivery, accelerating time-to-market for critical 5G features.',
       ],
-      aiContext: {
-        situation: 'Customer support operations were reactive, with critical issues taking too long to resolve. Training was delivered through quarterly live sessions that couldn\'t scale across global time zones. Release engineering cycles stretched across multiple days.',
-        approach: 'Implemented a proactive support model using data-driven insights from Splunk analytics. Created a self-service 5G training platform to replace live sessions. Established a dedicated Release Engineering function to compress deployment cycles.',
-        technicalWork: 'Built Splunk dashboards to analyze signal-to-noise ratio issues across 40+ customer sites. Designed the self-service training platform architecture enabling 24/7 access. Streamlined release engineering processes to enable same-day delivery.',
-        lessonsLearned: 'Scaling support means removing yourself from the critical path. The self-service training platform was a forcing function - by making knowledge accessible 24/7, we empowered customers to solve their own problems. Data visibility changed conversations from "we think there\'s a problem" to "here\'s exactly where and why."',
-      },
     },
     {
       id: 'qualcomm-staff',
@@ -68,12 +56,6 @@ export const resumeData: ResumeData = {
         'Implemented CI/CD transformation reducing build times by 87% (4 hours to 30 minutes), improving productivity for 100+ engineers and accelerating feature delivery.',
         'Led Agile transformation achieving 40% productivity improvement, implementing Scrum for development teams and Kanban for customer support operations.',
       ],
-      aiContext: {
-        situation: 'Development teams were delivering 4G features using waterfall processes with 4-hour build times. No standardized Agile practices existed, and productivity metrics were difficult to measure or improve.',
-        approach: 'Championed CI/CD transformation to compress build cycles. Led Agile adoption by implementing Scrum for development teams and Kanban for support operations. Established metrics-driven delivery practices.',
-        technicalWork: 'Redesigned CI/CD pipeline architecture reducing build times from 4 hours to 30 minutes. Implemented automated testing frameworks that enabled 6 major releases annually with 99.9% platform stability.',
-        lessonsLearned: 'Process transformation requires demonstrating value early. The CI/CD improvements gave teams immediate productivity gains that built momentum for broader Agile adoption. Choosing Scrum vs Kanban based on team context - development vs support - was critical to success.',
-      },
     },
     {
       id: 'qualcomm-senior',

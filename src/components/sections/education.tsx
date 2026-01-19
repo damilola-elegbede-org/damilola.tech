@@ -13,7 +13,7 @@ export function Education() {
       id="education"
       ref={ref as React.RefObject<HTMLElement>}
       className={cn(
-        'px-6 py-20 transition-all duration-700 ease-out',
+        'bg-[var(--color-bg-alt)] px-6 py-20 transition-all duration-700 ease-out',
         isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
       )}
     >
@@ -23,7 +23,7 @@ export function Education() {
         </h2>
         <div className="space-y-4">
           {resumeData.education.map((edu) => (
-            <Card key={edu.id}>
+            <Card key={edu.id} className="bg-[var(--color-bg)]">
               <CardContent>
                 <h3 className="text-lg font-semibold text-[var(--color-text)]">
                   {edu.degree}

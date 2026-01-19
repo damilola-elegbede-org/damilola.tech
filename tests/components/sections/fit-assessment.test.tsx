@@ -139,6 +139,7 @@ describe('FitAssessment', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: 'Engineering Manager role' }),
+        signal: expect.any(AbortSignal),
       });
     });
   });
@@ -275,7 +276,7 @@ describe('FitAssessment', () => {
       fireEvent.click(screen.getByRole('button', { name: /analyze fit/i }));
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /download md/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /download fit assessment as markdown/i })).toBeInTheDocument();
       });
     });
 
@@ -305,7 +306,7 @@ describe('FitAssessment', () => {
         expect(screen.getByText(/Analyzing job fit/i)).toBeInTheDocument();
       });
 
-      expect(screen.queryByRole('button', { name: /download md/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /download fit assessment as markdown/i })).not.toBeInTheDocument();
     });
 
     it('download MD creates blob with correct content', async () => {
@@ -335,10 +336,10 @@ describe('FitAssessment', () => {
       fireEvent.click(screen.getByRole('button', { name: /analyze fit/i }));
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /download md/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /download fit assessment as markdown/i })).toBeInTheDocument();
       });
 
-      fireEvent.click(screen.getByRole('button', { name: /download md/i }));
+      fireEvent.click(screen.getByRole('button', { name: /download fit assessment as markdown/i }));
 
       expect(mockCreateObjectURL).toHaveBeenCalled();
       expect(mockClick).toHaveBeenCalled();
@@ -375,10 +376,10 @@ describe('FitAssessment', () => {
       fireEvent.click(screen.getByRole('button', { name: /analyze fit/i }));
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /download md/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /download fit assessment as markdown/i })).toBeInTheDocument();
       });
 
-      fireEvent.click(screen.getByRole('button', { name: /download md/i }));
+      fireEvent.click(screen.getByRole('button', { name: /download fit assessment as markdown/i }));
 
       expect(capturedAnchor).not.toBeNull();
       // Dynamic filename based on extracted role title from "# Fit Assessment: Engineering Manager"
@@ -395,7 +396,7 @@ describe('FitAssessment', () => {
       fireEvent.click(screen.getByRole('button', { name: /analyze fit/i }));
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /download pdf/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /download fit assessment as pdf/i })).toBeInTheDocument();
       });
     });
 
@@ -424,7 +425,7 @@ describe('FitAssessment', () => {
         expect(screen.getByText(/Analyzing job fit/i)).toBeInTheDocument();
       });
 
-      expect(screen.queryByRole('button', { name: /download pdf/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /download fit assessment as pdf/i })).not.toBeInTheDocument();
     });
 
     it('PDF download calls html2pdf with correct options', async () => {
@@ -444,12 +445,12 @@ describe('FitAssessment', () => {
       fireEvent.click(screen.getByRole('button', { name: /analyze fit/i }));
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /download pdf/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /download fit assessment as pdf/i })).toBeInTheDocument();
       });
 
       // The actual html2pdf module is dynamically imported in the component
       // This test verifies the button exists and is clickable
-      const pdfButton = screen.getByRole('button', { name: /download pdf/i });
+      const pdfButton = screen.getByRole('button', { name: /download fit assessment as pdf/i });
       expect(pdfButton).not.toBeDisabled();
     });
 

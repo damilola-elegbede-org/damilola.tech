@@ -25,25 +25,9 @@ const mockExperienceWithAiContext: Experience = {
   endDate: 'Present',
   highlights: ['Built infrastructure platform'],
   aiContext: {
-    situation: 'Joined during a critical transition period with no cloud infrastructure.',
-    approach: 'Built the Cloud Infrastructure function from scratch.',
-    technicalWork: 'Led cloud environment actuations across multiple environments.',
-    lessonsLearned: 'Enterprise cloud transformation is fundamentally a people challenge.',
-  },
-};
-
-const mockExperienceWithAiContextNoTechnical: Experience = {
-  id: 'test-exp-no-tech',
-  company: 'No Technical Company',
-  title: 'Staff Engineer',
-  location: 'Boulder, CO',
-  startDate: 'Jan 2019',
-  endDate: 'Dec 2021',
-  highlights: ['Led team initiatives'],
-  aiContext: {
-    situation: 'Legacy systems needed modernization.',
-    approach: 'Implemented incremental migration strategy.',
-    lessonsLearned: 'Small wins build momentum for larger changes.',
+    strategicContext: 'The organization was navigating a critical inflection point: migrating from internal infrastructure to public cloud.',
+    leadershipChallenge: 'The hardest part was organizational. Building trust with teams who had little reason to prioritize requests.',
+    keyInsight: 'Enterprise cloud transformation is fundamentally a people and process challenge.',
   },
 };
 
@@ -85,36 +69,22 @@ describe('ExperienceCard', () => {
       const button = screen.getByRole('button', { name: /ai context/i });
 
       // AI context content should not be visible initially
-      expect(screen.queryByText(/Situation/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Strategic Context/)).not.toBeInTheDocument();
 
       // Click to open
       fireEvent.click(button);
-      expect(screen.getByText('Situation')).toBeInTheDocument();
-      expect(screen.getByText('Approach')).toBeInTheDocument();
-      expect(screen.getByText('Technical Work')).toBeInTheDocument();
-      expect(screen.getByText('Lessons Learned')).toBeInTheDocument();
+      expect(screen.getByText('Strategic Context')).toBeInTheDocument();
+      expect(screen.getByText('Leadership Challenge')).toBeInTheDocument();
+      expect(screen.getByText('Key Insight')).toBeInTheDocument();
 
       // Verify actual content
-      expect(screen.getByText(/Joined during a critical transition period/)).toBeInTheDocument();
-      expect(screen.getByText(/Built the Cloud Infrastructure function/)).toBeInTheDocument();
-      expect(screen.getByText(/Led cloud environment actuations/)).toBeInTheDocument();
+      expect(screen.getByText(/navigating a critical inflection point/)).toBeInTheDocument();
+      expect(screen.getByText(/The hardest part was organizational/)).toBeInTheDocument();
       expect(screen.getByText(/Enterprise cloud transformation is fundamentally/)).toBeInTheDocument();
 
       // Click to close
       fireEvent.click(button);
-      expect(screen.queryByText('Situation')).not.toBeInTheDocument();
-    });
-
-    it('does not show Technical Work section when technicalWork is not provided', () => {
-      render(<ExperienceCard experience={mockExperienceWithAiContextNoTechnical} />);
-      const button = screen.getByRole('button', { name: /ai context/i });
-
-      fireEvent.click(button);
-
-      expect(screen.getByText('Situation')).toBeInTheDocument();
-      expect(screen.getByText('Approach')).toBeInTheDocument();
-      expect(screen.queryByText('Technical Work')).not.toBeInTheDocument();
-      expect(screen.getByText('Lessons Learned')).toBeInTheDocument();
+      expect(screen.queryByText('Strategic Context')).not.toBeInTheDocument();
     });
   });
 });

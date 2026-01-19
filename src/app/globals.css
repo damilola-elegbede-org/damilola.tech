@@ -8,6 +8,7 @@
   --color-bg: #0D1117;
   --color-bg-alt: #161B22;
   --color-card: #1C2128;
+  --color-card-elevated: #252D38;
   --color-card-expert: #0D1B2A;
   --color-card-proficient: #1E2530;
   --color-card-familiar: #1A1D24;
@@ -37,6 +38,7 @@
   --color-bg: var(--color-bg);
   --color-bg-alt: var(--color-bg-alt);
   --color-card: var(--color-card);
+  --color-card-elevated: var(--color-card-elevated);
   --color-card-expert: var(--color-card-expert);
   --color-card-proficient: var(--color-card-proficient);
   --color-card-familiar: var(--color-card-familiar);

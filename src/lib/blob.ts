@@ -275,3 +275,12 @@ export async function fetchFitExamples(): Promise<{ strong: string; weak: string
   ]);
   return { strong, weak };
 }
+
+/**
+ * Fetch AI context for experience cards.
+ * Contains strategic context, leadership challenges, and key insights.
+ * Falls back to local file in development when blob token is not configured.
+ */
+export async function fetchAiContext(): Promise<string> {
+  return fetchWithLocalFallback('ai-context.md');
+}
