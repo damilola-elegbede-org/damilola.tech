@@ -23,7 +23,7 @@ describe('Hero', () => {
   it('renders the tagline', () => {
     render(<Hero onOpenChat={() => {}} />);
     expect(
-      screen.getByText('Building high-performance organizations that deliver enterprise-scale solutions')
+      screen.getByText('I build the teams that build the future')
     ).toBeInTheDocument();
   });
 
