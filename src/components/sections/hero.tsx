@@ -22,6 +22,18 @@ export function Hero({ onOpenChat }: HeroProps) {
         className="relative flex min-h-screen flex-col justify-center px-6 py-20"
       >
         <div className="mx-auto w-full max-w-5xl">
+          {/* Open to Roles */}
+          <div className="mb-8">
+            <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-2 text-sm text-[var(--color-text-muted)]">
+              <span
+                className="inline-block h-2 w-2 rounded-full bg-[#39FF14]"
+                aria-hidden="true"
+              />
+              <span className="sr-only">Currently available - </span>
+              Open to {resumeData.openToRoles.join(', ')}
+            </span>
+          </div>
+
           {/* Name */}
           <h1 className="mb-4 text-[var(--color-text)]">{resumeData.name}</h1>
 
@@ -45,14 +57,6 @@ export function Hero({ onOpenChat }: HeroProps) {
                 {tag}
               </span>
             ))}
-          </div>
-
-          {/* Status Pill */}
-          <div className="mb-8 flex items-center gap-2">
-            <span className="inline-block h-2 w-2 rounded-full bg-[var(--color-accent)]" />
-            <span className="text-sm text-[var(--color-text-muted)]">
-              Open to {resumeData.openToRoles.join(', ')} roles
-            </span>
           </div>
 
           {/* CTA Button */}

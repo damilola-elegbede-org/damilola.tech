@@ -14,7 +14,7 @@ test.describe('Home Page', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Damilola Elegbede');
     await expect(hero.getByText('Engineering Manager', { exact: true })).toBeVisible();
     await expect(
-      hero.getByText('Building high-performance organizations that deliver enterprise-scale solutions')
+      hero.getByText('I build the teams that build the future')
     ).toBeVisible();
 
     // CTA button

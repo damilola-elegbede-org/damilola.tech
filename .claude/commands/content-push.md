@@ -1,3 +1,8 @@
+---
+name: content-push
+description: Push .tmp/content files to Vercel Blob storage
+---
+
 # Content Push
 
 Push local `.tmp/content/` files to Vercel Blob storage.
@@ -7,8 +12,19 @@ Push local `.tmp/content/` files to Vercel Blob storage.
 2. Upload to Vercel Blob using @vercel/blob SDK
 3. Requires BLOB_READ_WRITE_TOKEN in .env.local
 
-## Usage
-Run `npm run content:push` after editing content files locally to sync changes to production.
+## Implementation
+
+Run the TypeScript script which handles checksum comparison and upload:
+
+```bash
+npx tsx scripts/content-push.ts
+```
+
+Or use the npm script:
+
+```bash
+npm run content:push
+```
 
 ## Prerequisites
 - BLOB_READ_WRITE_TOKEN must be set in `.env.local`

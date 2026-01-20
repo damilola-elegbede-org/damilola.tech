@@ -10,13 +10,20 @@ describe('Hero', () => {
 
   it('renders the title', () => {
     render(<Hero onOpenChat={() => {}} />);
-    expect(screen.getByText('Engineering Manager')).toBeInTheDocument();
+    // Title appears as both the main title and in the role bubbles
+    const titleElements = screen.getAllByText('Engineering Manager');
+    expect(titleElements.length).toBeGreaterThanOrEqual(1);
+    // Verify the main title has accent color styling
+    const mainTitle = titleElements.find(el =>
+      el.classList.contains('text-3xl') || el.classList.contains('text-4xl')
+    );
+    expect(mainTitle).toBeInTheDocument();
   });
 
   it('renders the tagline', () => {
     render(<Hero onOpenChat={() => {}} />);
     expect(
-      screen.getByText('Building high-performance organizations that deliver enterprise-scale solutions')
+      screen.getByText('I build the teams that build the future')
     ).toBeInTheDocument();
   });
 

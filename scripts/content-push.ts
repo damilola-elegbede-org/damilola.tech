@@ -6,7 +6,7 @@
  * Requires BLOB_READ_WRITE_TOKEN environment variable.
  */
 
-import { readdir, readFile } from 'fs/promises';
+import { readdir, readFile, lstat } from 'fs/promises';
 import { join } from 'path';
 import { createHash } from 'crypto';
 import { put } from '@vercel/blob';
@@ -16,8 +16,9 @@ import * as dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
 const BLOB_PATH_PREFIX = 'damilola.tech/content';
-const BLOB_BASE_URL = 'https://mikya8vluytqhmff.public.blob.vercel-storage.com';
+const BLOB_BASE_URL = process.env.BLOB_BASE_URL || 'https://mikya8vluytqhmff.public.blob.vercel-storage.com';
 const LOCAL_CONTENT_DIR = join(process.cwd(), '.tmp/content');
+const MAX_RESPONSE_SIZE = 10 * 1024 * 1024; // 10MB limit
 
 function md5(content: string): string {
   return createHash('md5').update(content).digest('hex');
@@ -28,6 +29,11 @@ async function getRemoteContent(filename: string): Promise<string | null> {
   try {
     const response = await fetch(url);
     if (response.ok) {
+      const contentLength = response.headers.get('content-length');
+      if (contentLength && parseInt(contentLength, 10) > MAX_RESPONSE_SIZE) {
+        console.error(`  [ERROR] ${filename}: Response too large (${contentLength} bytes)`);
+        return null;
+      }
       return await response.text();
     }
     return null;
@@ -65,7 +71,14 @@ async function uploadFile(filename: string, localContent: string): Promise<Uploa
     console.log(`  [UPLOADED] ${filename} -> ${blob.url}`);
     return 'uploaded';
   } catch (error) {
-    console.error(`  [ERROR] ${filename}:`, error);
+    const err = error as { code?: string; status?: number; message?: string };
+    if (err.code === 'EACCES') {
+      console.error(`  [ERROR] ${filename}: Permission denied`);
+    } else if (err.status === 429) {
+      console.error(`  [ERROR] ${filename}: Rate limited - try again later`);
+    } else {
+      console.error(`  [ERROR] ${filename}: ${err.message || 'Unknown error'}`);
+    }
     return 'error';
   }
 }
@@ -103,7 +116,23 @@ async function main() {
   let errorCount = 0;
 
   for (const filename of files) {
+    // Validate filename contains only safe characters (no path traversal)
+    if (!/^[a-zA-Z0-9._-]+$/.test(filename)) {
+      console.error(`  [SKIP] ${filename}: Invalid filename characters`);
+      errorCount++;
+      continue;
+    }
+
     const localPath = join(LOCAL_CONTENT_DIR, filename);
+
+    // Verify it's a regular file (not a symlink)
+    const stat = await lstat(localPath);
+    if (!stat.isFile()) {
+      console.error(`  [SKIP] ${filename}: Not a regular file`);
+      errorCount++;
+      continue;
+    }
+
     const content = await readFile(localPath, 'utf-8');
     const result = await uploadFile(filename, content);
 

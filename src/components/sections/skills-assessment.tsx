@@ -10,6 +10,12 @@ interface SkillCardProps {
   variant: 'expert' | 'proficient' | 'familiar';
 }
 
+const proficiencyLabels = {
+  expert: 'Expert',
+  proficient: 'Proficient',
+  familiar: 'Familiar',
+};
+
 function SkillCard({ title, items, variant }: SkillCardProps) {
   const variantStyles = {
     expert: {
@@ -17,67 +23,30 @@ function SkillCard({ title, items, variant }: SkillCardProps) {
       bg: 'bg-[var(--color-card-expert)]',
       hoverBorder: 'hover:border-[var(--color-skill-expert)]',
       hoverShadow: 'hover:shadow-[0_0_20px_rgba(96,165,250,0.2)]',
-      icon: (
-        <svg
-          aria-hidden="true"
-          focusable="false"
-          className="h-5 w-5 text-[var(--color-skill-expert)]"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M5 13l4 4L19 7"
-          />
-        </svg>
-      ),
       titleColor: 'text-[var(--color-skill-expert)]',
+      pillBorder: 'border-blue-400/50',
+      pillBg: 'bg-blue-500/10',
+      pillText: 'text-blue-300',
     },
     proficient: {
       border: 'border-[var(--color-skill-proficient)]',
       bg: 'bg-[var(--color-card-proficient)]',
       hoverBorder: 'hover:border-[var(--color-skill-proficient)]',
       hoverShadow: 'hover:shadow-[0_0_20px_rgba(100,116,139,0.2)]',
-      icon: (
-        <svg
-          aria-hidden="true"
-          focusable="false"
-          className="h-5 w-5 text-[var(--color-skill-proficient)]"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <circle cx="12" cy="12" r="3" strokeWidth={2} />
-        </svg>
-      ),
       titleColor: 'text-[var(--color-skill-proficient)]',
+      pillBorder: 'border-slate-400/50',
+      pillBg: 'bg-slate-500/10',
+      pillText: 'text-slate-300',
     },
     familiar: {
       border: 'border-[var(--color-skill-familiar)]',
       bg: 'bg-[var(--color-card-familiar)]',
       hoverBorder: 'hover:border-[var(--color-skill-familiar)]',
       hoverShadow: 'hover:shadow-[0_0_20px_rgba(71,85,105,0.2)]',
-      icon: (
-        <svg
-          aria-hidden="true"
-          focusable="false"
-          className="h-5 w-5 text-[var(--color-skill-familiar)]"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-          />
-        </svg>
-      ),
       titleColor: 'text-[var(--color-skill-familiar)]',
+      pillBorder: 'border-slate-500/50',
+      pillBg: 'bg-slate-600/10',
+      pillText: 'text-slate-400',
     },
   };
 
@@ -96,14 +65,23 @@ function SkillCard({ title, items, variant }: SkillCardProps) {
       <h3 className={`mb-4 text-lg font-semibold ${styles.titleColor}`}>
         {title}
       </h3>
-      <ul className="space-y-3">
+      <div className="flex flex-wrap gap-2" role="list" aria-label={`${title} skills`}>
         {items.map((item, i) => (
-          <li key={i} className="flex items-center gap-3 text-[var(--color-text)]">
-            {styles.icon}
-            <span>{item}</span>
-          </li>
+          <span
+            key={i}
+            role="listitem"
+            className={cn(
+              'rounded-full px-3 py-1 text-sm border',
+              styles.pillBorder,
+              styles.pillBg,
+              styles.pillText
+            )}
+          >
+            <span className="sr-only">{proficiencyLabels[variant]}: </span>
+            {item}
+          </span>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }

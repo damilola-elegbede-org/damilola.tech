@@ -3,15 +3,14 @@ import type { ResumeData, SuggestedQuestion } from '@/types';
 export const resumeData: ResumeData = {
   name: 'Damilola Elegbede',
   title: 'Engineering Manager',
-  tagline:
-    'Building high-performance organizations that deliver enterprise-scale solutions',
+  tagline: 'I build the teams that build the future',
   brandingStatement:
     "Strategic engineering leader with 15+ years scaling mission-critical infrastructure at Verily Life Sciences and Qualcomm. Designed a cloud transformation supporting 30+ production systems, enabling flagship product launches (L'Oréal LDP, T1D). Expert at building high-performance teams, driving GCP/AWS migrations, and establishing platform engineering practices that improve developer velocity and system reliability.",
   email: 'damilola.elegbede@gmail.com',
   linkedin: 'https://linkedin.com/in/damilola-elegbede/',
   github: 'https://github.com/damilola-elegbede',
   location: 'Boulder, CO',
-  openToRoles: ['Engineering Manager', 'Senior Engineering Manager'],
+  openToRoles: ['Engineering Manager', 'Senior Engineering Manager', 'Director of Engineering'],
   experienceTags: ['Ex-Verily', 'Ex-Qualcomm', 'MBA + MS CS'],
   experiences: [
     {
@@ -153,6 +152,9 @@ export const resumeData: ResumeData = {
       'Organizational Transformation',
       'CI/CD Pipeline Design',
       'Jenkins',
+      'Incident Management',
+      'Mentoring/Coaching',
+      'Training Development',
     ],
     proficient: [
       'GCP',
@@ -163,8 +165,27 @@ export const resumeData: ResumeData = {
       'SRE Principles',
       'Telecom Systems (5G/4G/3G)',
       'Python',
+      '3GPP Standards',
+      'RRC/L3 Layer',
+      'FHIR',
+      'gRPC',
+      'Cloud Run',
+      'BigQuery',
+      'OpenTelemetry',
+      'WebSockets',
+      'JWT',
+      'Knowledge Transfer',
     ],
-    familiar: ['AWS', 'SQL', 'YAML'],
+    familiar: [
+      'AWS',
+      'SQL',
+      'YAML',
+      'JavaScript/TypeScript',
+      'ArgoCD',
+      'Atlantis',
+      'Skaffold',
+      'Cloud Deploy',
+    ],
   },
   education: [
     {

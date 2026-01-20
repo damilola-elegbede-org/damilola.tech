@@ -1,3 +1,8 @@
+---
+name: content-pull
+description: Pull content files from Vercel Blob to .tmp/content
+---
+
 # Content Pull
 
 Pull all content files from Vercel Blob to local `.tmp/content/` directory.
@@ -7,12 +12,22 @@ Pull all content files from Vercel Blob to local `.tmp/content/` directory.
 2. Fetch all content files from blob base URL
 3. Save to local directory for editing/analysis
 
-## Blob Config
-- Base URL: https://mikya8vluytqhmff.public.blob.vercel-storage.com
-- Path prefix: damilola.tech/content/
-- Files: star-stories.json, verily-feedback.md, anecdotes.md, shared-context.md,
-  chatbot-instructions.md, fit-assessment-instructions.md, leadership-philosophy.md,
-  technical-expertise.md, ai-context.md
+## Prerequisites
+- BLOB_READ_WRITE_TOKEN must be set in `.env.local`
 
-## Usage
-Run `npm run content:pull` to download all content files from Vercel Blob to `.tmp/content/`.
+## Implementation
+
+Run the TypeScript script which dynamically lists and downloads all files from blob storage:
+
+```bash
+npm run content:pull
+```
+
+Or directly:
+
+```bash
+npx tsx scripts/content-pull.ts
+```
+
+The script uses `@vercel/blob`'s `list()` function to discover all files in the
+`damilola.tech/content/` prefix - no hardcoded file list required.
