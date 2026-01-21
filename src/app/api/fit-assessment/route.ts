@@ -25,7 +25,6 @@ const client = new Anthropic();
 // Use generated prompt in production, fall back to runtime fetch in development
 const isGeneratedPromptAvailable = FIT_ASSESSMENT_PROMPT !== '__DEVELOPMENT_PLACEHOLDER__';
 
-const MAX_JD_LENGTH = 20000;
 const MAX_BODY_SIZE = 50 * 1024; // 50KB max request body
 const MIN_EXTRACTED_CONTENT_LENGTH = 100;
 const URL_FETCH_TIMEOUT = 10000; // 10 seconds
@@ -331,11 +330,6 @@ export async function POST(req: Request) {
       return Response.json({ error: 'Job description is required.' }, { status: 400 });
     }
 
-    if (jobDescription.length > MAX_JD_LENGTH) {
-      console.log('[fit-assessment] Job description too long, rejecting');
-      return Response.json({ error: 'Job description too long.' }, { status: 400 });
-    }
-
     // Check if input is a URL
     let jobDescriptionText = jobDescription;
 
@@ -378,18 +372,6 @@ export async function POST(req: Request) {
             {
               error:
                 'The URL does not appear to contain a job description. Please ensure the URL points directly to a job posting, or copy and paste the job description text directly.',
-            },
-            { status: 400 }
-          );
-        }
-
-        // Cap extracted content to MAX_JD_LENGTH to avoid model limits/cost
-        if (textContent.length > MAX_JD_LENGTH) {
-          console.log('[fit-assessment] Extracted content too long, rejecting');
-          return Response.json(
-            {
-              error:
-                'The job description extracted from the URL is too long to process. Please paste a shorter excerpt.',
             },
             { status: 400 }
           );
