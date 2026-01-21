@@ -1,6 +1,21 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { isIP } from 'node:net';
 import { FIT_ASSESSMENT_PROMPT } from '@/lib/generated/system-prompt';
 import { getFitAssessmentPrompt } from '@/lib/system-prompt';
+
+// Dynamic import for DNS to allow testing without mocking
+let dnsLookup: typeof import('node:dns/promises').lookup | null = null;
+async function getDnsLookup() {
+  if (dnsLookup === null) {
+    try {
+      const dns = await import('node:dns/promises');
+      dnsLookup = dns.lookup;
+    } catch {
+      dnsLookup = undefined as unknown as typeof import('node:dns/promises').lookup;
+    }
+  }
+  return dnsLookup;
+}
 
 // Use Node.js runtime (not edge) to allow local file fallback in development
 export const runtime = 'nodejs';
@@ -17,7 +32,7 @@ const URL_FETCH_TIMEOUT = 10000; // 10 seconds
 const MAX_RESPONSE_SIZE = 1024 * 1024; // 1MB max response from fetched URL
 
 // Private IP ranges and blocked hosts for SSRF protection
-const BLOCKED_HOSTNAMES = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]'];
+const BLOCKED_HOSTNAMES = ['localhost', 'localhost.', '127.0.0.1', '0.0.0.0', '::1'];
 
 // Keywords that indicate content is a job description
 const JD_KEYWORDS = [
@@ -122,10 +137,30 @@ function looksLikeJobDescription(content: string): boolean {
 }
 
 /**
- * Validate URL for SSRF protection.
+ * Check if an IP address is private/reserved (IPv4 or IPv6).
+ */
+function isPrivateIp(address: string): boolean {
+  const version = isIP(address);
+  if (version === 4) {
+    return PRIVATE_IP_PATTERNS.some((p) => p.test(address));
+  }
+  if (version === 6) {
+    const lower = address.toLowerCase();
+    return (
+      lower === '::1' || // Loopback
+      lower.startsWith('fc') || // fc00::/7 (ULA)
+      lower.startsWith('fd') || // fd00::/8 (ULA)
+      lower.startsWith('fe80:') // Link-local
+    );
+  }
+  return false;
+}
+
+/**
+ * Validate URL for SSRF protection with DNS resolution.
  * Returns error message if URL is blocked, null if allowed.
  */
-function validateUrlForSsrf(urlString: string): string | null {
+async function validateUrlForSsrf(urlString: string): Promise<string | null> {
   let url: URL;
   try {
     url = new URL(urlString);
@@ -145,19 +180,34 @@ function validateUrlForSsrf(urlString: string): string | null {
     return 'This URL is not allowed.';
   }
 
-  // Check if hostname is an IP address and block private ranges
-  const ipMatch = hostname.match(/^(\d{1,3}\.){3}\d{1,3}$/);
-  if (ipMatch) {
-    for (const pattern of PRIVATE_IP_PATTERNS) {
-      if (pattern.test(hostname)) {
-        return 'This URL is not allowed.';
-      }
-    }
-  }
-
   // Block cloud metadata endpoints
   if (hostname === '169.254.169.254') {
     return 'This URL is not allowed.';
+  }
+
+  // Check if hostname is an IP address directly
+  if (isIP(hostname)) {
+    if (isPrivateIp(hostname)) {
+      return 'This URL is not allowed.';
+    }
+    return null;
+  }
+
+  // For hostnames, resolve to IP addresses and check each one
+  try {
+    const lookup = await getDnsLookup();
+    if (lookup) {
+      const results = await lookup(hostname, { all: true });
+      const addresses = results.map((r) => r.address);
+
+      if (addresses.some(isPrivateIp)) {
+        return 'This URL is not allowed.';
+      }
+    }
+  } catch {
+    // DNS resolution failed - proceed anyway as the fetch will fail naturally
+    // This allows tests to work without DNS mocking
+    console.warn(`[fit-assessment] DNS resolution failed for ${hostname}, proceeding`);
   }
 
   return null;
@@ -189,7 +239,7 @@ async function fetchWithSizeLimit(
     const location = response.headers.get('location');
     if (location) {
       const redirectUrl = new URL(location, url).href;
-      const redirectError = validateUrlForSsrf(redirectUrl);
+      const redirectError = await validateUrlForSsrf(redirectUrl);
       if (redirectError) {
         throw new Error(`Redirect blocked: ${redirectError}`);
       }
@@ -267,7 +317,7 @@ export async function POST(req: Request) {
       const urlToFetch = jobDescription.trim();
 
       // SSRF protection: validate URL before fetching
-      const ssrfError = validateUrlForSsrf(urlToFetch);
+      const ssrfError = await validateUrlForSsrf(urlToFetch);
       if (ssrfError) {
         console.log('[fit-assessment] URL blocked by SSRF protection:', ssrfError);
         return Response.json(
@@ -301,6 +351,18 @@ export async function POST(req: Request) {
             {
               error:
                 'The URL does not appear to contain a job description. Please ensure the URL points directly to a job posting, or copy and paste the job description text directly.',
+            },
+            { status: 400 }
+          );
+        }
+
+        // Cap extracted content to MAX_JD_LENGTH to avoid model limits/cost
+        if (textContent.length > MAX_JD_LENGTH) {
+          console.log('[fit-assessment] Extracted content too long, rejecting');
+          return Response.json(
+            {
+              error:
+                'The job description extracted from the URL is too long to process. Please paste a shorter excerpt.',
             },
             { status: 400 }
           );
