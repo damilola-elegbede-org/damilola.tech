@@ -255,7 +255,7 @@ export function FitAssessment() {
           Fit Assessment
         </h2>
         <p className="mb-8 text-lg text-[var(--color-text-muted)]">
-          Paste a job description. Get an honest assessment of whether I&apos;m the
+          Paste a job description or link to one. Get an honest assessment of whether I&apos;m the
           right person—including when I&apos;m not.
         </p>
 
@@ -300,7 +300,7 @@ export function FitAssessment() {
         <textarea
           value={jobDescription}
           onChange={(e) => setJobDescription(e.target.value)}
-          placeholder="Paste job description here..."
+          placeholder="Paste job description or URL here..."
           className="mb-4 h-[30rem] w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-4 text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
           aria-label="Job description"
         />
