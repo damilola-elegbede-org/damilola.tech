@@ -3,7 +3,7 @@ import type { ResumeData, SuggestedQuestion } from '@/types';
 export const resumeData: ResumeData = {
   name: 'Damilola Elegbede',
   title: 'Engineering Manager',
-  tagline: 'I build the teams that build the future',
+  tagline: 'I build engineering organizations that deliver results, retain top talent, and develop leaders',
   brandingStatement:
     "Strategic engineering leader with 15+ years scaling mission-critical infrastructure at Verily Life Sciences and Qualcomm. Designed a cloud transformation supporting 30+ production systems, enabling flagship product launches (L'Oréal LDP, T1D). Expert at building high-performance teams, driving GCP/AWS migrations, and establishing platform engineering practices that improve developer velocity and system reliability.",
   email: 'damilola.elegbede@gmail.com',
