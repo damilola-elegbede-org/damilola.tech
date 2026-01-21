@@ -82,7 +82,7 @@ test.describe('Home Page', () => {
     // Navigation links visible on desktop
     await expect(page.getByRole('link', { name: /experience/i }).first()).toBeVisible();
     await expect(page.getByRole('link', { name: /skills/i }).first()).toBeVisible();
-    await expect(page.getByRole('link', { name: /fit check/i }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: /fit assessment/i }).first()).toBeVisible();
     await expect(page.getByRole('link', { name: /education/i }).first()).toBeVisible();
 
     // At least 4 nav links expected (Contact not in nav)

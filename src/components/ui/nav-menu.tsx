@@ -8,7 +8,7 @@ const navItems = [
   { label: 'Skills', href: '#skills-assessment' },
   { label: 'Education', href: '#education' },
   { label: 'Projects', href: '#projects' },
-  { label: 'Fit Check', href: '#fit-assessment' },
+  { label: 'Fit Assessment', href: '#fit-assessment' },
 ];
 
 interface NavMenuProps {

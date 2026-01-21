@@ -30,7 +30,7 @@ test.describe('Fit Assessment', () => {
     // Skip on mobile - navigation is hidden behind hamburger menu
     test.skip(isMobile, 'Navigation links are hidden on mobile');
 
-    await page.getByRole('link', { name: /fit check/i }).first().click();
+    await page.getByRole('link', { name: /fit assessment/i }).first().click();
     await expect(page.locator('#fit-assessment')).toBeInViewport();
   });
 

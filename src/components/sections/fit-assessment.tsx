@@ -254,6 +254,9 @@ export function FitAssessment() {
         <h2 className="mb-4 text-3xl text-[var(--color-text)] md:text-4xl">
           Fit Assessment
         </h2>
+        <p className="mb-4 text-lg text-[var(--color-text-muted)]">
+          Fit goes both ways—I want us both set up to succeed.
+        </p>
         <p className="mb-8 text-lg text-[var(--color-text-muted)]">
           Paste a job description or link to one. Get an honest assessment of whether I&apos;m the
           right person—including when I&apos;m not.

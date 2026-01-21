@@ -59,14 +59,28 @@ export function Hero({ onOpenChat }: HeroProps) {
             ))}
           </div>
 
-          {/* CTA Button */}
-          <Button
-            onClick={onOpenChat}
-            size="lg"
-            className="bg-[var(--color-accent)] text-[var(--color-bg)] hover:bg-[var(--color-accent)]/90"
-          >
-            Ask AI About Me
-          </Button>
+          {/* CTA Buttons */}
+          <div className="flex flex-wrap gap-4">
+            <Button
+              onClick={onOpenChat}
+              size="lg"
+              className="bg-[var(--color-accent)] text-[var(--color-bg)] hover:bg-[var(--color-accent)]/90 hover:shadow-[0_0_20px_rgba(0,102,255,0.4)] transition-shadow"
+            >
+              Ask AI About Me
+            </Button>
+            <Button
+              onClick={() => {
+                document
+                  .getElementById('fit-assessment')
+                  ?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              size="lg"
+              className="bg-[var(--color-accent)] text-[var(--color-bg)] hover:bg-[var(--color-accent)]/90 hover:shadow-[0_0_20px_rgba(0,102,255,0.4)] transition-shadow"
+              aria-label="Scroll to fit assessment section"
+            >
+              Run Fit Assessment
+            </Button>
+          </div>
         </div>
 
         {/* Scroll Indicator */}
