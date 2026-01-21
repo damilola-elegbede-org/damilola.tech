@@ -648,6 +648,83 @@ describe('fit-assessment API route', () => {
       expect(response.status).toBe(400);
       expect(data.error).toContain('not allowed');
     });
+
+    it('should reject IPv4-mapped IPv6 addresses (::ffff:127.0.0.1)', async () => {
+      vi.doMock('@/lib/generated/system-prompt', () => ({
+        FIT_ASSESSMENT_PROMPT: 'Test system prompt',
+      }));
+      vi.doMock('@/lib/system-prompt', () => ({
+        getFitAssessmentPrompt: vi.fn().mockResolvedValue('Test system prompt'),
+      }));
+      vi.doMock('@anthropic-ai/sdk', () => {
+        const mockStream = {
+          [Symbol.asyncIterator]: async function* () {
+            yield {
+              type: 'content_block_delta',
+              delta: { type: 'text_delta', text: '# Fit Assessment: Test Role' },
+            };
+          },
+        };
+        return {
+          default: class MockAnthropic {
+            messages = { stream: vi.fn().mockReturnValue(mockStream) };
+          },
+        };
+      });
+
+      const { POST } = await import('@/app/api/fit-assessment/route');
+
+      const request = new Request('http://localhost/api/fit-assessment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'http://[::ffff:127.0.0.1]/secret' }),
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toContain('not allowed');
+    });
+
+    it('should reject IPv6 link-local range (fe80::/10)', async () => {
+      vi.doMock('@/lib/generated/system-prompt', () => ({
+        FIT_ASSESSMENT_PROMPT: 'Test system prompt',
+      }));
+      vi.doMock('@/lib/system-prompt', () => ({
+        getFitAssessmentPrompt: vi.fn().mockResolvedValue('Test system prompt'),
+      }));
+      vi.doMock('@anthropic-ai/sdk', () => {
+        const mockStream = {
+          [Symbol.asyncIterator]: async function* () {
+            yield {
+              type: 'content_block_delta',
+              delta: { type: 'text_delta', text: '# Fit Assessment: Test Role' },
+            };
+          },
+        };
+        return {
+          default: class MockAnthropic {
+            messages = { stream: vi.fn().mockReturnValue(mockStream) };
+          },
+        };
+      });
+
+      const { POST } = await import('@/app/api/fit-assessment/route');
+
+      // Test fe90:: which is in fe80::/10 range but wasn't blocked before
+      const request = new Request('http://localhost/api/fit-assessment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'http://[fe90::1]/secret' }),
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toContain('not allowed');
+    });
   });
 
   describe('existing functionality preserved', () => {

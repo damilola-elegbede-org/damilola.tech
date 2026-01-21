@@ -146,12 +146,34 @@ function isPrivateIp(address: string): boolean {
   }
   if (version === 6) {
     const lower = address.toLowerCase();
-    return (
-      lower === '::1' || // Loopback
-      lower.startsWith('fc') || // fc00::/7 (ULA)
-      lower.startsWith('fd') || // fd00::/8 (ULA)
-      lower.startsWith('fe80:') // Link-local
-    );
+
+    // Loopback
+    if (lower === '::1') return true;
+
+    // IPv4-mapped IPv6 in dotted decimal (e.g., ::ffff:127.0.0.1)
+    const mappedDotted = lower.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/);
+    if (mappedDotted && PRIVATE_IP_PATTERNS.some((p) => p.test(mappedDotted[1]))) {
+      return true;
+    }
+
+    // IPv4-mapped IPv6 in hex format (e.g., ::ffff:7f00:1 = 127.0.0.1)
+    const mappedHex = lower.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+    if (mappedHex) {
+      const hi = parseInt(mappedHex[1], 16);
+      const lo = parseInt(mappedHex[2], 16);
+      const ipv4 = `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+      if (PRIVATE_IP_PATTERNS.some((p) => p.test(ipv4))) {
+        return true;
+      }
+    }
+
+    // ULA: fc00::/7
+    if (lower.startsWith('fc') || lower.startsWith('fd')) return true;
+
+    // Link-local: fe80::/10 (fe80–febf)
+    if (/^fe[89ab]/.test(lower)) return true;
+
+    return false;
   }
   return false;
 }
@@ -185,9 +207,14 @@ async function validateUrlForSsrf(urlString: string): Promise<string | null> {
     return 'This URL is not allowed.';
   }
 
+  // Strip brackets from IPv6 addresses for isIP check
+  const ipAddress = hostname.startsWith('[') && hostname.endsWith(']')
+    ? hostname.slice(1, -1)
+    : hostname;
+
   // Check if hostname is an IP address directly
-  if (isIP(hostname)) {
-    if (isPrivateIp(hostname)) {
+  if (isIP(ipAddress)) {
+    if (isPrivateIp(ipAddress)) {
       return 'This URL is not allowed.';
     }
     return null;
