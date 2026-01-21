@@ -43,7 +43,7 @@ export function Hero({ onOpenChat }: HeroProps) {
           </p>
 
           {/* Tagline */}
-          <p className="mb-8 max-w-2xl text-base text-[var(--color-text-muted)]">
+          <p className="mb-8 max-w-2xl text-base italic text-[var(--color-text-muted)]">
             {resumeData.tagline}
           </p>
 
