@@ -3,6 +3,7 @@
  *
  * Stores chat messages in localStorage to survive page refreshes.
  * Sessions automatically expire after 4 hours of inactivity.
+ * Expired sessions are archived to Vercel Blob before clearing.
  */
 
 const STORAGE_KEY = 'damilola-chat-session';
@@ -23,6 +24,19 @@ export interface StoredMessage {
 interface StoredSession {
   messages: StoredMessage[];
   timestamp: number;
+  startedAt: string;
+  sessionId: string;
+}
+
+/**
+ * Generate a UUID v4
+ */
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 /**
@@ -70,14 +84,63 @@ function isStoredSession(obj: unknown): obj is StoredSession {
 }
 
 /**
+ * Get the raw stored session without validation or expiry checks
+ */
+function getRawSession(): StoredSession | null {
+  if (!isLocalStorageAvailable()) return null;
+
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return null;
+
+    const parsed: unknown = JSON.parse(stored);
+    if (!isStoredSession(parsed)) return null;
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Archive a session to Vercel Blob (fire-and-forget)
+ * This is called before clearing expired sessions or when user clears chat
+ */
+export async function archiveSession(
+  sessionId: string,
+  sessionStartedAt: string,
+  messages: StoredMessage[]
+): Promise<void> {
+  try {
+    const response = await fetch('/api/chat/archive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, sessionStartedAt, messages }),
+    });
+
+    if (!response.ok) {
+      console.warn('Failed to archive session:', `HTTP ${response.status}`);
+    }
+  } catch (error) {
+    console.warn('Failed to archive session:', error);
+  }
+}
+
+/**
  * Save chat messages to localStorage
+ * Preserves startedAt and sessionId from existing session
  */
 export function saveSession(messages: StoredMessage[]): void {
   if (!isLocalStorageAvailable()) return;
 
+  // Preserve existing session metadata or create new
+  const existing = getRawSession();
+
   const session: StoredSession = {
     messages,
     timestamp: Date.now(),
+    startedAt: existing?.startedAt || new Date().toISOString(),
+    sessionId: existing?.sessionId || generateUUID(),
   };
 
   try {
@@ -89,8 +152,18 @@ export function saveSession(messages: StoredMessage[]): void {
 }
 
 /**
+ * Get the current session ID
+ * Returns null if no session exists
+ */
+export function getSessionId(): string | null {
+  const session = getRawSession();
+  return session?.sessionId ?? null;
+}
+
+/**
  * Load chat messages from localStorage if session is still valid
  * Returns null if no session exists or session has expired
+ * Archives expired sessions before clearing them
  */
 export function loadSession(): StoredMessage[] | null {
   if (!isLocalStorageAvailable()) return null;
@@ -104,14 +177,18 @@ export function loadSession(): StoredMessage[] | null {
     // Validate structure before using
     if (!isStoredSession(parsed)) {
       console.warn('Invalid session structure, clearing');
-      clearSession();
+      removeSessionFromStorage();
       return null;
     }
 
     const age = Date.now() - parsed.timestamp;
 
     if (age > SESSION_TTL_MS) {
-      clearSession();
+      // Archive expired session before clearing (fire-and-forget)
+      if (parsed.messages.length > 0 && parsed.sessionId && parsed.startedAt) {
+        archiveSession(parsed.sessionId, parsed.startedAt, parsed.messages);
+      }
+      removeSessionFromStorage();
       return null;
     }
 
@@ -119,15 +196,15 @@ export function loadSession(): StoredMessage[] | null {
   } catch (error) {
     // If parsing fails, clear corrupted data
     console.warn('Failed to load chat session:', error);
-    clearSession();
+    removeSessionFromStorage();
     return null;
   }
 }
 
 /**
- * Clear the stored chat session
+ * Internal function to remove session from localStorage without archiving
  */
-export function clearSession(): void {
+function removeSessionFromStorage(): void {
   if (!isLocalStorageAvailable()) return;
 
   try {
@@ -135,4 +212,21 @@ export function clearSession(): void {
   } catch {
     // Ignore errors
   }
+}
+
+/**
+ * Clear the stored chat session
+ * Archives the session before clearing if it has messages
+ */
+export function clearSession(): void {
+  if (!isLocalStorageAvailable()) return;
+
+  // Get current session to archive before clearing
+  const session = getRawSession();
+  if (session && session.messages.length > 0 && session.sessionId && session.startedAt) {
+    // Fire-and-forget archive
+    archiveSession(session.sessionId, session.startedAt, session.messages);
+  }
+
+  removeSessionFromStorage();
 }

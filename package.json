@@ -16,7 +16,8 @@
     "typecheck": "tsc --noEmit",
     "generate-prompt": "tsx scripts/generate-prompt.ts",
     "content:pull": "tsx scripts/content-pull.ts",
-    "content:push": "tsx scripts/content-push.ts"
+    "content:push": "tsx scripts/content-push.ts",
+    "cleanup:chats": "tsx scripts/cleanup-chats.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.15",
