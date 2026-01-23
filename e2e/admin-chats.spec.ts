@@ -12,6 +12,7 @@ test.describe('Admin Chats', () => {
     await page.goto('/admin/login');
     await page.getByLabel('Password').fill(password);
     await page.getByRole('button', { name: 'Sign In' }).click();
+    await expect(page).toHaveURL('/admin/dashboard');
     await page.goto('/admin/chats');
   });
 

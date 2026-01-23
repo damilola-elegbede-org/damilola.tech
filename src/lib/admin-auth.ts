@@ -17,28 +17,37 @@ function getJwtSecret(): Uint8Array {
 // Get the appropriate admin password based on environment
 function getAdminPassword(): string {
   const env = process.env.VERCEL_ENV || 'development';
+  console.log('[admin-auth] Environment:', env);
 
   if (env === 'production') {
     const password = process.env.ADMIN_PASSWORD_PRODUCTION;
     if (!password) throw new Error('ADMIN_PASSWORD_PRODUCTION not configured');
+    console.log('[admin-auth] Using production password, length:', password.length);
     return password;
   }
 
   // Preview and development use the preview password
   const password = process.env.ADMIN_PASSWORD_PREVIEW;
   if (!password) throw new Error('ADMIN_PASSWORD_PREVIEW not configured');
+  console.log('[admin-auth] Using preview password, length:', password.length);
   return password;
 }
 
 // Timing-safe password verification
 export function verifyPassword(provided: string): boolean {
   try {
-    const expected = getAdminPassword();
-    if (provided.length !== expected.length) {
+    const expected = getAdminPassword().trim();
+    const providedTrimmed = provided.trim();
+    console.log('[admin-auth] Password lengths - provided:', providedTrimmed.length, 'expected:', expected.length);
+    if (providedTrimmed.length !== expected.length) {
+      console.log('[admin-auth] Length mismatch');
       return false;
     }
-    return timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
-  } catch {
+    const result = timingSafeEqual(Buffer.from(providedTrimmed), Buffer.from(expected));
+    console.log('[admin-auth] Comparison result:', result);
+    return result;
+  } catch (error) {
+    console.error('[admin-auth] Error in verifyPassword:', error);
     return false;
   }
 }
