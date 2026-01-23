@@ -382,7 +382,9 @@ Respond in this exact JSON format:
     jsonText = jsonMatch[0];
   }
 
-  let parsed;
+  let parsed:
+    | { scores: EvaluationScores; reasoning: string; violations?: string[] }
+    | undefined;
   try {
     parsed = JSON.parse(jsonText);
   } catch (parseError) {
@@ -407,8 +409,30 @@ Respond in this exact JSON format:
       throw new Error(`Could not parse evaluator response as JSON: ${parseError}`);
     }
   }
+
+  // Validate required fields exist
+  if (!parsed || !parsed.scores || !parsed.reasoning) {
+    throw new Error('Evaluator response missing required fields');
+  }
+
+  // Validate all score fields are present and numeric
+  const required: (keyof EvaluationScores)[] = [
+    'brevity',
+    'voice',
+    'contentAdherence',
+    'formatting',
+    'boundaries',
+    'focus',
+  ];
+  for (const key of required) {
+    const value = (parsed.scores as Record<string, unknown>)[key];
+    if (typeof value !== 'number' || Number.isNaN(value)) {
+      throw new Error(`Evaluator score "${key}" is missing or invalid`);
+    }
+  }
+
   return {
-    scores: parsed.scores as EvaluationScores,
+    scores: parsed.scores,
     reasoning: parsed.reasoning,
   };
 }
