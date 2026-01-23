@@ -99,7 +99,13 @@ describe('cron cleanup-chats API route', () => {
         url: `https://blob.vercel-storage.com/chats/production/${oldTimestamp}-a1b2c3d4.json`,
       };
 
-      mockList.mockResolvedValue({ blobs: [oldBlob], cursor: null });
+      // Mock returns oldBlob for chats, empty for others
+      mockList.mockImplementation(({ prefix }: { prefix: string }) => {
+        if (prefix.includes('/chats/')) {
+          return Promise.resolve({ blobs: [oldBlob], cursor: null });
+        }
+        return Promise.resolve({ blobs: [], cursor: null });
+      });
       mockDel.mockResolvedValue(undefined);
 
       const { GET } = await import('@/app/api/cron/cleanup-chats/route');
@@ -110,8 +116,8 @@ describe('cron cleanup-chats API route', () => {
 
       expect(response.status).toBe(200);
       expect(mockDel).toHaveBeenCalledWith(oldBlob.url);
-      expect(data.deleted).toBe(1);
-      expect(data.kept).toBe(0);
+      expect(data.totals.deleted).toBe(1);
+      expect(data.totals.kept).toBe(0);
     });
 
     it('keeps blobs younger than 90 days', async () => {
@@ -122,7 +128,12 @@ describe('cron cleanup-chats API route', () => {
         url: `https://blob.vercel-storage.com/chats/production/${recentTimestamp}-a1b2c3d4.json`,
       };
 
-      mockList.mockResolvedValue({ blobs: [recentBlob], cursor: null });
+      mockList.mockImplementation(({ prefix }: { prefix: string }) => {
+        if (prefix.includes('/chats/')) {
+          return Promise.resolve({ blobs: [recentBlob], cursor: null });
+        }
+        return Promise.resolve({ blobs: [], cursor: null });
+      });
 
       const { GET } = await import('@/app/api/cron/cleanup-chats/route');
 
@@ -132,8 +143,8 @@ describe('cron cleanup-chats API route', () => {
 
       expect(response.status).toBe(200);
       expect(mockDel).not.toHaveBeenCalled();
-      expect(data.deleted).toBe(0);
-      expect(data.kept).toBe(1);
+      expect(data.totals.deleted).toBe(0);
+      expect(data.totals.kept).toBe(1);
     });
 
     it('handles mix of old and recent blobs', async () => {
@@ -146,7 +157,12 @@ describe('cron cleanup-chats API route', () => {
         url: 'https://blob.vercel-storage.com/new.json',
       };
 
-      mockList.mockResolvedValue({ blobs: [oldBlob, recentBlob], cursor: null });
+      mockList.mockImplementation(({ prefix }: { prefix: string }) => {
+        if (prefix.includes('/chats/')) {
+          return Promise.resolve({ blobs: [oldBlob, recentBlob], cursor: null });
+        }
+        return Promise.resolve({ blobs: [], cursor: null });
+      });
       mockDel.mockResolvedValue(undefined);
 
       const { GET } = await import('@/app/api/cron/cleanup-chats/route');
@@ -158,8 +174,8 @@ describe('cron cleanup-chats API route', () => {
       expect(response.status).toBe(200);
       expect(mockDel).toHaveBeenCalledTimes(1);
       expect(mockDel).toHaveBeenCalledWith(oldBlob.url);
-      expect(data.deleted).toBe(1);
-      expect(data.kept).toBe(1);
+      expect(data.totals.deleted).toBe(1);
+      expect(data.totals.kept).toBe(1);
     });
 
     it('handles blobs exactly at 90-day boundary', async () => {
@@ -170,7 +186,12 @@ describe('cron cleanup-chats API route', () => {
         url: 'https://blob.vercel-storage.com/boundary.json',
       };
 
-      mockList.mockResolvedValue({ blobs: [boundaryBlob], cursor: null });
+      mockList.mockImplementation(({ prefix }: { prefix: string }) => {
+        if (prefix.includes('/chats/')) {
+          return Promise.resolve({ blobs: [boundaryBlob], cursor: null });
+        }
+        return Promise.resolve({ blobs: [], cursor: null });
+      });
 
       const { GET } = await import('@/app/api/cron/cleanup-chats/route');
 
@@ -180,7 +201,7 @@ describe('cron cleanup-chats API route', () => {
 
       expect(response.status).toBe(200);
       expect(mockDel).not.toHaveBeenCalled();
-      expect(data.kept).toBe(1);
+      expect(data.totals.kept).toBe(1);
     });
 
     it('handles pagination with cursor', async () => {
@@ -193,9 +214,17 @@ describe('cron cleanup-chats API route', () => {
         url: 'https://blob.vercel-storage.com/page2.json',
       };
 
-      mockList
-        .mockResolvedValueOnce({ blobs: [blob1], cursor: 'next-page-cursor' })
-        .mockResolvedValueOnce({ blobs: [blob2], cursor: null });
+      let chatCallCount = 0;
+      mockList.mockImplementation(({ prefix }: { prefix: string }) => {
+        if (prefix.includes('/chats/')) {
+          chatCallCount++;
+          if (chatCallCount === 1) {
+            return Promise.resolve({ blobs: [blob1], cursor: 'next-page-cursor' });
+          }
+          return Promise.resolve({ blobs: [blob2], cursor: null });
+        }
+        return Promise.resolve({ blobs: [], cursor: null });
+      });
       mockDel.mockResolvedValue(undefined);
 
       const { GET } = await import('@/app/api/cron/cleanup-chats/route');
@@ -205,9 +234,10 @@ describe('cron cleanup-chats API route', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(mockList).toHaveBeenCalledTimes(2);
+      // Called once for each prefix (3), plus one pagination call for chats
+      expect(mockList).toHaveBeenCalledTimes(4);
       expect(mockDel).toHaveBeenCalledTimes(2);
-      expect(data.deleted).toBe(2);
+      expect(data.totals.deleted).toBe(2);
     });
 
     it('skips blobs with unparseable timestamps', async () => {
@@ -216,7 +246,12 @@ describe('cron cleanup-chats API route', () => {
         url: 'https://blob.vercel-storage.com/invalid.json',
       };
 
-      mockList.mockResolvedValue({ blobs: [invalidBlob], cursor: null });
+      mockList.mockImplementation(({ prefix }: { prefix: string }) => {
+        if (prefix.includes('/chats/')) {
+          return Promise.resolve({ blobs: [invalidBlob], cursor: null });
+        }
+        return Promise.resolve({ blobs: [], cursor: null });
+      });
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const { GET } = await import('@/app/api/cron/cleanup-chats/route');
@@ -227,12 +262,12 @@ describe('cron cleanup-chats API route', () => {
 
       expect(response.status).toBe(200);
       expect(mockDel).not.toHaveBeenCalled();
-      expect(data.skipped).toBe(1);
+      expect(data.totals.skipped).toBe(1);
 
       consoleSpy.mockRestore();
     });
 
-    it('only processes blobs in chats folder', async () => {
+    it('processes all log type folders', async () => {
       mockList.mockResolvedValue({ blobs: [], cursor: null });
 
       const { GET } = await import('@/app/api/cron/cleanup-chats/route');
@@ -240,10 +275,17 @@ describe('cron cleanup-chats API route', () => {
       const request = createRequest(`Bearer ${VALID_CRON_SECRET}`);
       await GET(request);
 
-      expect(mockList).toHaveBeenCalledWith({
+      // Should be called for all three prefixes (in parallel)
+      expect(mockList).toHaveBeenCalledTimes(3);
+      expect(mockList).toHaveBeenCalledWith(expect.objectContaining({
         prefix: 'damilola.tech/chats/',
-        cursor: undefined,
-      });
+      }));
+      expect(mockList).toHaveBeenCalledWith(expect.objectContaining({
+        prefix: 'damilola.tech/fit-assessments/',
+      }));
+      expect(mockList).toHaveBeenCalledWith(expect.objectContaining({
+        prefix: 'damilola.tech/audit/',
+      }));
     });
   });
 
@@ -277,7 +319,12 @@ describe('cron cleanup-chats API route', () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2025-04-22T12:00:00.000Z'));
 
-      mockList.mockResolvedValue({ blobs: [blob1, blob2], cursor: null });
+      mockList.mockImplementation(({ prefix }: { prefix: string }) => {
+        if (prefix.includes('/chats/')) {
+          return Promise.resolve({ blobs: [blob1, blob2], cursor: null });
+        }
+        return Promise.resolve({ blobs: [], cursor: null });
+      });
       mockDel
         .mockRejectedValueOnce(new Error('Delete failed'))
         .mockResolvedValueOnce(undefined);
@@ -292,8 +339,8 @@ describe('cron cleanup-chats API route', () => {
 
       expect(response.status).toBe(200);
       expect(mockDel).toHaveBeenCalledTimes(2);
-      expect(data.deleted).toBe(1);
-      expect(data.errors).toBe(1);
+      expect(data.totals.deleted).toBe(1);
+      expect(data.totals.errors).toBe(1);
 
       consoleSpy.mockRestore();
       vi.useRealTimers();
@@ -314,7 +361,12 @@ describe('cron cleanup-chats API route', () => {
         url: 'https://blob.vercel-storage.com/new.json',
       };
 
-      mockList.mockResolvedValue({ blobs: [oldBlob, recentBlob], cursor: null });
+      mockList.mockImplementation(({ prefix }: { prefix: string }) => {
+        if (prefix.includes('/chats/')) {
+          return Promise.resolve({ blobs: [oldBlob, recentBlob], cursor: null });
+        }
+        return Promise.resolve({ blobs: [], cursor: null });
+      });
       mockDel.mockResolvedValue(undefined);
 
       const { GET } = await import('@/app/api/cron/cleanup-chats/route');
@@ -326,10 +378,10 @@ describe('cron cleanup-chats API route', () => {
       expect(response.status).toBe(200);
       expect(data).toMatchObject({
         success: true,
-        deleted: 1,
-        kept: 1,
-        skipped: 0,
-        errors: 0,
+        chats: { deleted: 1, kept: 1, skipped: 0, errors: 0 },
+        fitAssessments: { deleted: 0, kept: 0, skipped: 0, errors: 0 },
+        audit: { deleted: 0, kept: 0, skipped: 0, errors: 0 },
+        totals: { deleted: 1, kept: 1, skipped: 0, errors: 0 },
       });
 
       vi.useRealTimers();

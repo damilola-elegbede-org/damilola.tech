@@ -18,6 +18,7 @@ import {
   clearSession,
   type StoredMessage,
 } from '@/lib/chat-storage';
+import { trackEvent } from '@/lib/audit-client';
 
 const MAX_MESSAGE_LENGTH = 2000;
 
@@ -105,6 +106,13 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
       setMessages((prev) => [...prev, userMessage]);
       setStatus('submitted');
       setHasInteracted(true);
+
+      trackEvent('chat_message_sent', {
+        section: 'Chat',
+        metadata: {
+          messageLength: userText.length,
+        },
+      });
 
       try {
         // Convert messages to API format

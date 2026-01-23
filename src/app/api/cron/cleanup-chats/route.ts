@@ -8,6 +8,8 @@ const RETENTION_DAYS = 90;
 const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
 const CHATS_PREFIX = 'damilola.tech/chats/';
+const FIT_ASSESSMENTS_PREFIX = 'damilola.tech/fit-assessments/';
+const AUDIT_PREFIX = 'damilola.tech/audit/';
 
 /**
  * Parse timestamp from blob pathname
@@ -50,6 +52,68 @@ function verifyToken(provided: string, expected: string): boolean {
   return timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
 }
 
+interface CleanupResult {
+  deleted: number;
+  kept: number;
+  skipped: number;
+  errors: number;
+}
+
+/**
+ * Clean up blobs with a given prefix older than the cutoff date
+ */
+async function cleanupPrefix(
+  prefix: string,
+  cutoffDate: number
+): Promise<CleanupResult> {
+  let deleted = 0;
+  let kept = 0;
+  let skipped = 0;
+  let errors = 0;
+  let cursor: string | undefined;
+  const toDelete: string[] = [];
+
+  do {
+    const result = await list({ prefix, cursor });
+
+    for (const blob of result.blobs) {
+      const timestamp = parseTimestampFromPathname(blob.pathname);
+
+      if (!timestamp) {
+        console.warn(`Could not parse timestamp from: ${blob.pathname}`);
+        skipped++;
+        continue;
+      }
+
+      if (timestamp.getTime() < cutoffDate) {
+        toDelete.push(blob.url);
+      } else {
+        kept++;
+      }
+    }
+
+    cursor = result.cursor ?? undefined;
+  } while (cursor);
+
+  // Batch delete
+  const BATCH_SIZE = 10;
+  for (let i = 0; i < toDelete.length; i += BATCH_SIZE) {
+    const batch = toDelete.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(batch.map((url) => del(url)));
+
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        deleted++;
+      } else {
+        console.error('Failed to delete blob:', result.reason);
+        errors++;
+      }
+    }
+  }
+
+  return { deleted, kept, skipped, errors };
+}
+
 export async function GET(req: Request) {
   // Verify CRON_SECRET
   const authHeader = req.headers.get('Authorization');
@@ -74,66 +138,27 @@ export async function GET(req: Request) {
     const now = Date.now();
     const cutoffDate = now - RETENTION_MS;
 
-    let deleted = 0;
-    let kept = 0;
-    let skipped = 0;
-    let errors = 0;
-    let cursor: string | undefined;
-
-    // Collect blobs to delete for batch processing
-    const toDelete: string[] = [];
-
-    // Paginate through all blobs in chats folder
-    do {
-      const result = await list({
-        prefix: CHATS_PREFIX,
-        cursor,
-      });
-
-      for (const blob of result.blobs) {
-        const timestamp = parseTimestampFromPathname(blob.pathname);
-
-        if (!timestamp) {
-          console.warn(`Could not parse timestamp from: ${blob.pathname}`);
-          skipped++;
-          continue;
-        }
-
-        if (timestamp.getTime() < cutoffDate) {
-          toDelete.push(blob.url);
-        } else {
-          kept++;
-        }
-      }
-
-      cursor = result.cursor ?? undefined;
-    } while (cursor);
-
-    // Batch delete in parallel with controlled concurrency
-    const BATCH_SIZE = 10;
-    for (let i = 0; i < toDelete.length; i += BATCH_SIZE) {
-      const batch = toDelete.slice(i, i + BATCH_SIZE);
-      const results = await Promise.allSettled(batch.map((url) => del(url)));
-
-      for (const result of results) {
-        if (result.status === 'fulfilled') {
-          deleted++;
-        } else {
-          console.error('Failed to delete blob:', result.reason);
-          errors++;
-        }
-      }
-    }
+    // Clean all prefixes in parallel
+    const [chatsResult, assessmentsResult, auditResult] = await Promise.all([
+      cleanupPrefix(CHATS_PREFIX, cutoffDate),
+      cleanupPrefix(FIT_ASSESSMENTS_PREFIX, cutoffDate),
+      cleanupPrefix(AUDIT_PREFIX, cutoffDate),
+    ]);
 
     return Response.json({
       success: true,
-      deleted,
-      kept,
-      skipped,
-      errors,
+      chats: chatsResult,
+      fitAssessments: assessmentsResult,
+      audit: auditResult,
+      totals: {
+        deleted: chatsResult.deleted + assessmentsResult.deleted + auditResult.deleted,
+        kept: chatsResult.kept + assessmentsResult.kept + auditResult.kept,
+        skipped: chatsResult.skipped + assessmentsResult.skipped + auditResult.skipped,
+        errors: chatsResult.errors + assessmentsResult.errors + auditResult.errors,
+      },
     });
   } catch (error) {
-    console.error('[cron/cleanup-chats] Error during cleanup:', error);
+    console.error('[cron/cleanup] Error during cleanup:', error);
     return Response.json({ error: 'Failed to run cleanup' }, { status: 500 });
   }
 }

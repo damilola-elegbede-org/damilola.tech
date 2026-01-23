@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { useScrollReveal } from '@/hooks/use-scroll-reveal';
+import { trackEvent } from '@/lib/audit-client';
 
 interface ExampleJDs {
   strong: string;
@@ -23,6 +24,18 @@ export function FitAssessment() {
   const [examplesError, setExamplesError] = useState(false);
   const { ref, isVisible } = useScrollReveal();
   const resultRef = useRef<HTMLDivElement>(null);
+  const [assessmentId, setAssessmentId] = useState<string | null>(null);
+  const streamStartRef = useRef<number>(0);
+
+  // Check if input is URL
+  const isUrl = (text: string): boolean => {
+    try {
+      new URL(text.trim());
+      return true;
+    } catch {
+      return text.trim().startsWith('http');
+    }
+  };
 
   // Extract role title from the assessment (looks for "Fit Assessment: [Title]" pattern)
   const extractRoleTitle = (text: string): string => {
@@ -42,6 +55,12 @@ export function FitAssessment() {
   const handleDownloadMD = useCallback(() => {
     if (!completion) return;
     const roleTitle = extractRoleTitle(completion);
+
+    trackEvent('fit_assessment_download', {
+      section: 'FitAssessment',
+      metadata: { format: 'md', roleTitle },
+    });
+
     const blob = new Blob([completion], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -149,6 +168,11 @@ export function FitAssessment() {
     try {
       await html2pdf().set(opt).from(clone).save();
       setDownloadError(null);
+
+      trackEvent('fit_assessment_download', {
+        section: 'FitAssessment',
+        metadata: { format: 'pdf', roleTitle },
+      });
     } catch (err) {
       console.error('PDF generation failed:', err);
       setDownloadError('Failed to generate PDF. Please try the Markdown download instead.');
@@ -213,6 +237,41 @@ export function FitAssessment() {
         // Flush any remaining buffered bytes
         text += decoder.decode();
         setCompletion(text);
+
+        // Track completion after stream finishes
+        const streamDurationMs = Date.now() - streamStartRef.current;
+        const roleTitle = extractRoleTitle(text);
+
+        trackEvent('fit_assessment_completed', {
+          section: 'FitAssessment',
+          metadata: {
+            inputLength: jobDescription.length,
+            completionLength: text.length,
+            streamDurationMs,
+            roleTitle,
+          },
+        });
+
+        // Log to backend
+        if (assessmentId) {
+          fetch('/api/fit-assessment/log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              assessmentId,
+              inputType: isUrl(jobDescription) ? 'url' : 'text',
+              inputLength: jobDescription.length,
+              extractedUrl: isUrl(jobDescription) ? jobDescription.trim() : undefined,
+              jobDescriptionSnippet: jobDescription.slice(0, 200),
+              completionLength: text.length,
+              streamDurationMs,
+              roleTitle,
+              downloadedPdf: false,
+              downloadedMd: false,
+              userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+            }),
+          }).catch(console.error);
+        }
       } finally {
         reader.releaseLock();
       }
@@ -224,17 +283,29 @@ export function FitAssessment() {
     } finally {
       setIsLoading(false);
     }
-  }, [jobDescription]);
+  }, [jobDescription, assessmentId]);
 
   // Cleanup stream on unmount
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const handleAnalyzeClick = useCallback(() => {
+    const id = crypto.randomUUID();
+    setAssessmentId(id);
+    streamStartRef.current = Date.now();
+
+    trackEvent('fit_assessment_started', {
+      section: 'FitAssessment',
+      metadata: {
+        inputLength: jobDescription.length,
+        inputType: isUrl(jobDescription) ? 'url' : 'text',
+      },
+    });
+
     // Abort any existing request
     abortControllerRef.current?.abort();
     abortControllerRef.current = new AbortController();
     handleAnalyze(abortControllerRef.current.signal);
-  }, [handleAnalyze]);
+  }, [handleAnalyze, jobDescription]);
 
   useEffect(() => {
     return () => {

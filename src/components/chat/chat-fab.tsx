@@ -1,5 +1,7 @@
 'use client';
 
+import { trackEvent } from '@/lib/audit-client';
+
 interface ChatFabProps {
   onClick: () => void;
   isOpen: boolean;
@@ -11,7 +13,13 @@ export function ChatFab({ onClick, isOpen }: ChatFabProps) {
 
   return (
     <button
-      onClick={onClick}
+      onClick={() => {
+        trackEvent('chat_opened', {
+          section: 'Chat',
+          metadata: {},
+        });
+        onClick();
+      }}
       className="fixed bottom-6 right-6 z-[60] flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-accent)] shadow-lg transition-all duration-300 hover:bg-[var(--color-accent-light)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2"
       aria-label="Open chat"
       aria-expanded={false}
