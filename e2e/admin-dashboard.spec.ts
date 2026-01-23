@@ -21,7 +21,8 @@ test.describe('Admin Dashboard', () => {
   });
 
   test('shows stats cards', async ({ page }) => {
-    await expect(page.getByText('Chat Sessions')).toBeVisible();
+    // Wait for stats to load (they load asynchronously)
+    await expect(page.getByText('Chat Sessions')).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('Fit Assessments')).toBeVisible();
     await expect(page.getByText('Audit Events')).toBeVisible();
   });
