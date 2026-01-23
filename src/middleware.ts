@@ -25,8 +25,8 @@ async function verifyToken(token: string): Promise<boolean> {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Skip login page
-  if (pathname === '/admin/login') {
+  // Skip login page and auth API endpoint
+  if (pathname === '/admin/login' || pathname === '/api/admin/auth') {
     return NextResponse.next();
   }
 
