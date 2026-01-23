@@ -22,30 +22,37 @@ test.describe('Admin Dashboard', () => {
 
   test('shows stats cards', async ({ page }) => {
     // Wait for stats to load (they load asynchronously)
-    await expect(page.getByText('Chat Sessions')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('Fit Assessments')).toBeVisible();
-    await expect(page.getByText('Audit Events')).toBeVisible();
+    // Use main region to avoid matching nav links
+    const main = page.getByRole('main');
+    await expect(main.getByText('Chat Sessions')).toBeVisible({ timeout: 10000 });
+    await expect(main.getByText('Fit Assessments')).toBeVisible();
+    await expect(main.getByText('Audit Events')).toBeVisible();
   });
 
   test('has navigation links', async ({ page }) => {
-    await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Chats' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Fit Assessments' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Audit Log' })).toBeVisible();
+    // Use nav element to target sidebar navigation specifically
+    const nav = page.locator('nav');
+    await expect(nav.getByRole('link', { name: 'Dashboard' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Chats' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Fit Assessments' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Audit Log' })).toBeVisible();
   });
 
   test('can navigate to chats page', async ({ page }) => {
-    await page.getByRole('link', { name: 'Chats' }).click();
+    const nav = page.locator('nav');
+    await nav.getByRole('link', { name: 'Chats' }).click();
     await expect(page).toHaveURL('/admin/chats');
   });
 
   test('can navigate to fit assessments page', async ({ page }) => {
-    await page.getByRole('link', { name: 'Fit Assessments' }).click();
+    const nav = page.locator('nav');
+    await nav.getByRole('link', { name: 'Fit Assessments' }).click();
     await expect(page).toHaveURL('/admin/fit-assessments');
   });
 
   test('can navigate to audit log page', async ({ page }) => {
-    await page.getByRole('link', { name: 'Audit Log' }).click();
+    const nav = page.locator('nav');
+    await nav.getByRole('link', { name: 'Audit Log' }).click();
     await expect(page).toHaveURL('/admin/audit');
   });
 
