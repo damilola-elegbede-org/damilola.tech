@@ -53,7 +53,16 @@ export function DataTable<T extends { id: string }>({
             <tr
               key={item.id}
               onClick={() => onRowClick?.(item)}
-              className={`bg-[var(--color-bg)] ${onRowClick ? 'cursor-pointer hover:bg-[var(--color-card)]' : ''}`}
+              onKeyDown={(event) => {
+                if (!onRowClick) return;
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  onRowClick(item);
+                }
+              }}
+              tabIndex={onRowClick ? 0 : undefined}
+              role={onRowClick ? 'button' : undefined}
+              className={`bg-[var(--color-bg)] ${onRowClick ? 'cursor-pointer hover:bg-[var(--color-card)] focus:bg-[var(--color-card)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-inset' : ''}`}
             >
               {columns.map((col) => (
                 <td

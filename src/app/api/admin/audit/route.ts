@@ -30,7 +30,9 @@ export async function GET(req: Request) {
       prefix += `${date}/`;
     }
 
-    const result = await list({ prefix, cursor, limit: limit * 2 }); // Fetch more to filter
+    // When filtering by eventType, we need to fetch more to ensure we get enough results
+    const fetchLimit = eventType ? limit * 3 : limit;
+    const result = await list({ prefix, cursor, limit: fetchLimit });
 
     let events: AuditSummary[] = result.blobs.map((blob) => {
       // Extract from pathname: damilola.tech/audit/{env}/{date}/{timestamp}-{event-type}.json
@@ -56,13 +58,15 @@ export async function GET(req: Request) {
       events = events.filter((e) => e.eventType === eventType);
     }
 
-    // Limit results
+    // Check if we have more results than requested (for accurate hasMore)
+    const hasMoreFiltered = events.length > limit;
     events = events.slice(0, limit);
 
     return Response.json({
       events,
       cursor: result.cursor,
-      hasMore: result.hasMore,
+      // hasMore is true if the underlying list has more OR if we filtered out items
+      hasMore: result.hasMore || hasMoreFiltered,
     });
   } catch (error) {
     console.error('[admin/audit] Error listing events:', error);

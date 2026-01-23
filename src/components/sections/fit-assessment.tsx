@@ -200,7 +200,7 @@ export function FitAssessment() {
     loadExamples();
   }, []);
 
-  const handleAnalyze = useCallback(async (signal?: AbortSignal) => {
+  const handleAnalyze = useCallback(async (signal?: AbortSignal, currentAssessmentId?: string) => {
     if (!jobDescription.trim()) return;
 
     setIsLoading(true);
@@ -252,13 +252,13 @@ export function FitAssessment() {
           },
         });
 
-        // Log to backend
-        if (assessmentId) {
+        // Log to backend (use passed assessmentId to avoid stale closure)
+        if (currentAssessmentId) {
           fetch('/api/fit-assessment/log', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              assessmentId,
+              assessmentId: currentAssessmentId,
               inputType: isUrl(jobDescription) ? 'url' : 'text',
               inputLength: jobDescription.length,
               extractedUrl: isUrl(jobDescription) ? jobDescription.trim() : undefined,
@@ -283,7 +283,7 @@ export function FitAssessment() {
     } finally {
       setIsLoading(false);
     }
-  }, [jobDescription, assessmentId]);
+  }, [jobDescription]);
 
   // Cleanup stream on unmount
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -304,7 +304,7 @@ export function FitAssessment() {
     // Abort any existing request
     abortControllerRef.current?.abort();
     abortControllerRef.current = new AbortController();
-    handleAnalyze(abortControllerRef.current.signal);
+    handleAnalyze(abortControllerRef.current.signal, id);
   }, [handleAnalyze, jobDescription]);
 
   useEffect(() => {

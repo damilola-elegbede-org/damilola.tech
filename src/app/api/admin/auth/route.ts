@@ -40,25 +40,9 @@ export async function POST(req: Request) {
       );
     }
 
-    let body: unknown;
-    try {
-      body = await req.json();
-    } catch {
-      return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
-    }
-
-    const { password } = body as LoginRequest;
-
-    if (typeof password !== 'string' || !password) {
-      return Response.json({ error: 'Password is required' }, { status: 400 });
-    }
-
-    const isValid = verifyPassword(password);
-    if (!isValid) {
-      // Record failed attempt for rate limiting
+    // Helper to record failed attempt and check for lockout
+    const recordAndCheckLimit = () => {
       recordFailedAttempt(ip);
-
-      // Check if this attempt triggered a lockout
       const newLimit = checkRateLimit(ip);
       if (newLimit.limited) {
         return Response.json(
@@ -74,6 +58,33 @@ export async function POST(req: Request) {
           }
         );
       }
+      return null;
+    };
+
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      // Record attempt for invalid JSON to prevent rate limit bypass
+      const limitResponse = recordAndCheckLimit();
+      if (limitResponse) return limitResponse;
+      return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
+    const { password } = body as LoginRequest;
+
+    if (typeof password !== 'string' || !password) {
+      // Record attempt for missing password to prevent rate limit bypass
+      const limitResponse = recordAndCheckLimit();
+      if (limitResponse) return limitResponse;
+      return Response.json({ error: 'Password is required' }, { status: 400 });
+    }
+
+    const isValid = verifyPassword(password);
+    if (!isValid) {
+      // Record failed attempt and check for lockout
+      const limitResponse = recordAndCheckLimit();
+      if (limitResponse) return limitResponse;
 
       return Response.json({ error: 'Invalid password' }, { status: 401 });
     }

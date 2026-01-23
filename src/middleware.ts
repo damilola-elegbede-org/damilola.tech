@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 
+// Note: These are duplicated from src/lib/admin-auth.ts because that module
+// imports Node.js crypto (for timingSafeEqual), which is incompatible with
+// Edge Runtime middleware. Must be kept in sync with the shared module.
 const ADMIN_COOKIE_NAME = 'admin_session';
 
 function getJwtSecret(): Uint8Array {

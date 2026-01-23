@@ -1,5 +1,5 @@
 import { SignJWT, jwtVerify } from 'jose';
-import { timingSafeEqual } from 'crypto';
+import { timingSafeEqual, createHash } from 'crypto';
 
 // Constants
 export const ADMIN_COOKIE_NAME = 'admin_session';
@@ -30,15 +30,21 @@ function getAdminPassword(): string {
   return password;
 }
 
-// Timing-safe password verification
+// Hash a string for constant-time comparison (avoids length-based timing leaks)
+function hashForComparison(value: string): Buffer {
+  return createHash('sha256').update(value).digest();
+}
+
+// Timing-safe password verification using hash comparison
+// This ensures constant-time comparison regardless of password length
 export function verifyPassword(provided: string): boolean {
   try {
     const expected = getAdminPassword().trim();
     const providedTrimmed = provided.trim();
-    if (providedTrimmed.length !== expected.length) {
-      return false;
-    }
-    return timingSafeEqual(Buffer.from(providedTrimmed), Buffer.from(expected));
+    // Compare hashes to ensure constant-time behavior regardless of length
+    const expectedHash = hashForComparison(expected);
+    const providedHash = hashForComparison(providedTrimmed);
+    return timingSafeEqual(expectedHash, providedHash);
   } catch {
     return false;
   }
