@@ -27,7 +27,8 @@ test.describe('Admin Login', () => {
       page.getByRole('button', { name: 'Sign In' }).click(),
     ]);
 
-    await expect(page.getByRole('alert')).toContainText('Invalid password');
+    // Use filter to avoid matching Next.js route announcer which also has role="alert"
+    await expect(page.getByRole('alert').filter({ hasText: 'Invalid password' })).toBeVisible();
     await expect(page).toHaveURL('/admin/login');
   });
 
@@ -65,7 +66,7 @@ test.describe('Admin Login', () => {
     await expect(button).toContainText('Signing in...');
     await expect(button).toBeDisabled();
 
-    // Wait for response to complete
-    await expect(page.getByRole('alert')).toBeVisible({ timeout: 5000 });
+    // Wait for response to complete - filter to avoid Next.js route announcer
+    await expect(page.getByRole('alert').filter({ hasText: 'Invalid password' })).toBeVisible({ timeout: 5000 });
   });
 });
