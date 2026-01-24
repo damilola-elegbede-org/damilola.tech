@@ -12,7 +12,7 @@ interface Stats {
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const environment = searchParams.get('env') || 'production';
+    const environment = searchParams.get('env') || process.env.VERCEL_ENV || 'production';
 
     // Count blobs in each category (using pagination)
     async function countBlobs(prefix: string): Promise<number> {
@@ -40,7 +40,8 @@ export async function GET(req: Request) {
     const auditByType: Record<string, number> = {};
     for (const blob of auditResult.blobs) {
       const filename = blob.pathname.split('/').pop() || '';
-      const match = filename.match(/-([a-z_]+)\.json/);
+      // Match: {timestamp}-{event_type}.json or {timestamp}-{event_type}-{suffix}.json
+      const match = filename.match(/^\d{4}-\d{2}-\d{2}T[\d-]+Z-([a-z_]+)/);
       const type = match?.[1] || 'unknown';
       auditByType[type] = (auditByType[type] || 0) + 1;
     }
