@@ -109,8 +109,8 @@ async function checkRateLimitRedis(ip: string): Promise<{
     return { limited: false, remainingAttempts: MAX_ATTEMPTS - attempts };
   } catch (error) {
     console.error('[rate-limit] Redis error:', error);
-    // On Redis error, allow the request (fail open) but log
-    return { limited: false, remainingAttempts: MAX_ATTEMPTS };
+    // On Redis error, fail closed to prevent bypass attacks
+    return { limited: true, retryAfter: 60 };
   }
 }
 
