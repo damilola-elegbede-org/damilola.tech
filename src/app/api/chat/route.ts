@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { CHATBOT_SYSTEM_PROMPT } from '@/lib/generated/system-prompt';
 import { getFullSystemPrompt } from '@/lib/system-prompt';
+import { saveConversationToBlob } from '@/lib/chat-storage-server';
 
 // Use Node.js runtime for reliable Anthropic SDK streaming
 export const runtime = 'nodejs';
@@ -43,7 +44,7 @@ export async function POST(req: Request) {
       return Response.json({ error: 'Request body too large.' }, { status: 413 });
     }
 
-    const { messages } = await req.json();
+    const { messages, sessionId, sessionStartedAt } = await req.json();
 
     if (!validateMessages(messages)) {
       return Response.json(
@@ -78,17 +79,30 @@ export async function POST(req: Request) {
     const encoder = new TextEncoder();
     const readable = new ReadableStream({
       async start(controller) {
+        let fullResponse = '';
         try {
           for await (const event of stream) {
             if (
               event.type === 'content_block_delta' &&
               event.delta.type === 'text_delta'
             ) {
+              fullResponse += event.delta.text;
               controller.enqueue(encoder.encode(event.delta.text));
             }
           }
           controller.close();
           console.log('[chat] Stream completed');
+
+          // Save to Blob after stream completes (fire-and-forget)
+          if (sessionId && sessionStartedAt) {
+            const fullConversation = [
+              ...messages,
+              { role: 'assistant' as const, content: fullResponse },
+            ];
+            saveConversationToBlob(sessionId, sessionStartedAt, fullConversation).catch(
+              (err) => console.warn('[chat] Failed to save conversation:', err)
+            );
+          }
         } catch (error) {
           console.error('[chat] Stream error:', error);
           controller.error(error);

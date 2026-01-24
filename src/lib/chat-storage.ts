@@ -167,6 +167,15 @@ export function getSessionId(): string | null {
 }
 
 /**
+ * Get the session start timestamp
+ * Returns null if no session exists
+ */
+export function getSessionStartedAt(): string | null {
+  const session = getRawSession();
+  return session?.startedAt ?? null;
+}
+
+/**
  * Load chat messages from localStorage if session is still valid
  * Returns null if no session exists or session has expired
  * Archives expired sessions before clearing them

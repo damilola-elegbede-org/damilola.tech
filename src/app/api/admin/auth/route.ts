@@ -11,6 +11,8 @@ import {
   clearRateLimit,
   getClientIp,
 } from '@/lib/rate-limit';
+import { validateCsrfToken, clearCsrfToken, CSRF_HEADER } from '@/lib/csrf';
+import { logAdminEvent } from '@/lib/audit-server';
 
 export const runtime = 'nodejs';
 
@@ -19,13 +21,21 @@ interface LoginRequest {
 }
 
 export async function POST(req: Request) {
+  const ip = getClientIp(req);
+
   try {
-    // Get client IP for rate limiting
-    const ip = getClientIp(req);
+    // Validate CSRF token first
+    const csrfToken = req.headers.get(CSRF_HEADER);
+    const validCsrf = await validateCsrfToken(csrfToken);
+    if (!validCsrf) {
+      await logAdminEvent('admin_login_failure', { reason: 'invalid_csrf' }, ip);
+      return Response.json({ error: 'Invalid request' }, { status: 403 });
+    }
 
     // Check rate limit before processing
-    const rateLimit = checkRateLimit(ip);
+    const rateLimit = await checkRateLimit(ip);
     if (rateLimit.limited) {
+      await logAdminEvent('admin_login_failure', { reason: 'rate_limited' }, ip);
       return Response.json(
         {
           error: 'Too many login attempts. Please try again later.',
@@ -41,9 +51,9 @@ export async function POST(req: Request) {
     }
 
     // Helper to record failed attempt and check for lockout
-    const recordAndCheckLimit = () => {
-      recordFailedAttempt(ip);
-      const newLimit = checkRateLimit(ip);
+    const recordAndCheckLimit = async () => {
+      await recordFailedAttempt(ip);
+      const newLimit = await checkRateLimit(ip);
       if (newLimit.limited) {
         return Response.json(
           {
@@ -66,7 +76,8 @@ export async function POST(req: Request) {
       body = await req.json();
     } catch {
       // Record attempt for invalid JSON to prevent rate limit bypass
-      const limitResponse = recordAndCheckLimit();
+      await logAdminEvent('admin_login_failure', { reason: 'invalid_json' }, ip);
+      const limitResponse = await recordAndCheckLimit();
       if (limitResponse) return limitResponse;
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
@@ -75,7 +86,8 @@ export async function POST(req: Request) {
 
     if (typeof password !== 'string' || !password) {
       // Record attempt for missing password to prevent rate limit bypass
-      const limitResponse = recordAndCheckLimit();
+      await logAdminEvent('admin_login_failure', { reason: 'missing_password' }, ip);
+      const limitResponse = await recordAndCheckLimit();
       if (limitResponse) return limitResponse;
       return Response.json({ error: 'Password is required' }, { status: 400 });
     }
@@ -83,14 +95,18 @@ export async function POST(req: Request) {
     const isValid = verifyPassword(password);
     if (!isValid) {
       // Record failed attempt and check for lockout
-      const limitResponse = recordAndCheckLimit();
+      await logAdminEvent('admin_login_failure', { reason: 'invalid_password' }, ip);
+      const limitResponse = await recordAndCheckLimit();
       if (limitResponse) return limitResponse;
 
       return Response.json({ error: 'Invalid password' }, { status: 401 });
     }
 
     // Clear rate limit on successful login
-    clearRateLimit(ip);
+    await clearRateLimit(ip);
+
+    // Clear CSRF token after successful login
+    await clearCsrfToken();
 
     const token = await signToken();
     const cookieOptions = getAuthCookieOptions();
@@ -98,17 +114,24 @@ export async function POST(req: Request) {
     const cookieStore = await cookies();
     cookieStore.set(ADMIN_COOKIE_NAME, token, cookieOptions);
 
+    await logAdminEvent('admin_login_success', {}, ip);
+
     return Response.json({ success: true });
   } catch (error) {
     console.error('[admin/auth] Login error:', error);
+    await logAdminEvent('admin_login_failure', { reason: 'internal_error' }, ip);
     return Response.json({ error: 'Login failed' }, { status: 500 });
   }
 }
 
-export async function DELETE() {
+export async function DELETE(req: Request) {
+  const ip = getClientIp(req);
+
   try {
     const cookieStore = await cookies();
     cookieStore.delete(ADMIN_COOKIE_NAME);
+
+    await logAdminEvent('admin_logout', {}, ip);
 
     return Response.json({ success: true });
   } catch (error) {

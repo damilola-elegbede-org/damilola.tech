@@ -14,7 +14,7 @@ describe('rate-limit module', () => {
     it('allows first attempt', async () => {
       const { checkRateLimit } = await import('@/lib/rate-limit');
 
-      const result = checkRateLimit('192.168.1.1');
+      const result = await checkRateLimit('192.168.1.1');
 
       expect(result.limited).toBe(false);
       expect(result.remainingAttempts).toBe(5);
@@ -26,10 +26,10 @@ describe('rate-limit module', () => {
 
       // Record 4 failed attempts (limit is 5)
       for (let i = 0; i < 4; i++) {
-        recordFailedAttempt(ip);
+        await recordFailedAttempt(ip);
       }
 
-      const result = checkRateLimit(ip);
+      const result = await checkRateLimit(ip);
       expect(result.limited).toBe(false);
       expect(result.remainingAttempts).toBe(1);
     });
@@ -40,10 +40,10 @@ describe('rate-limit module', () => {
 
       // Record 5 failed attempts (hits the limit)
       for (let i = 0; i < 5; i++) {
-        recordFailedAttempt(ip);
+        await recordFailedAttempt(ip);
       }
 
-      const result = checkRateLimit(ip);
+      const result = await checkRateLimit(ip);
       expect(result.limited).toBe(true);
       expect(result.retryAfter).toBeGreaterThan(0);
     });
@@ -54,10 +54,10 @@ describe('rate-limit module', () => {
 
       // Hit the limit
       for (let i = 0; i < 5; i++) {
-        recordFailedAttempt(ip);
+        await recordFailedAttempt(ip);
       }
 
-      const result = checkRateLimit(ip);
+      const result = await checkRateLimit(ip);
       // Should be close to 15 minutes (900 seconds)
       expect(result.retryAfter).toBeLessThanOrEqual(900);
       expect(result.retryAfter).toBeGreaterThan(890);
@@ -69,15 +69,15 @@ describe('rate-limit module', () => {
 
       // Hit the limit
       for (let i = 0; i < 5; i++) {
-        recordFailedAttempt(ip);
+        await recordFailedAttempt(ip);
       }
 
-      expect(checkRateLimit(ip).limited).toBe(true);
+      expect((await checkRateLimit(ip)).limited).toBe(true);
 
       // Advance time past lockout (15 minutes)
       vi.advanceTimersByTime(15 * 60 * 1000 + 1000);
 
-      const result = checkRateLimit(ip);
+      const result = await checkRateLimit(ip);
       expect(result.limited).toBe(false);
     });
   });
@@ -87,13 +87,13 @@ describe('rate-limit module', () => {
       const { checkRateLimit, recordFailedAttempt } = await import('@/lib/rate-limit');
       const ip = '192.168.1.6';
 
-      expect(checkRateLimit(ip).remainingAttempts).toBe(5);
+      expect((await checkRateLimit(ip)).remainingAttempts).toBe(5);
 
-      recordFailedAttempt(ip);
-      expect(checkRateLimit(ip).remainingAttempts).toBe(4);
+      await recordFailedAttempt(ip);
+      expect((await checkRateLimit(ip)).remainingAttempts).toBe(4);
 
-      recordFailedAttempt(ip);
-      expect(checkRateLimit(ip).remainingAttempts).toBe(3);
+      await recordFailedAttempt(ip);
+      expect((await checkRateLimit(ip)).remainingAttempts).toBe(3);
     });
 
     it('resets after window expires', async () => {
@@ -101,15 +101,15 @@ describe('rate-limit module', () => {
       const ip = '192.168.1.7';
 
       // Record some attempts
-      recordFailedAttempt(ip);
-      recordFailedAttempt(ip);
-      expect(checkRateLimit(ip).remainingAttempts).toBe(3);
+      await recordFailedAttempt(ip);
+      await recordFailedAttempt(ip);
+      expect((await checkRateLimit(ip)).remainingAttempts).toBe(3);
 
       // Advance time past window (15 minutes)
       vi.advanceTimersByTime(15 * 60 * 1000 + 1000);
 
       // Should reset
-      const result = checkRateLimit(ip);
+      const result = await checkRateLimit(ip);
       expect(result.remainingAttempts).toBe(5);
     });
   });
@@ -121,15 +121,15 @@ describe('rate-limit module', () => {
 
       // Record some attempts
       for (let i = 0; i < 3; i++) {
-        recordFailedAttempt(ip);
+        await recordFailedAttempt(ip);
       }
-      expect(checkRateLimit(ip).remainingAttempts).toBe(2);
+      expect((await checkRateLimit(ip)).remainingAttempts).toBe(2);
 
       // Clear (simulating successful login)
-      clearRateLimit(ip);
+      await clearRateLimit(ip);
 
       // Should be fresh
-      expect(checkRateLimit(ip).remainingAttempts).toBe(5);
+      expect((await checkRateLimit(ip)).remainingAttempts).toBe(5);
     });
   });
 

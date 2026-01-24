@@ -6,7 +6,13 @@ export type AuditEventType =
   | 'fit_assessment_started'
   | 'fit_assessment_completed'
   | 'fit_assessment_download'
-  | 'external_link_click';
+  | 'external_link_click'
+  | 'admin_login_success'
+  | 'admin_login_failure'
+  | 'admin_logout'
+  | 'admin_chat_viewed'
+  | 'admin_assessment_viewed'
+  | 'admin_audit_accessed';
 
 export interface AuditEvent {
   version: 1;

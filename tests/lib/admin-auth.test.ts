@@ -111,7 +111,7 @@ describe('admin-auth module', () => {
 
       expect(options.httpOnly).toBe(true);
       expect(options.secure).toBe(true);
-      expect(options.sameSite).toBe('lax');
+      expect(options.sameSite).toBe('strict');
       expect(options.maxAge).toBe(24 * 60 * 60);
       expect(options.path).toBe('/');
     });

@@ -1,49 +1,58 @@
 /**
- * Simple in-memory rate limiter for login attempts.
+ * Distributed rate limiter for admin login attempts.
  *
- * Note: In serverless environments, each instance has its own memory,
- * so this provides per-instance rate limiting. For distributed rate
- * limiting, use Vercel KV or Upstash Redis.
- *
- * This is adequate for a personal site - it catches most brute force
- * attempts and significantly raises the cost of attacks.
+ * Uses Upstash Redis for distributed state in production.
+ * Falls back to in-memory storage when Redis is not configured.
  */
 
+import { Redis } from '@upstash/redis';
+
+// Configuration
+const MAX_ATTEMPTS = 5; // Failed attempts before lockout
+const WINDOW_SECONDS = 15 * 60; // 15 minutes - attempt window
+const LOCKOUT_SECONDS = 15 * 60; // 15 minutes - lockout duration
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes - cleanup old entries (in-memory only)
+
+// Check if Redis is configured
+const useRedis = !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+
+// Lazy-init Redis client
+let redis: Redis | null = null;
+function getRedis(): Redis {
+  if (!redis) {
+    redis = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL!,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    });
+  }
+  return redis;
+}
+
+// In-memory fallback for local development
 interface RateLimitEntry {
   attempts: number;
   firstAttempt: number;
   lockedUntil: number | null;
 }
 
-// Configuration
-const MAX_ATTEMPTS = 5; // Failed attempts before lockout
-const WINDOW_MS = 15 * 60 * 1000; // 15 minutes - attempt window
-const LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes - lockout duration
-const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes - cleanup old entries
-
-// In-memory store
-const attempts = new Map<string, RateLimitEntry>();
-
-// Periodic cleanup of expired entries
+const memoryStore = new Map<string, RateLimitEntry>();
 let cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
 function startCleanup() {
-  if (cleanupInterval) return;
+  if (cleanupInterval || useRedis) return;
 
   cleanupInterval = setInterval(() => {
     const now = Date.now();
-    for (const [key, entry] of attempts.entries()) {
-      // Remove if window expired and not locked
-      const windowExpired = now - entry.firstAttempt > WINDOW_MS;
+    for (const [key, entry] of memoryStore.entries()) {
+      const windowExpired = now - entry.firstAttempt > WINDOW_SECONDS * 1000;
       const lockExpired = !entry.lockedUntil || now > entry.lockedUntil;
 
       if (windowExpired && lockExpired) {
-        attempts.delete(key);
+        memoryStore.delete(key);
       }
     }
   }, CLEANUP_INTERVAL_MS);
 
-  // Don't prevent process exit
   if (cleanupInterval.unref) {
     cleanupInterval.unref();
   }
@@ -53,7 +62,59 @@ function startCleanup() {
  * Check if an IP is rate limited.
  * Returns { limited: false } if allowed, or { limited: true, retryAfter } if blocked.
  */
-export function checkRateLimit(ip: string): {
+export async function checkRateLimit(ip: string): Promise<{
+  limited: boolean;
+  retryAfter?: number;
+  remainingAttempts?: number;
+}> {
+  if (useRedis) {
+    return checkRateLimitRedis(ip);
+  }
+  return checkRateLimitMemory(ip);
+}
+
+async function checkRateLimitRedis(ip: string): Promise<{
+  limited: boolean;
+  retryAfter?: number;
+  remainingAttempts?: number;
+}> {
+  const lockoutKey = `lockout:admin:${ip}`;
+  const attemptsKey = `ratelimit:admin:${ip}`;
+
+  try {
+    const client = getRedis();
+
+    // Check if locked out
+    const lockoutExpiry = await client.get<number>(lockoutKey);
+    if (lockoutExpiry) {
+      const now = Date.now();
+      if (now < lockoutExpiry) {
+        const retryAfter = Math.ceil((lockoutExpiry - now) / 1000);
+        return { limited: true, retryAfter };
+      }
+      // Lockout expired, clean up
+      await client.del(lockoutKey);
+    }
+
+    // Get current attempts
+    const attempts = (await client.get<number>(attemptsKey)) || 0;
+
+    if (attempts >= MAX_ATTEMPTS) {
+      // Apply lockout
+      const lockoutExpiry = Date.now() + LOCKOUT_SECONDS * 1000;
+      await client.set(lockoutKey, lockoutExpiry, { ex: LOCKOUT_SECONDS });
+      return { limited: true, retryAfter: LOCKOUT_SECONDS };
+    }
+
+    return { limited: false, remainingAttempts: MAX_ATTEMPTS - attempts };
+  } catch (error) {
+    console.error('[rate-limit] Redis error:', error);
+    // On Redis error, allow the request (fail open) but log
+    return { limited: false, remainingAttempts: MAX_ATTEMPTS };
+  }
+}
+
+function checkRateLimitMemory(ip: string): {
   limited: boolean;
   retryAfter?: number;
   remainingAttempts?: number;
@@ -61,7 +122,7 @@ export function checkRateLimit(ip: string): {
   startCleanup();
 
   const now = Date.now();
-  const entry = attempts.get(ip);
+  const entry = memoryStore.get(ip);
 
   if (!entry) {
     return { limited: false, remainingAttempts: MAX_ATTEMPTS };
@@ -74,16 +135,16 @@ export function checkRateLimit(ip: string): {
   }
 
   // Check if window expired (reset if so)
-  if (now - entry.firstAttempt > WINDOW_MS) {
-    attempts.delete(ip);
+  if (now - entry.firstAttempt > WINDOW_SECONDS * 1000) {
+    memoryStore.delete(ip);
     return { limited: false, remainingAttempts: MAX_ATTEMPTS };
   }
 
   // Check if at limit
   if (entry.attempts >= MAX_ATTEMPTS) {
     // Apply lockout
-    entry.lockedUntil = now + LOCKOUT_MS;
-    const retryAfter = Math.ceil(LOCKOUT_MS / 1000);
+    entry.lockedUntil = now + LOCKOUT_SECONDS * 1000;
+    const retryAfter = Math.ceil(LOCKOUT_SECONDS);
     return { limited: true, retryAfter };
   }
 
@@ -93,14 +154,48 @@ export function checkRateLimit(ip: string): {
 /**
  * Record a failed login attempt for an IP.
  */
-export function recordFailedAttempt(ip: string): void {
+export async function recordFailedAttempt(ip: string): Promise<void> {
+  if (useRedis) {
+    await recordFailedAttemptRedis(ip);
+  } else {
+    recordFailedAttemptMemory(ip);
+  }
+}
+
+async function recordFailedAttemptRedis(ip: string): Promise<void> {
+  const attemptsKey = `ratelimit:admin:${ip}`;
+  const lockoutKey = `lockout:admin:${ip}`;
+
+  try {
+    const client = getRedis();
+
+    // Increment attempts counter
+    const attempts = await client.incr(attemptsKey);
+
+    // Set expiry on first attempt
+    if (attempts === 1) {
+      await client.expire(attemptsKey, WINDOW_SECONDS);
+    }
+
+    // Apply lockout if limit reached
+    if (attempts >= MAX_ATTEMPTS) {
+      const lockoutExpiry = Date.now() + LOCKOUT_SECONDS * 1000;
+      await client.set(lockoutKey, lockoutExpiry, { ex: LOCKOUT_SECONDS });
+      console.warn(`[rate-limit] IP ${ip} locked out after ${MAX_ATTEMPTS} failed attempts`);
+    }
+  } catch (error) {
+    console.error('[rate-limit] Redis error recording attempt:', error);
+  }
+}
+
+function recordFailedAttemptMemory(ip: string): void {
   startCleanup();
 
   const now = Date.now();
-  const entry = attempts.get(ip);
+  const entry = memoryStore.get(ip);
 
   if (!entry) {
-    attempts.set(ip, {
+    memoryStore.set(ip, {
       attempts: 1,
       firstAttempt: now,
       lockedUntil: null,
@@ -109,8 +204,8 @@ export function recordFailedAttempt(ip: string): void {
   }
 
   // Reset if window expired
-  if (now - entry.firstAttempt > WINDOW_MS) {
-    attempts.set(ip, {
+  if (now - entry.firstAttempt > WINDOW_SECONDS * 1000) {
+    memoryStore.set(ip, {
       attempts: 1,
       firstAttempt: now,
       lockedUntil: null,
@@ -123,7 +218,7 @@ export function recordFailedAttempt(ip: string): void {
 
   // Apply lockout if limit reached
   if (entry.attempts >= MAX_ATTEMPTS) {
-    entry.lockedUntil = now + LOCKOUT_MS;
+    entry.lockedUntil = now + LOCKOUT_SECONDS * 1000;
     console.warn(`[rate-limit] IP ${ip} locked out after ${MAX_ATTEMPTS} failed attempts`);
   }
 }
@@ -131,8 +226,19 @@ export function recordFailedAttempt(ip: string): void {
 /**
  * Clear rate limit for an IP (call on successful login).
  */
-export function clearRateLimit(ip: string): void {
-  attempts.delete(ip);
+export async function clearRateLimit(ip: string): Promise<void> {
+  if (useRedis) {
+    try {
+      const client = getRedis();
+      const attemptsKey = `ratelimit:admin:${ip}`;
+      const lockoutKey = `lockout:admin:${ip}`;
+      await Promise.all([client.del(attemptsKey), client.del(lockoutKey)]);
+    } catch (error) {
+      console.error('[rate-limit] Redis error clearing limit:', error);
+    }
+  } else {
+    memoryStore.delete(ip);
+  }
 }
 
 /**

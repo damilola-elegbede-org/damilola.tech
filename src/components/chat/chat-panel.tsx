@@ -16,6 +16,8 @@ import {
   loadSession,
   saveSession,
   clearSession,
+  getSessionId,
+  getSessionStartedAt,
   type StoredMessage,
 } from '@/lib/chat-storage';
 import { trackEvent } from '@/lib/audit-client';
@@ -131,7 +133,11 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: apiMessages }),
+          body: JSON.stringify({
+            messages: apiMessages,
+            sessionId: getSessionId(),
+            sessionStartedAt: getSessionStartedAt(),
+          }),
           signal: abortController.signal,
         });
 

@@ -1,4 +1,6 @@
 import { list } from '@vercel/blob';
+import { logAdminEvent } from '@/lib/audit-server';
+import { getClientIp } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 
@@ -16,6 +18,8 @@ interface AuditSummary {
 }
 
 export async function GET(req: Request) {
+  const ip = getClientIp(req);
+
   try {
     const { searchParams } = new URL(req.url);
     const environment = searchParams.get('env') || 'production';
@@ -61,6 +65,9 @@ export async function GET(req: Request) {
     // Check if we have more results than requested (for accurate hasMore)
     const hasMoreFiltered = events.length > limit;
     events = events.slice(0, limit);
+
+    // Log audit access (non-blocking)
+    logAdminEvent('admin_audit_accessed', { environment, date, eventType }, ip);
 
     return Response.json({
       events,

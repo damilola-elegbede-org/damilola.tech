@@ -8,6 +8,8 @@ vi.mock('@/lib/chat-storage', () => ({
   loadSession: vi.fn(),
   saveSession: vi.fn(),
   clearSession: vi.fn(),
+  getSessionId: vi.fn(() => 'test-session-id'),
+  getSessionStartedAt: vi.fn(() => '2025-01-22T10:00:00.000Z'),
 }));
 
 // Mock resume-data module

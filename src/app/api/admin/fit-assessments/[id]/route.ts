@@ -1,3 +1,6 @@
+import { logAdminEvent } from '@/lib/audit-server';
+import { getClientIp } from '@/lib/rate-limit';
+
 export const runtime = 'nodejs';
 
 // Validate that URL belongs to our Vercel Blob storage
@@ -18,6 +21,8 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ip = getClientIp(req);
+
   try {
     const { id } = await params;
     const blobUrl = decodeURIComponent(id);
@@ -33,6 +38,10 @@ export async function GET(
     }
 
     const data = await response.json();
+
+    // Log assessment access
+    await logAdminEvent('admin_assessment_viewed', { assessmentUrl: blobUrl }, ip);
+
     return Response.json(data);
   } catch (error) {
     console.error('[admin/fit-assessments/[id]] Error fetching assessment:', error);

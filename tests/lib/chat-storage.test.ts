@@ -4,6 +4,7 @@ import {
   saveSession,
   clearSession,
   getSessionId,
+  getSessionStartedAt,
   archiveSession,
   type StoredMessage,
 } from '@/lib/chat-storage';
@@ -394,6 +395,23 @@ describe('chat-storage', () => {
     it('getSessionId returns null when no session exists', () => {
       const sessionId = getSessionId();
       expect(sessionId).toBeNull();
+    });
+
+    it('getSessionStartedAt returns current session startedAt', () => {
+      const messages: StoredMessage[] = [
+        { id: '1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] },
+      ];
+
+      saveSession(messages);
+      const savedData = JSON.parse(localStorageMock['damilola-chat-session']);
+
+      const startedAt = getSessionStartedAt();
+      expect(startedAt).toBe(savedData.startedAt);
+    });
+
+    it('getSessionStartedAt returns null when no session exists', () => {
+      const startedAt = getSessionStartedAt();
+      expect(startedAt).toBeNull();
     });
   });
 
