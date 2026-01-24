@@ -215,7 +215,7 @@ describe('ChatPanel', () => {
     fireEvent.change(input, { target: { value: longText } });
 
     // Submit button should be disabled
-    const submitButton = screen.getByRole('button', { name: '' }); // The send button has no visible text
+    const submitButton = screen.getByRole('button', { name: /send message/i });
     expect(submitButton).toBeDisabled();
   });
 

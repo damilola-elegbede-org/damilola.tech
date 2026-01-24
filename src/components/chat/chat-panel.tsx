@@ -483,6 +483,7 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
                 size="sm"
                 disabled={isLoading || !input.trim() || isInputTooLong}
                 className="rounded-full"
+                aria-label="Send message"
               >
                 <svg
                   className="h-4 w-4"
