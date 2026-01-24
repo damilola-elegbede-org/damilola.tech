@@ -61,20 +61,25 @@ export async function GET(req: Request) {
 
       // Convert UTC timestamp to Mountain Time for display
       let displayTimestamp = '';
+      let displayDate = eventDate; // Fallback to UTC date from path
       let sortKey = 0;
       if (match?.[1]) {
         const utcTimestamp = match[1].replace(/T(\d{2})-(\d{2})-(\d{2})/, 'T$1:$2:$3');
         const utcDate = new Date(utcTimestamp);
         sortKey = utcDate.getTime();
-        displayTimestamp = utcDate.toLocaleString('en-US', {
+
+        // Get Mountain Time date (YYYY-MM-DD format)
+        displayDate = utcDate.toLocaleDateString('en-CA', {
           timeZone: 'America/Denver',
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
+        }); // en-CA gives YYYY-MM-DD format
+
+        // Get Mountain Time timestamp (HH:MM:SS AM/PM format)
+        displayTimestamp = utcDate.toLocaleTimeString('en-US', {
+          timeZone: 'America/Denver',
           hour: '2-digit',
           minute: '2-digit',
           second: '2-digit',
-          hour12: false,
+          hour12: true,
         });
       }
 
@@ -83,7 +88,7 @@ export async function GET(req: Request) {
         pathname: blob.pathname,
         eventType: match?.[2] || '',
         environment,
-        date: eventDate,
+        date: displayDate,
         timestamp: displayTimestamp,
         size: blob.size,
         url: blob.url,
