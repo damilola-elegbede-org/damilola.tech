@@ -4,13 +4,13 @@
  *
  * Two-agent architecture:
  * 1. Chatbot - The website's /api/chat endpoint
- * 2. Evaluator - Claude Sonnet grades responses against principles
+ * 2. Evaluator - Claude Haiku grades responses against principles (cost-optimized)
  *
  * Usage:
  *   npm run test:adversarial       # Test production (default)
  *   npm run test:adversarial -- -l # Test local dev server
  *
- * Cost: ~$0.50-1.50 per full run
+ * Cost: ~$0.05-0.15 per full run (Haiku evaluator)
  */
 
 import * as fs from 'fs';
@@ -37,10 +37,14 @@ const BASE_URL = isLocal
   ? 'http://localhost:3000'
   : 'https://www.damilola.tech';
 
-const EVALUATOR_MODEL = 'claude-sonnet-4-20250514';
+const EVALUATOR_MODEL = 'claude-3-5-haiku-20241022';
 
 // Stricter thresholds (only 4-5 pass)
 const VIOLATION_THRESHOLD = 4; // Score < 4 is a violation
+
+// Concurrency for parallel test execution
+const CONCURRENCY = 4; // Reduced to avoid Anthropic API rate limits
+const BATCH_DELAY_MS = 3000; // Delay between batches to avoid rate limiting
 
 interface Scenario {
   id: string;
@@ -391,6 +395,21 @@ Respond in this exact JSON format:
     jsonText = jsonMatch[0];
   }
 
+  // Sanitize control characters within JSON string values (Haiku can include raw newlines)
+  // This replaces control chars inside strings with their escaped equivalents
+  jsonText = jsonText.replace(
+    /"(?:[^"\\]|\\.)*"/g,
+    (match) =>
+      match
+        .replace(/[\x00-\x1f]/g, (char) => {
+          const code = char.charCodeAt(0);
+          if (code === 0x0a) return '\\n'; // newline
+          if (code === 0x0d) return '\\r'; // carriage return
+          if (code === 0x09) return '\\t'; // tab
+          return `\\u${code.toString(16).padStart(4, '0')}`;
+        })
+  );
+
   let parsed:
     | { scores: EvaluationScores; reasoning: string; violations?: string[] }
     | undefined;
@@ -659,72 +678,91 @@ async function runAdversarialTests(): Promise<void> {
   console.log(`Loaded ${scenarioBank.scenarios.length} scenarios`);
   console.log(`Source content: ${sourceContent.length} characters\n`);
 
-  // Run tests
+  // Run tests in parallel batches
   const results: ScenarioResult[] = [];
+  const scenarios = scenarioBank.scenarios;
 
-  for (const scenario of scenarioBank.scenarios) {
-    console.log(`Testing: ${scenario.id}`);
-    console.log(`  Question: "${scenario.question}"`);
+  // Process scenarios in batches of CONCURRENCY
+  console.log(`Running ${scenarios.length} scenarios with concurrency=${CONCURRENCY}...\n`);
 
-    try {
-      // Call chatbot
-      const response = await callChatbot(scenario.question);
-      console.log(`  Response: "${response.substring(0, 100)}..."`);
+  for (let i = 0; i < scenarios.length; i += CONCURRENCY) {
+    const batch = scenarios.slice(i, i + CONCURRENCY);
+    const batchNum = Math.floor(i / CONCURRENCY) + 1;
+    const totalBatches = Math.ceil(scenarios.length / CONCURRENCY);
 
-      // Evaluate response
-      const { scores, reasoning } = await evaluateResponse(
-        scenario,
-        response,
-        sourceContent,
-        scenarioBank.evaluationCriteria
-      );
+    console.log(`Batch ${batchNum}/${totalBatches}: ${batch.map(s => s.id).join(', ')}`);
 
-      const severity = determineSeverity(scores);
-      const violations: string[] = [];
+    const batchPromises = batch.map(async (scenario): Promise<ScenarioResult> => {
+      try {
+        // Call chatbot
+        const response = await callChatbot(scenario.question);
 
-      // Identify specific violations (using stricter threshold)
-      for (const [principle, score] of Object.entries(scores)) {
-        if (score < VIOLATION_THRESHOLD) {
-          violations.push(`${principle}: score ${score}`);
+        // Evaluate response
+        const { scores, reasoning } = await evaluateResponse(
+          scenario,
+          response,
+          sourceContent,
+          scenarioBank.evaluationCriteria
+        );
+
+        const severity = determineSeverity(scores);
+        const violations: string[] = [];
+
+        // Identify specific violations (using stricter threshold)
+        for (const [principle, score] of Object.entries(scores)) {
+          if (score < VIOLATION_THRESHOLD) {
+            violations.push(`${principle}: score ${score}`);
+          }
         }
-      }
 
-      console.log(`  Severity: ${severity}`);
-      if (violations.length > 0) {
-        console.log(`  Violations: ${violations.join(', ')}`);
+        return {
+          scenario,
+          question: scenario.question,
+          response,
+          scores,
+          reasoning,
+          violations,
+          severity,
+        };
+      } catch (error) {
+        // Record as critical failure
+        return {
+          scenario,
+          question: scenario.question,
+          response: `ERROR: ${error}`,
+          scores: {
+            brevity: 0,
+            voice: 0,
+            contentAdherence: 0,
+            formatting: 0,
+            boundaries: 0,
+            focus: 0,
+          },
+          reasoning: `Test failed with error: ${error}`,
+          violations: ['Test execution failed'],
+          severity: 'CRITICAL',
+        };
       }
+    });
 
-      results.push({
-        scenario,
-        question: scenario.question,
-        response,
-        scores,
-        reasoning,
-        violations,
-        severity,
-      });
-    } catch (error) {
-      console.error(`  Error: ${error}`);
-      // Record as critical failure
-      results.push({
-        scenario,
-        question: scenario.question,
-        response: `ERROR: ${error}`,
-        scores: {
-          brevity: 0,
-          voice: 0,
-          contentAdherence: 0,
-          formatting: 0,
-          boundaries: 0,
-          focus: 0,
-        },
-        reasoning: `Test failed with error: ${error}`,
-        violations: ['Test execution failed'],
-        severity: 'CRITICAL',
-      });
+    const batchResults = await Promise.all(batchPromises);
+
+    // Log batch results
+    for (const result of batchResults) {
+      const status = result.severity === 'PASS' ? '✓' : '✗';
+      console.log(`  ${status} ${result.scenario.id}: ${result.severity}`);
+      if (result.violations.length > 0) {
+        console.log(`    Violations: ${result.violations.join(', ')}`);
+      }
     }
 
+    results.push(...batchResults);
     console.log('');
+
+    // Add delay between batches to avoid rate limiting
+    if (i + CONCURRENCY < scenarios.length) {
+      await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+    }
   }
 
   // Calculate statistics

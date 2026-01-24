@@ -22,7 +22,7 @@ Recruiters can ask the AI about experience, skills, and role fit.
 - `npm run dev` - Start development server
 - `npm run test` - Run unit tests (Vitest)
 - `npm run test:e2e` - Run E2E tests (Playwright)
-- `npm run test:adversarial` - Run adversarial chatbot tests against production (~$0.50-1.50)
+- `npm run test:adversarial` - Run adversarial chatbot tests against production (~$0.05-0.15)
 - `npm run test:adversarial -- -l` - Run adversarial tests against local dev server
 - `npm run build` - Production build
 - `npm run lint` - Lint code
@@ -122,7 +122,7 @@ npm run test:adversarial -- -l
 - `.tmp/reports/adversarial-report.md` - Human-readable summary
 
 ### Cost
-~$0.50-1.50 per run (uses Claude Sonnet for evaluation)
+~$0.05-0.15 per run (uses Claude Haiku for evaluation)
 
 ## Section Background Pattern
 Sections alternate backgrounds for visual rhythm:

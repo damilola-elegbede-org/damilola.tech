@@ -72,7 +72,7 @@ This test uses **maximum stringency**:
 
 ## Cost
 
-~$0.50-1.50 per run (uses Claude Sonnet for evaluation)
+~$0.05-0.15 per run (uses Claude Haiku for evaluation)
 
 ## Prerequisites
 
