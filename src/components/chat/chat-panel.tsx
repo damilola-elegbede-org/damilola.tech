@@ -46,6 +46,7 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const lastSavedRef = useRef<string>('');
   const abortControllerRef = useRef<AbortController | null>(null);
+  const wasLoadingRef = useRef(false);
 
   // Load stored messages after hydration (fixes SSR mismatch)
   // Uses queueMicrotask to batch state updates and avoid cascading render warnings
@@ -221,6 +222,14 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [isOpen]);
+
+  // Restore focus after loading completes
+  useEffect(() => {
+    if (wasLoadingRef.current && !isLoading && isOpen) {
+      inputRef.current?.focus();
+    }
+    wasLoadingRef.current = isLoading;
+  }, [isLoading, isOpen]);
 
   // Click outside to close (desktop only)
   useEffect(() => {
