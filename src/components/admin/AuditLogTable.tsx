@@ -23,6 +23,12 @@ const eventTypeColors: Record<string, string> = {
   fit_assessment_completed: 'bg-violet-500/10 text-violet-400',
   fit_assessment_download: 'bg-pink-500/10 text-pink-400',
   external_link_click: 'bg-orange-500/10 text-orange-400',
+  admin_login_success: 'bg-green-500/10 text-green-400',
+  admin_login_failure: 'bg-red-500/10 text-red-400',
+  admin_logout: 'bg-yellow-500/10 text-yellow-400',
+  admin_chat_viewed: 'bg-indigo-500/10 text-indigo-400',
+  admin_assessment_viewed: 'bg-fuchsia-500/10 text-fuchsia-400',
+  admin_audit_accessed: 'bg-slate-500/10 text-slate-400',
 };
 
 export function AuditLogTable({ events, isLoading }: AuditLogTableProps) {
@@ -74,7 +80,7 @@ export function AuditLogTable({ events, isLoading }: AuditLogTableProps) {
                 {event.date}
               </td>
               <td className="px-4 py-3 text-sm text-[var(--color-text-muted)]">
-                {event.timestamp ? new Date(event.timestamp).toLocaleTimeString() : '-'}
+                {event.timestamp || '-'}
               </td>
             </tr>
           ))}

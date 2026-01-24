@@ -56,8 +56,9 @@ export async function GET(req: Request) {
       const parts = blob.pathname.split('/');
       const filename = parts.pop() || '';
       const eventDate = parts.pop() || '';
-      // Handle timestamps with or without milliseconds: 2024-01-24T12-00-00.000Z or 2024-01-24T12-00-00Z
-      const match = filename.match(/^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:\.\d{3})?Z)-([a-z_]+)/);
+      // Handle timestamps with or without milliseconds, and optional random suffix from Vercel Blob
+      // Format: 2024-01-24T12-00-00.000Z-event_type.json or 2024-01-24T12-00-00.000Z-event_type-randomsuffix.json
+      const match = filename.match(/^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:\.\d{3})?Z)-([a-z_]+)(?:-[a-zA-Z0-9]+)?\.json$/);
 
       // Convert UTC timestamp to Mountain Time for display
       let displayTimestamp = '';

@@ -24,6 +24,12 @@ const eventTypes = [
   'fit_assessment_completed',
   'fit_assessment_download',
   'external_link_click',
+  'admin_login_success',
+  'admin_login_failure',
+  'admin_logout',
+  'admin_chat_viewed',
+  'admin_assessment_viewed',
+  'admin_audit_accessed',
 ];
 
 export default function AuditPage() {
