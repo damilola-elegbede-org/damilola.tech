@@ -35,6 +35,7 @@ export function LoginForm() {
           'Content-Type': 'application/json',
           'x-csrf-token': csrfToken,
         },
+        credentials: 'include',
         body: JSON.stringify({ password }),
       });
 
