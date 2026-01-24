@@ -1,7 +1,6 @@
 interface PageNavigationProps {
   currentPage: number;
-  hasNext: boolean;
-  hasPrev: boolean;
+  totalPages: number;
   onNext: () => void;
   onPrev: () => void;
   isLoading?: boolean;
@@ -9,12 +8,14 @@ interface PageNavigationProps {
 
 export function PageNavigation({
   currentPage,
-  hasNext,
-  hasPrev,
+  totalPages,
   onNext,
   onPrev,
   isLoading,
 }: PageNavigationProps) {
+  const hasNext = currentPage < totalPages;
+  const hasPrev = currentPage > 1;
+
   return (
     <div className="mt-4 flex items-center justify-center gap-4">
       <button
@@ -38,11 +39,11 @@ export function PageNavigation({
         </svg>
       </button>
 
-      <span className="min-w-[80px] text-center text-sm text-[var(--color-text)]">
+      <span className="min-w-[100px] text-center text-sm text-[var(--color-text)]">
         {isLoading ? (
           <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
         ) : (
-          `Page ${currentPage}`
+          `Page ${currentPage} of ${totalPages}`
         )}
       </span>
 

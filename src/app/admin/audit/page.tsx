@@ -15,7 +15,7 @@ interface AuditEvent {
   url: string;
 }
 
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 20;
 
 const eventTypes = [
   'page_view',
@@ -37,19 +37,18 @@ const eventTypes = [
 export default function AuditPage() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const [cursorHistory, setCursorHistory] = useState<(string | null)[]>([null]); // Index 0 = page 1 cursor (null for first page)
-  const [hasMore, setHasMore] = useState(false);
+  const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<string>('');
 
-  const fetchPage = useCallback(async (pageNum: number, cursorForPage: string | null) => {
+  const fetchPage = useCallback(async (pageNum: number) => {
     try {
       setIsLoading(true);
       const params = new URLSearchParams();
+      params.set('page', pageNum.toString());
       params.set('limit', PAGE_SIZE.toString());
-      if (cursorForPage) params.set('cursor', cursorForPage);
       if (selectedType) params.set('eventType', selectedType);
       if (selectedDate) params.set('date', selectedDate);
 
@@ -58,21 +57,8 @@ export default function AuditPage() {
 
       const data = await res.json();
       setEvents(data.events);
-      setHasMore(data.hasMore);
-      setCurrentPage(pageNum);
-
-      // Store cursor for next page if we have more
-      if (data.hasMore && data.cursor) {
-        setCursorHistory((prev) => {
-          const newHistory = [...prev];
-          // Ensure we have slot for current page's next cursor
-          while (newHistory.length <= pageNum) {
-            newHistory.push(null);
-          }
-          newHistory[pageNum] = data.cursor;
-          return newHistory;
-        });
-      }
+      setCurrentPage(data.page);
+      setTotalPages(data.totalPages);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -81,26 +67,23 @@ export default function AuditPage() {
   }, [selectedType, selectedDate]);
 
   const handleNext = useCallback(() => {
-    if (hasMore && cursorHistory[currentPage]) {
-      fetchPage(currentPage + 1, cursorHistory[currentPage]);
+    if (currentPage < totalPages) {
+      fetchPage(currentPage + 1);
     }
-  }, [hasMore, currentPage, cursorHistory, fetchPage]);
+  }, [currentPage, totalPages, fetchPage]);
 
   const handlePrev = useCallback(() => {
     if (currentPage > 1) {
-      fetchPage(currentPage - 1, cursorHistory[currentPage - 2]);
+      fetchPage(currentPage - 1);
     }
-  }, [currentPage, cursorHistory, fetchPage]);
+  }, [currentPage, fetchPage]);
 
   useEffect(() => {
     // Reset to page 1 when filters change
-    setCursorHistory([null]);
-    setCurrentPage(1);
-    fetchPage(1, null);
+    fetchPage(1);
   }, [selectedType, selectedDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFilterChange = () => {
-    setCursorHistory([null]);
     setCurrentPage(1);
     setEvents([]);
   };
@@ -164,8 +147,7 @@ export default function AuditPage() {
       <AuditLogTable events={events} isLoading={isLoading && events.length === 0} />
       <PageNavigation
         currentPage={currentPage}
-        hasNext={hasMore}
-        hasPrev={currentPage > 1}
+        totalPages={totalPages}
         onNext={handleNext}
         onPrev={handlePrev}
         isLoading={isLoading}

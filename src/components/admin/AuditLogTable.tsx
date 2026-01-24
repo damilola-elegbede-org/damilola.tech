@@ -92,7 +92,7 @@ export function AuditLogTable({ events, isLoading }: AuditLogTableProps) {
   }
 
   return (
-    <div className="max-h-[600px] overflow-y-auto rounded-lg border border-[var(--color-border)]">
+    <div className="overflow-hidden rounded-lg border border-[var(--color-border)]">
       <table className="w-full">
         <thead className="sticky top-0 bg-[var(--color-card)]">
           <tr>
