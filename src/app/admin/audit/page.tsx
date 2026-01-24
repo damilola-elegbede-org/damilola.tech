@@ -32,8 +32,6 @@ const eventTypes = [
   'admin_audit_accessed',
 ];
 
-const environments = ['production', 'preview', 'development'];
-
 export default function AuditPage() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -42,7 +40,6 @@ export default function AuditPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<string>('');
-  const [selectedEnv, setSelectedEnv] = useState<string>('production');
 
   const fetchEvents = async (append = false) => {
     try {
@@ -51,7 +48,6 @@ export default function AuditPage() {
       if (cursor && append) params.set('cursor', cursor);
       if (selectedType) params.set('eventType', selectedType);
       if (selectedDate) params.set('date', selectedDate);
-      if (selectedEnv) params.set('env', selectedEnv);
 
       const res = await fetch(`/api/admin/audit?${params}`);
       if (!res.ok) throw new Error('Failed to fetch events');
@@ -69,7 +65,7 @@ export default function AuditPage() {
 
   useEffect(() => {
     fetchEvents();
-  }, [selectedType, selectedDate, selectedEnv]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedType, selectedDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFilterChange = () => {
     setCursor(null);
@@ -86,23 +82,6 @@ export default function AuditPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-4">
-        <div>
-          <label className="block text-sm text-[var(--color-text-muted)]">Environment</label>
-          <select
-            value={selectedEnv}
-            onChange={(e) => {
-              setSelectedEnv(e.target.value);
-              handleFilterChange();
-            }}
-            className="mt-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 text-sm text-[var(--color-text)]"
-          >
-            {environments.map((env) => (
-              <option key={env} value={env}>
-                {env}
-              </option>
-            ))}
-          </select>
-        </div>
         <div>
           <label className="block text-sm text-[var(--color-text-muted)]">Event Type</label>
           <select

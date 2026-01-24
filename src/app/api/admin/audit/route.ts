@@ -35,7 +35,7 @@ export async function GET(req: Request) {
 
   try {
     const { searchParams } = new URL(req.url);
-    const environment = searchParams.get('env') || 'production';
+    const environment = searchParams.get('env') || process.env.VERCEL_ENV || 'production';
     const date = searchParams.get('date'); // YYYY-MM-DD format
     const eventType = searchParams.get('eventType');
     const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100);
