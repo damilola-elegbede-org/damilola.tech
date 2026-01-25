@@ -33,7 +33,7 @@ describe('chat-storage-server', () => {
         `damilola.tech/chats/development/${sessionId}.json`,
         expect.any(String),
         expect.objectContaining({
-          access: 'private',
+          access: 'public',
           addRandomSuffix: false,
           contentType: 'application/json',
         })

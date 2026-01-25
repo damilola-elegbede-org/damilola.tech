@@ -58,7 +58,7 @@ export async function logAdminEvent(
     const pathname = `${AUDIT_PREFIX}/${environment}/${dateStr}/${timestamp}-${eventType}.json`;
 
     await put(pathname, JSON.stringify(event), {
-      access: 'private',
+      access: 'public',
       addRandomSuffix: true,
     });
   } catch (error) {
