@@ -1,4 +1,6 @@
+import { cookies } from 'next/headers';
 import { list } from '@vercel/blob';
+import { verifyToken, ADMIN_COOKIE_NAME } from '@/lib/admin-auth';
 
 export const runtime = 'nodejs';
 
@@ -15,6 +17,13 @@ interface AssessmentSummary {
 }
 
 export async function GET(req: Request) {
+  // Verify authentication
+  const cookieStore = await cookies();
+  const token = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
+  if (!token || !(await verifyToken(token))) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const { searchParams } = new URL(req.url);
     const environment = searchParams.get('env') || process.env.VERCEL_ENV || 'production';

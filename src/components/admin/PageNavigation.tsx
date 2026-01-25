@@ -1,3 +1,5 @@
+'use client';
+
 interface PageNavigationProps {
   currentPage: number;
   totalPages: number;

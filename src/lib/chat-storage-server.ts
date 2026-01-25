@@ -51,7 +51,7 @@ export async function saveConversationToBlob(
   };
 
   await put(path, JSON.stringify(payload), {
-    access: 'public',
+    access: 'private',
     addRandomSuffix: false,
     contentType: 'application/json',
   });

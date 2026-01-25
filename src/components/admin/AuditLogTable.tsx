@@ -174,7 +174,7 @@ export function AuditLogTable({ events, isLoading }: AuditLogTableProps) {
               </tr>
               {expandedId === event.id && (
                 <tr key={`${event.id}-details`} className="bg-[var(--color-card)]">
-                  <td colSpan={4} className="px-4 py-4">
+                  <td colSpan={3} className="px-4 py-4">
                     {detailsLoading ? (
                       <div className="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
                         <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />

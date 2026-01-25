@@ -43,11 +43,12 @@ export function LoginForm() {
 
       if (!res.ok) {
         const data = await res.json();
-        setError(data.error || 'Login failed');
-        // Refresh CSRF token on failure
+        const loginError = data.error || 'Login failed';
+        setError(loginError);
+        // Refresh CSRF token on failure (preserve original error message)
         generateCsrfToken()
           .then(setCsrfToken)
-          .catch(() => setError('Unable to refresh security token. Please try again.'));
+          .catch(() => console.error('Failed to refresh CSRF token'));
         return;
       }
 
