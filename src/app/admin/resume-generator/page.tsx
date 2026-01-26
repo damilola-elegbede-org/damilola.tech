@@ -56,12 +56,13 @@ export default function ResumeGeneratorPage() {
 
       let fullText = '';
       let isFirstLine = true;
+      const decoder = new TextDecoder();
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = new TextDecoder().decode(value);
+        const chunk = decoder.decode(value, { stream: true });
         fullText += chunk;
 
         // Extract metadata from first line (metadata contains wasUrl, extractedUrl)
@@ -77,6 +78,9 @@ export default function ResumeGeneratorPage() {
           setStreamingText(fullText);
         }
       }
+
+      // Flush any remaining bytes from the decoder
+      fullText += decoder.decode();
 
       // Parse the JSON result
       let jsonText = fullText.trim();

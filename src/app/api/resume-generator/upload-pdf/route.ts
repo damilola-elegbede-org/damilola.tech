@@ -57,7 +57,9 @@ export async function POST(req: Request) {
 
     const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     const timestamp = Date.now(); // Add timestamp to prevent collisions
-    const filename = `${sanitize(companyName)}-${sanitize(roleTitle)}-${date}-${timestamp}.pdf`;
+    const safeCompany = sanitize(companyName) || 'company';
+    const safeRole = sanitize(roleTitle) || 'role';
+    const filename = `${safeCompany}-${safeRole}-${date}-${timestamp}.pdf`;
     const environment = getEnvironment();
 
     // Store in resume/generated/ folder

@@ -87,6 +87,18 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     const updates = await req.json();
     const { applicationStatus, appliedDate, notes } = updates;
 
+    // Validate appliedDate if provided
+    if (appliedDate !== undefined) {
+      if (typeof appliedDate !== 'string' || Number.isNaN(Date.parse(appliedDate))) {
+        return Response.json({ error: 'Invalid applied date' }, { status: 400 });
+      }
+    }
+
+    // Validate notes if provided
+    if (notes !== undefined && typeof notes !== 'string') {
+      return Response.json({ error: 'Invalid notes' }, { status: 400 });
+    }
+
     // Validate applicationStatus if provided
     const validStatuses: ApplicationStatus[] = ['draft', 'applied', 'interview', 'offer', 'rejected'];
     if (applicationStatus && !validStatuses.includes(applicationStatus)) {

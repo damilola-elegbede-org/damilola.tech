@@ -47,7 +47,7 @@ export default function ResumeGeneratorHistoryPage() {
       if (!res.ok) throw new Error('Failed to fetch generations');
 
       const data = await res.json();
-      setGenerations(append ? [...generations, ...data.generations] : data.generations);
+      setGenerations(prev => append ? [...prev, ...data.generations] : data.generations);
       setCursor(data.cursor);
       setHasMore(data.hasMore);
     } catch (err) {
