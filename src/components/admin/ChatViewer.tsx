@@ -1,7 +1,8 @@
 interface Message {
   id: string;
   role: 'user' | 'assistant';
-  parts: { type: string; text: string }[];
+  parts?: { type: string; text: string }[];
+  content?: string; // Legacy/backward-compatible field
 }
 
 interface ChatSession {
@@ -26,6 +27,22 @@ function formatDate(dateString: string | undefined): string {
   } catch {
     return '-';
   }
+}
+
+/**
+ * Extract text from message, supporting both current (parts) and legacy (content) formats
+ */
+function getMessageText(msg: Message): string {
+  // Current format: parts array with text type
+  if (msg.parts && Array.isArray(msg.parts)) {
+    const textPart = msg.parts.find((p) => p.type === 'text');
+    if (textPart?.text) return textPart.text;
+  }
+
+  // Legacy format: direct content string
+  if (msg.content) return msg.content;
+
+  return '';
 }
 
 export function ChatViewer({ chat }: ChatViewerProps) {
@@ -67,7 +84,7 @@ export function ChatViewer({ chat }: ChatViewerProps) {
                 {msg.role === 'user' ? 'User' : 'Assistant'}
               </p>
               <p className="whitespace-pre-wrap text-sm text-[var(--color-text)]">
-                {msg.parts?.find((p) => p.type === 'text')?.text || ''}
+                {getMessageText(msg)}
               </p>
             </li>
           ))}
