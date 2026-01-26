@@ -114,7 +114,11 @@ export async function POST(req: Request) {
     const cookieStore = await cookies();
     cookieStore.set(ADMIN_COOKIE_NAME, token, cookieOptions);
 
-    await logAdminEvent('admin_login_success', {}, ip);
+    // Fire-and-forget: log success without awaiting to prevent blob failures
+    // from triggering catch block (which would log a false admin_login_failure)
+    logAdminEvent('admin_login_success', {}, ip).catch((err) => {
+      console.error('[admin/auth] Failed to log success event:', err);
+    });
 
     return Response.json({ success: true });
   } catch (error) {
