@@ -7,6 +7,7 @@ export const runtime = 'nodejs';
 interface Stats {
   chats: { total: number };
   fitAssessments: { total: number };
+  resumeGenerations: { total: number; byStatus: Record<string, number> };
   audit: { total: number; byType: Record<string, number> };
   environment: string;
 }
@@ -59,11 +60,30 @@ export async function GET(req: Request) {
       return count;
     }
 
-    const [chatCount, assessmentCount, auditCount] = await Promise.all([
+    const [chatCount, assessmentCount, resumeGenCount, auditCount] = await Promise.all([
       countValidChats(`damilola.tech/chats/${environment}/`),
       countBlobs(`damilola.tech/fit-assessments/${environment}/`),
+      countBlobs(`damilola.tech/resume-generations/${environment}/`),
       countBlobs(`damilola.tech/audit/${environment}/`),
     ]);
+
+    // For resume generations, also count by status
+    const resumeGenResult = await list({
+      prefix: `damilola.tech/resume-generations/${environment}/`,
+      limit: 100,
+    });
+
+    const resumeByStatus: Record<string, number> = {};
+    for (const blob of resumeGenResult.blobs) {
+      try {
+        const response = await fetch(blob.url);
+        const data = await response.json();
+        const status = data.applicationStatus || 'draft';
+        resumeByStatus[status] = (resumeByStatus[status] || 0) + 1;
+      } catch {
+        // Skip failed fetches
+      }
+    }
 
     // For audit byType breakdown, fetch recent events only (performance)
     // The total count above is paginated; byType is a sample of recent events
@@ -84,6 +104,10 @@ export async function GET(req: Request) {
     const stats: Stats = {
       chats: { total: chatCount },
       fitAssessments: { total: assessmentCount },
+      resumeGenerations: {
+        total: resumeGenCount,
+        byStatus: resumeByStatus,
+      },
       audit: {
         total: auditCount,
         byType: auditByType,

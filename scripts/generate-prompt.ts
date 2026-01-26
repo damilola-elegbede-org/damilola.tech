@@ -16,7 +16,7 @@
  * Or automatically via: npm run build (prebuild hook)
  */
 
-import { fetchSharedContext, fetchChatbotInstructions, fetchFitAssessmentInstructionsRequired, fetchAllContent } from '../src/lib/blob';
+import { fetchSharedContext, fetchChatbotInstructions, fetchFitAssessmentInstructionsRequired, fetchResumeGeneratorInstructionsRequired, fetchAllContent } from '../src/lib/blob';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -67,6 +67,17 @@ async function generatePrompt(): Promise<void> {
     console.log('   ✓ fit-assessment-instructions.md fetched successfully\n');
   } catch (error) {
     console.error('   ✗ Failed to fetch fit assessment instructions template');
+    throw error;
+  }
+
+  // Step 3b: Fetch resume generator instructions template (REQUIRED in production)
+  console.log('3b. Fetching resume generator instructions template...');
+  let resumeGeneratorInstructionsTemplate: string;
+  try {
+    resumeGeneratorInstructionsTemplate = await fetchResumeGeneratorInstructionsRequired();
+    console.log('   ✓ resume-generator-instructions.md fetched successfully\n');
+  } catch (error) {
+    console.error('   ✗ Failed to fetch resume generator instructions template');
     throw error;
   }
 
@@ -159,11 +170,35 @@ async function generatePrompt(): Promise<void> {
   }
   console.log('   ✓ FIT_ASSESSMENT_PROMPT generated\n');
 
+  // Step 8b: Generate RESUME_GENERATOR_PROMPT (resume generator instructions only, no shared context prefix)
+  // The resume generator uses different placeholders that map to content sources
+  console.log('7b. Generating RESUME_GENERATOR_PROMPT...');
+  let resumeGeneratorPrompt = resumeGeneratorInstructionsTemplate;
+
+  // Resume generator uses different placeholder names
+  const resumeGeneratorReplacements: Record<string, string> = {
+    '{{RESUME_FULL}}': content.resume || '*Resume content not available in current build.*',
+    '{{STAR_STORIES}}': content.starStories || '*STAR stories not available in current build.*',
+    '{{LEADERSHIP_PHILOSOPHY}}': content.leadershipPhilosophy || '*Leadership philosophy details not available in current build.*',
+    '{{TECHNICAL_EXPERTISE}}': content.technicalExpertise || '*Technical expertise details not available in current build.*',
+    '{{VERILY_FEEDBACK}}': content.verilyFeedback || '*Performance feedback not available in current build.*',
+    '{{PROJECTS_CONTEXT}}': content.projectsContext || '*Projects context not available in current build.*',
+    '{{ANECDOTES}}': content.anecdotes || '*Additional context and anecdotes not available in current build.*',
+  };
+
+  for (const [placeholder, value] of Object.entries(resumeGeneratorReplacements)) {
+    resumeGeneratorPrompt = resumeGeneratorPrompt.replace(
+      new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'),
+      () => value
+    );
+  }
+  console.log('   ✓ RESUME_GENERATOR_PROMPT generated\n');
+
   // Step 9: Generate output file with all exports
   console.log('8. Generating output file...');
   const output = `// AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
 // Generated at: ${new Date().toISOString()}
-// Template sources: shared-context.md, chatbot-instructions.md, fit-assessment-instructions.md (Vercel Blob)
+// Template sources: shared-context.md, chatbot-instructions.md, fit-assessment-instructions.md, resume-generator-instructions.md (Vercel Blob)
 //
 // To regenerate: npm run generate-prompt
 // This file is automatically regenerated during build.
@@ -187,6 +222,12 @@ export const CHATBOT_SYSTEM_PROMPT: string = ${JSON.stringify(chatbotPrompt)};
 export const FIT_ASSESSMENT_PROMPT: string = ${JSON.stringify(fitAssessmentPrompt)};
 
 /**
+ * Resume generator system prompt with content sources for ATS optimization.
+ * Use this for the resume generator feature.
+ */
+export const RESUME_GENERATOR_PROMPT: string = ${JSON.stringify(resumeGeneratorPrompt)};
+
+/**
  * @deprecated Use CHATBOT_SYSTEM_PROMPT instead.
  * Kept for backwards compatibility during migration.
  */
@@ -198,6 +239,7 @@ export const PROMPT_STATS = {
   sharedContextSize: ${sharedContext.length},
   chatbotPromptSize: ${chatbotPrompt.length},
   fitAssessmentPromptSize: ${fitAssessmentPrompt.length},
+  resumeGeneratorPromptSize: ${resumeGeneratorPrompt.length},
   contentIncluded: {
     starStories: ${!!content.starStories},
     resume: ${!!content.resume},
@@ -223,6 +265,7 @@ export const PROMPT_STATS = {
   console.log(`SHARED_CONTEXT size: ${sharedContext.length.toLocaleString()} characters`);
   console.log(`CHATBOT_SYSTEM_PROMPT size: ${chatbotPrompt.length.toLocaleString()} characters`);
   console.log(`FIT_ASSESSMENT_PROMPT size: ${fitAssessmentPrompt.length.toLocaleString()} characters`);
+  console.log(`RESUME_GENERATOR_PROMPT size: ${resumeGeneratorPrompt.length.toLocaleString()} characters`);
   console.log('');
 }
 
@@ -245,6 +288,7 @@ async function createDevelopmentPlaceholder(): Promise<void> {
 export const SHARED_CONTEXT: string = '__DEVELOPMENT_PLACEHOLDER__';
 export const CHATBOT_SYSTEM_PROMPT: string = '__DEVELOPMENT_PLACEHOLDER__';
 export const FIT_ASSESSMENT_PROMPT: string = '__DEVELOPMENT_PLACEHOLDER__';
+export const RESUME_GENERATOR_PROMPT: string = '__DEVELOPMENT_PLACEHOLDER__';
 export const SYSTEM_PROMPT: string = '__DEVELOPMENT_PLACEHOLDER__';
 
 // Prompt statistics
@@ -253,6 +297,7 @@ export const PROMPT_STATS = {
   sharedContextSize: 0,
   chatbotPromptSize: 0,
   fitAssessmentPromptSize: 0,
+  resumeGeneratorPromptSize: 0,
   contentIncluded: {
     starStories: false,
     resume: false,

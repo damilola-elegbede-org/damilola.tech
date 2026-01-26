@@ -12,7 +12,11 @@ export type AuditEventType =
   | 'admin_logout'
   | 'admin_chat_viewed'
   | 'admin_assessment_viewed'
-  | 'admin_audit_accessed';
+  | 'admin_audit_accessed'
+  | 'resume_generation_started'
+  | 'resume_generation_completed'
+  | 'resume_generation_download'
+  | 'admin_resume_generation_viewed';
 
 export interface AuditEvent {
   version: 1;
