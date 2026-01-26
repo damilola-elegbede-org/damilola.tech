@@ -7,6 +7,7 @@ import { StatsCard } from '@/components/admin/StatsCard';
 interface Stats {
   chats: { total: number };
   fitAssessments: { total: number };
+  resumeGenerations: { total: number; byStatus: Record<string, number> };
   audit: { total: number; byType: Record<string, number> };
   environment: string;
 }
@@ -34,7 +35,7 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
+      <div className="flex h-64 items-center justify-center" role="status" aria-label="Loading statistics">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
       </div>
     );
@@ -57,7 +58,7 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         <StatsCard
           title="Chat Sessions"
           value={stats?.chats.total ?? 0}
@@ -71,12 +72,37 @@ export default function DashboardPage() {
           icon="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
         />
         <StatsCard
+          title="Resume Generations"
+          value={stats?.resumeGenerations.total ?? 0}
+          subtitle="ATS-optimized resumes"
+          icon="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+        />
+        <StatsCard
           title="Audit Events"
           value={stats?.audit.total ?? 0}
           subtitle="Recent activity logs"
           icon="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
         />
       </div>
+
+      {/* Resume generation status breakdown */}
+      {stats?.resumeGenerations.byStatus && Object.keys(stats.resumeGenerations.byStatus).length > 0 && (
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-6">
+          <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">
+            Applications by Status
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            {Object.entries(stats.resumeGenerations.byStatus).map(([status, count]) => (
+              <div key={status} className="rounded-lg bg-[var(--color-bg)] p-3">
+                <p className="text-sm capitalize text-[var(--color-text-muted)]">
+                  {status}
+                </p>
+                <p className="text-xl font-semibold text-[var(--color-text)]">{count}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Event breakdown */}
       {stats?.audit.byType && Object.keys(stats.audit.byType).length > 0 && (
@@ -98,7 +124,13 @@ export default function DashboardPage() {
       )}
 
       {/* Quick links */}
-      <div className="flex gap-4">
+      <div className="flex flex-wrap gap-4">
+        <Link
+          href="/admin/resume-generator"
+          className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-accent)]/90"
+        >
+          Generate Resume →
+        </Link>
         <Link
           href="/admin/chats"
           className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-2 text-sm text-[var(--color-text)] transition-colors hover:border-[var(--color-accent)]"

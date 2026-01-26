@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { CHATBOT_SYSTEM_PROMPT } from '@/lib/generated/system-prompt';
 import { getFullSystemPrompt } from '@/lib/system-prompt';
 import { saveConversationToBlob } from '@/lib/chat-storage-server';
+import { compactConversation } from '@/lib/chat-compaction';
 
 // Use Node.js runtime for reliable Anthropic SDK streaming
 export const runtime = 'nodejs';
@@ -12,9 +13,10 @@ const client = new Anthropic();
 const isGeneratedPromptAvailable = CHATBOT_SYSTEM_PROMPT !== '__DEVELOPMENT_PLACEHOLDER__';
 
 const MAX_MESSAGE_LENGTH = 2000;
-const MAX_MESSAGES = 50;
-// Maximum request body size: 50 messages * 2000 chars + overhead ≈ 150KB
-const MAX_BODY_SIZE = 150 * 1024;
+const MAX_MESSAGES = 200;
+// Maximum request body size: 200 messages * 2000 chars + overhead ≈ 500KB
+const MAX_BODY_SIZE = 500 * 1024;
+const COMPACTION_THRESHOLD = 180; // 90% of MAX_MESSAGES
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -69,14 +71,25 @@ export async function POST(req: Request) {
     const brevityPrefix = `CRITICAL: Keep responses SHORT. Default: 2-4 sentences. Simple factual questions: 1-2 sentences. Only use STAR format for behavioral questions. Never volunteer extra context unless asked.\n\n`;
     const systemPrompt = brevityPrefix + basePrompt;
 
-    console.log('[chat] Starting stream, messages:', messages.length);
+    // Auto-compact conversation if approaching limits
+    const { messages: processedMessages, wasCompacted, originalCount } = await compactConversation(
+      messages,
+      client,
+      COMPACTION_THRESHOLD
+    );
+
+    if (wasCompacted) {
+      console.log(`[chat] Compacted ${originalCount} -> ${processedMessages.length} messages`);
+    }
+
+    console.log('[chat] Starting stream, messages:', processedMessages.length);
 
     // Use Anthropic SDK streaming
     const stream = client.messages.stream({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 512, // Reduced to encourage brevity
       system: systemPrompt,
-      messages: messages.map((m) => ({
+      messages: processedMessages.map((m) => ({
         role: m.role,
         content: m.content,
       })),

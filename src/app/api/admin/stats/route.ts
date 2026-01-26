@@ -7,6 +7,7 @@ export const runtime = 'nodejs';
 interface Stats {
   chats: { total: number };
   fitAssessments: { total: number };
+  resumeGenerations: { total: number; byStatus: Record<string, number> };
   audit: { total: number; byType: Record<string, number> };
   environment: string;
 }
@@ -59,11 +60,36 @@ export async function GET(req: Request) {
       return count;
     }
 
-    const [chatCount, assessmentCount, auditCount] = await Promise.all([
+    const [chatCount, assessmentCount, resumeGenCount, auditCount] = await Promise.all([
       countValidChats(`damilola.tech/chats/${environment}/`),
       countBlobs(`damilola.tech/fit-assessments/${environment}/`),
+      countBlobs(`damilola.tech/resume-generations/${environment}/`),
       countBlobs(`damilola.tech/audit/${environment}/`),
     ]);
+
+    // For resume generations, also count by status (fetch in parallel for performance)
+    // Note: This is a sampled count from the most recent 100 entries
+    const resumeGenResult = await list({
+      prefix: `damilola.tech/resume-generations/${environment}/`,
+      limit: 100,
+    });
+
+    const resumeByStatus: Record<string, number> = {};
+    const statusResults = await Promise.allSettled(
+      resumeGenResult.blobs.map(async (blob) => {
+        const response = await fetch(blob.url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        return data.applicationStatus || 'draft';
+      })
+    );
+
+    for (const result of statusResults) {
+      if (result.status === 'fulfilled') {
+        const status = result.value;
+        resumeByStatus[status] = (resumeByStatus[status] || 0) + 1;
+      }
+    }
 
     // For audit byType breakdown, fetch recent events only (performance)
     // The total count above is paginated; byType is a sample of recent events
@@ -84,6 +110,10 @@ export async function GET(req: Request) {
     const stats: Stats = {
       chats: { total: chatCount },
       fitAssessments: { total: assessmentCount },
+      resumeGenerations: {
+        total: resumeGenCount,
+        byStatus: resumeByStatus,
+      },
       audit: {
         total: auditCount,
         byType: auditByType,

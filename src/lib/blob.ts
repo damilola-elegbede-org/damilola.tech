@@ -289,3 +289,11 @@ export async function fetchFitExamples(): Promise<{ strong: string; weak: string
 export async function fetchAiContext(): Promise<string> {
   return fetchWithLocalFallback('ai-context.md');
 }
+
+/**
+ * Fetch resume generator instructions (REQUIRED version for build-time).
+ * Throws error if file not found - build will fail.
+ */
+export async function fetchResumeGeneratorInstructionsRequired(): Promise<string> {
+  return fetchWithLocalFallbackRequired('resume-generator-instructions.md');
+}
