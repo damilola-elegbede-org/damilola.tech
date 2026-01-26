@@ -1,6 +1,13 @@
 'use client';
 
-import { useState, Fragment, useRef, useEffect } from 'react';
+import { useState, useMemo, Fragment, useRef, useEffect } from 'react';
+
+type SortKey = 'eventType' | 'timestamp';
+
+interface SortConfig {
+  key: SortKey;
+  direction: 'asc' | 'desc';
+}
 
 interface AuditEvent {
   id: string;
@@ -26,6 +33,51 @@ interface AuditLogTableProps {
   isLoading?: boolean;
 }
 
+function SortIndicator({ direction }: { direction: 'asc' | 'desc' | null }) {
+  if (direction === null) {
+    return (
+      <span className="ml-1 text-[var(--color-text-muted)]/30" aria-hidden="true">
+        ▲
+      </span>
+    );
+  }
+  return (
+    <span className="ml-1" aria-hidden="true">
+      {direction === 'asc' ? '▲' : '▼'}
+    </span>
+  );
+}
+
+interface SortableHeaderProps {
+  label: string;
+  sortKey: SortKey;
+  currentSort: SortConfig;
+  onSort: (key: SortKey) => void;
+}
+
+function SortableHeader({ label, sortKey, currentSort, onSort }: SortableHeaderProps) {
+  const isActive = currentSort.key === sortKey;
+
+  return (
+    <th
+      onClick={() => onSort(sortKey)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSort(sortKey);
+        }
+      }}
+      tabIndex={0}
+      role="columnheader"
+      aria-sort={isActive ? (currentSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+      className="cursor-pointer select-none px-4 py-3 text-left text-sm font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-inset"
+    >
+      {label}
+      <SortIndicator direction={isActive ? currentSort.direction : null} />
+    </th>
+  );
+}
+
 const eventTypeColors: Record<string, string> = {
   page_view: 'bg-blue-500/10 text-blue-400',
   section_view: 'bg-cyan-500/10 text-cyan-400',
@@ -48,6 +100,34 @@ export function AuditLogTable({ events, isLoading }: AuditLogTableProps) {
   const [expandedDetails, setExpandedDetails] = useState<EventDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [sortConfig, setSortConfig] = useState<SortConfig>({
+    key: 'timestamp',
+    direction: 'desc',
+  });
+
+  const handleSort = (key: SortKey) => {
+    setSortConfig((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  };
+
+  const sortedEvents = useMemo(() => {
+    return [...events].sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortConfig.key) {
+        case 'timestamp':
+          comparison = new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+          break;
+        case 'eventType':
+          comparison = a.eventType.localeCompare(b.eventType);
+          break;
+      }
+
+      return sortConfig.direction === 'asc' ? comparison : -comparison;
+    });
+  }, [events, sortConfig]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -119,17 +199,13 @@ export function AuditLogTable({ events, isLoading }: AuditLogTableProps) {
       <table className="w-full">
         <thead className="sticky top-0 bg-[var(--color-card)]">
           <tr>
-            <th className="px-4 py-3 text-left text-sm font-medium text-[var(--color-text-muted)]">
-              Event Type
-            </th>
-            <th className="px-4 py-3 text-left text-sm font-medium text-[var(--color-text-muted)]">
-              Date/Time
-            </th>
+            <SortableHeader label="Event Type" sortKey="eventType" currentSort={sortConfig} onSort={handleSort} />
+            <SortableHeader label="Date/Time" sortKey="timestamp" currentSort={sortConfig} onSort={handleSort} />
             <th className="w-8 px-4 py-3"></th>
           </tr>
         </thead>
         <tbody className="divide-y divide-[var(--color-border)]">
-          {events.map((event) => (
+          {sortedEvents.map((event) => (
             <Fragment key={event.id}>
               <tr
                 onClick={() => handleRowClick(event)}

@@ -8,7 +8,9 @@ import { trackEvent } from '@/lib/audit-client';
 import type {
   ResumeGenerationSummary,
   ResumeGenerationLog,
+  ResumeGenerationFilters,
   ApplicationStatus,
+  GenerationHistoryEntry,
 } from '@/lib/types/resume-generation';
 
 // Allowed blob storage domain pattern for URL validation
@@ -27,6 +29,195 @@ function isValidBlobUrl(url: string): boolean {
   }
 }
 
+const STATUS_OPTIONS: { value: ApplicationStatus | ''; label: string }[] = [
+  { value: '', label: 'All Statuses' },
+  { value: 'draft', label: 'Draft' },
+  { value: 'applied', label: 'Applied' },
+  { value: 'interview', label: 'Interview' },
+  { value: 'offer', label: 'Offer' },
+  { value: 'rejected', label: 'Rejected' },
+];
+
+interface FilterBarProps {
+  filters: ResumeGenerationFilters;
+  onFilterChange: (filters: ResumeGenerationFilters) => void;
+  onClear: () => void;
+}
+
+function FilterBar({ filters, onFilterChange, onClear }: FilterBarProps) {
+  const hasFilters = Object.values(filters).some((v) => v !== undefined && v !== '');
+
+  return (
+    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-4">
+      <div className="flex flex-wrap items-end gap-4">
+        {/* Status Filter */}
+        <div className="min-w-[140px]">
+          <label className="mb-1 block text-xs text-[var(--color-text-muted)]">Status</label>
+          <select
+            value={filters.applicationStatus || ''}
+            onChange={(e) =>
+              onFilterChange({
+                ...filters,
+                applicationStatus: e.target.value as ApplicationStatus | undefined,
+              })
+            }
+            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+          >
+            {STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Company Filter */}
+        <div className="min-w-[180px]">
+          <label className="mb-1 block text-xs text-[var(--color-text-muted)]">Company</label>
+          <input
+            type="text"
+            placeholder="Search company..."
+            value={filters.companyName || ''}
+            onChange={(e) =>
+              onFilterChange({
+                ...filters,
+                companyName: e.target.value || undefined,
+              })
+            }
+            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+          />
+        </div>
+
+        {/* Date From */}
+        <div className="min-w-[140px]">
+          <label className="mb-1 block text-xs text-[var(--color-text-muted)]">From Date</label>
+          <input
+            type="date"
+            value={filters.dateFrom || ''}
+            onChange={(e) =>
+              onFilterChange({
+                ...filters,
+                dateFrom: e.target.value || undefined,
+              })
+            }
+            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+          />
+        </div>
+
+        {/* Date To */}
+        <div className="min-w-[140px]">
+          <label className="mb-1 block text-xs text-[var(--color-text-muted)]">To Date</label>
+          <input
+            type="date"
+            value={filters.dateTo || ''}
+            onChange={(e) =>
+              onFilterChange({
+                ...filters,
+                dateTo: e.target.value || undefined,
+              })
+            }
+            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+          />
+        </div>
+
+        {/* Min Score */}
+        <div className="w-[100px]">
+          <label className="mb-1 block text-xs text-[var(--color-text-muted)]">Min Score</label>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            placeholder="0"
+            value={filters.minScore ?? ''}
+            onChange={(e) =>
+              onFilterChange({
+                ...filters,
+                minScore: e.target.value ? Number(e.target.value) : undefined,
+              })
+            }
+            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+          />
+        </div>
+
+        {/* Max Score */}
+        <div className="w-[100px]">
+          <label className="mb-1 block text-xs text-[var(--color-text-muted)]">Max Score</label>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            placeholder="100"
+            value={filters.maxScore ?? ''}
+            onChange={(e) =>
+              onFilterChange({
+                ...filters,
+                maxScore: e.target.value ? Number(e.target.value) : undefined,
+              })
+            }
+            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+          />
+        </div>
+
+        {/* Clear Button */}
+        {hasFilters && (
+          <button
+            onClick={onClear}
+            className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]"
+          >
+            Clear Filters
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface GenerationHistoryProps {
+  history: GenerationHistoryEntry[];
+}
+
+function GenerationHistory({ history }: GenerationHistoryProps) {
+  if (history.length === 0) return null;
+
+  return (
+    <div className="mt-6">
+      <h3 className="text-sm font-medium text-[var(--color-text)]">
+        Generation History ({history.length} previous)
+      </h3>
+      <div className="mt-2 space-y-2">
+        {history.map((entry) => (
+          <div
+            key={entry.generationId}
+            className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-3 text-sm"
+          >
+            <div className="flex items-center gap-4">
+              <span className="text-[var(--color-text-muted)]">
+                {new Date(entry.generatedAt).toLocaleDateString()}
+              </span>
+              <span className="font-mono text-[var(--color-text)]">
+                {entry.scoreBefore} &rarr; {entry.scoreAfter}
+              </span>
+              <span className="text-[var(--color-text-muted)]">
+                {entry.changesAccepted} accepted, {entry.changesRejected} rejected
+              </span>
+            </div>
+            {entry.pdfUrl && (
+              <a
+                href={entry.pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[var(--color-accent)] hover:underline"
+              >
+                PDF
+              </a>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function ResumeGeneratorHistoryPage() {
   const [generations, setGenerations] = useState<ResumeGenerationSummary[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -35,15 +226,37 @@ export default function ResumeGeneratorHistoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedGeneration, setSelectedGeneration] = useState<ResumeGenerationLog | null>(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
+  const [filters, setFilters] = useState<ResumeGenerationFilters>({});
   const modalRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
-  const fetchGenerations = async (append = false) => {
+  const fetchGenerations = useCallback(async (append = false, currentFilters = filters) => {
     try {
       setError(null);
       setIsLoading(true);
       const params = new URLSearchParams();
+
       if (cursor && append) params.set('cursor', cursor);
+
+      // Add filter params
+      if (currentFilters.applicationStatus) {
+        params.set('status', currentFilters.applicationStatus);
+      }
+      if (currentFilters.companyName) {
+        params.set('company', currentFilters.companyName);
+      }
+      if (currentFilters.dateFrom) {
+        params.set('dateFrom', currentFilters.dateFrom);
+      }
+      if (currentFilters.dateTo) {
+        params.set('dateTo', currentFilters.dateTo);
+      }
+      if (currentFilters.minScore !== undefined) {
+        params.set('minScore', String(currentFilters.minScore));
+      }
+      if (currentFilters.maxScore !== undefined) {
+        params.set('maxScore', String(currentFilters.maxScore));
+      }
 
       const res = await fetch(`/api/admin/resume-generations?${params}`);
       if (!res.ok) throw new Error('Failed to fetch generations');
@@ -57,11 +270,21 @@ export default function ResumeGeneratorHistoryPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [cursor, filters]);
 
   useEffect(() => {
-    fetchGenerations();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    fetchGenerations(false, filters);
+  }, [filters]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleFilterChange = (newFilters: ResumeGenerationFilters) => {
+    setFilters(newFilters);
+    setCursor(null); // Reset pagination when filters change
+  };
+
+  const handleClearFilters = () => {
+    setFilters({});
+    setCursor(null);
+  };
 
   const handleRowClick = async (generation: ResumeGenerationSummary) => {
     // Validate URL before fetching (security)
@@ -153,13 +376,10 @@ export default function ResumeGeneratorHistoryPage() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [selectedGeneration, isDetailLoading, closeDetail]);
 
-  if (error) {
-    return (
-      <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-4 text-red-400">
-        {error}
-      </div>
-    );
-  }
+  // Check if selected generation is v2 with history
+  const hasHistory = selectedGeneration?.version === 2 &&
+    Array.isArray(selectedGeneration.generationHistory) &&
+    selectedGeneration.generationHistory.length > 0;
 
   return (
     <div className="space-y-6">
@@ -179,6 +399,29 @@ export default function ResumeGeneratorHistoryPage() {
         </Link>
       </div>
 
+      {/* Filter Bar */}
+      <FilterBar filters={filters} onFilterChange={handleFilterChange} onClear={handleClearFilters} />
+
+      {/* Error Display */}
+      {error && (
+        <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-4 text-red-400">
+          {error}
+          <button
+            onClick={() => setError(null)}
+            className="ml-4 text-sm underline hover:no-underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Results Info */}
+      {!isLoading && (
+        <p className="text-sm text-[var(--color-text-muted)]">
+          {generations.length === 0 ? 'No results found' : `Showing ${generations.length} result${generations.length === 1 ? '' : 's'}`}
+        </p>
+      )}
+
       {/* Table */}
       <ResumeGenerationsTable
         generations={generations}
@@ -188,7 +431,7 @@ export default function ResumeGeneratorHistoryPage() {
       />
 
       {/* Pagination */}
-      <Pagination hasMore={hasMore} onLoadMore={() => fetchGenerations(true)} isLoading={isLoading} />
+      <Pagination hasMore={hasMore} onLoadMore={() => fetchGenerations(true, filters)} isLoading={isLoading} />
 
       {/* Detail Modal */}
       {(selectedGeneration || isDetailLoading) && (
@@ -216,6 +459,11 @@ export default function ResumeGeneratorHistoryPage() {
                       {selectedGeneration.companyName}
                     </h2>
                     <p className="text-[var(--color-text-muted)]">{selectedGeneration.roleTitle}</p>
+                    {selectedGeneration.version === 2 && (
+                      <p className="mt-1 text-xs text-[var(--color-accent)]">
+                        Job ID: {selectedGeneration.jobId}
+                      </p>
+                    )}
                   </div>
                   <button
                     ref={closeButtonRef}
@@ -263,6 +511,11 @@ export default function ResumeGeneratorHistoryPage() {
                     </span>
                   </div>
                 </div>
+
+                {/* Generation History (V2 only) */}
+                {hasHistory && (
+                  <GenerationHistory history={selectedGeneration.generationHistory} />
+                )}
 
                 {/* Gaps */}
                 {selectedGeneration.gapsIdentified.length > 0 && (
@@ -312,7 +565,13 @@ export default function ResumeGeneratorHistoryPage() {
                 {/* Metadata */}
                 <div className="mt-6 border-t border-[var(--color-border)] pt-4 text-xs text-[var(--color-text-muted)]">
                   <p>Generated: {new Date(selectedGeneration.createdAt).toLocaleString()}</p>
+                  {selectedGeneration.version === 2 && selectedGeneration.updatedAt !== selectedGeneration.createdAt && (
+                    <p>Last Updated: {new Date(selectedGeneration.updatedAt).toLocaleString()}</p>
+                  )}
                   <p>Generation ID: {selectedGeneration.generationId}</p>
+                  {selectedGeneration.version === 2 && selectedGeneration.datePosted && (
+                    <p>Job Posted: {selectedGeneration.datePosted}</p>
+                  )}
                 </div>
               </div>
             ) : null}

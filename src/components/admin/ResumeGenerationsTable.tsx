@@ -1,7 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { ResumeGenerationSummary, ApplicationStatus } from '@/lib/types/resume-generation';
+
+type SortKey = 'timestamp' | 'companyName' | 'roleTitle' | 'scoreAfter' | 'applicationStatus';
+
+interface SortConfig {
+  key: SortKey;
+  direction: 'asc' | 'desc';
+}
 
 interface ResumeGenerationsTableProps {
   generations: ResumeGenerationSummary[];
@@ -19,6 +26,15 @@ const STATUS_COLORS: Record<ApplicationStatus, string> = {
 };
 
 const STATUS_OPTIONS: ApplicationStatus[] = ['draft', 'applied', 'interview', 'offer', 'rejected'];
+
+// Order for sorting statuses
+const STATUS_ORDER: Record<ApplicationStatus, number> = {
+  draft: 0,
+  applied: 1,
+  interview: 2,
+  offer: 3,
+  rejected: 4,
+};
 
 function StatusDropdown({
   value,
@@ -67,6 +83,63 @@ function ScoreChange({ before, after }: { before: number; after: number }) {
   );
 }
 
+function GenerationCountBadge({ count }: { count: number }) {
+  if (count <= 1) return null;
+  return (
+    <span
+      className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[var(--color-accent)]/20 px-1.5 text-xs font-medium text-[var(--color-accent)]"
+      title={`${count} versions generated`}
+    >
+      {count}
+    </span>
+  );
+}
+
+function SortIndicator({ direction }: { direction: 'asc' | 'desc' | null }) {
+  if (direction === null) {
+    return (
+      <span className="ml-1 text-[var(--color-text-muted)]/30" aria-hidden="true">
+        ▲
+      </span>
+    );
+  }
+  return (
+    <span className="ml-1" aria-hidden="true">
+      {direction === 'asc' ? '▲' : '▼'}
+    </span>
+  );
+}
+
+interface SortableHeaderProps {
+  label: string;
+  sortKey: SortKey;
+  currentSort: SortConfig;
+  onSort: (key: SortKey) => void;
+}
+
+function SortableHeader({ label, sortKey, currentSort, onSort }: SortableHeaderProps) {
+  const isActive = currentSort.key === sortKey;
+
+  return (
+    <th
+      onClick={() => onSort(sortKey)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSort(sortKey);
+        }
+      }}
+      tabIndex={0}
+      role="columnheader"
+      aria-sort={isActive ? (currentSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+      className="cursor-pointer select-none px-4 py-3 text-left text-sm font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-inset"
+    >
+      {label}
+      <SortIndicator direction={isActive ? currentSort.direction : null} />
+    </th>
+  );
+}
+
 export function ResumeGenerationsTable({
   generations,
   onRowClick,
@@ -74,6 +147,43 @@ export function ResumeGenerationsTable({
   isLoading,
 }: ResumeGenerationsTableProps) {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [sortConfig, setSortConfig] = useState<SortConfig>({
+    key: 'timestamp',
+    direction: 'desc',
+  });
+
+  const handleSort = (key: SortKey) => {
+    setSortConfig((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  };
+
+  const sortedGenerations = useMemo(() => {
+    return [...generations].sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortConfig.key) {
+        case 'timestamp':
+          comparison = new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+          break;
+        case 'companyName':
+          comparison = a.companyName.localeCompare(b.companyName);
+          break;
+        case 'roleTitle':
+          comparison = a.roleTitle.localeCompare(b.roleTitle);
+          break;
+        case 'scoreAfter':
+          comparison = a.scoreAfter - b.scoreAfter;
+          break;
+        case 'applicationStatus':
+          comparison = STATUS_ORDER[a.applicationStatus] - STATUS_ORDER[b.applicationStatus];
+          break;
+      }
+
+      return sortConfig.direction === 'asc' ? comparison : -comparison;
+    });
+  }, [generations, sortConfig]);
 
   const handleStatusChange = async (generation: ResumeGenerationSummary, status: ApplicationStatus) => {
     setUpdatingId(generation.id);
@@ -121,25 +231,15 @@ export function ResumeGenerationsTable({
       <table className="w-full">
         <thead className="bg-[var(--color-card)]">
           <tr>
-            <th className="px-4 py-3 text-left text-sm font-medium text-[var(--color-text-muted)]">
-              Date
-            </th>
-            <th className="px-4 py-3 text-left text-sm font-medium text-[var(--color-text-muted)]">
-              Company
-            </th>
-            <th className="px-4 py-3 text-left text-sm font-medium text-[var(--color-text-muted)]">
-              Role
-            </th>
-            <th className="px-4 py-3 text-left text-sm font-medium text-[var(--color-text-muted)]">
-              Score
-            </th>
-            <th className="px-4 py-3 text-left text-sm font-medium text-[var(--color-text-muted)]">
-              Status
-            </th>
+            <SortableHeader label="Date" sortKey="timestamp" currentSort={sortConfig} onSort={handleSort} />
+            <SortableHeader label="Company" sortKey="companyName" currentSort={sortConfig} onSort={handleSort} />
+            <SortableHeader label="Role" sortKey="roleTitle" currentSort={sortConfig} onSort={handleSort} />
+            <SortableHeader label="Score" sortKey="scoreAfter" currentSort={sortConfig} onSort={handleSort} />
+            <SortableHeader label="Status" sortKey="applicationStatus" currentSort={sortConfig} onSort={handleSort} />
           </tr>
         </thead>
         <tbody className="divide-y divide-[var(--color-border)]">
-          {generations.map((gen) => (
+          {sortedGenerations.map((gen) => (
             <tr
               key={gen.id}
               onClick={() => onRowClick(gen)}
@@ -154,6 +254,7 @@ export function ResumeGenerationsTable({
             >
               <td className="px-4 py-3 text-sm text-[var(--color-text-muted)]">
                 {new Date(gen.timestamp).toLocaleDateString()}
+                <GenerationCountBadge count={gen.generationCount} />
               </td>
               <td className="px-4 py-3 text-sm text-[var(--color-text)]">{gen.companyName}</td>
               <td className="px-4 py-3 text-sm text-[var(--color-text)]">{gen.roleTitle}</td>

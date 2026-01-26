@@ -6,6 +6,7 @@ import { ResumeGeneratorForm } from '@/components/admin/ResumeGeneratorForm';
 import { CompatibilityScoreCard } from '@/components/admin/CompatibilityScoreCard';
 import { ChangePreviewPanel } from '@/components/admin/ChangePreviewPanel';
 import { trackEvent } from '@/lib/audit-client';
+import { generateJobId, extractDatePosted } from '@/lib/job-id';
 import type { ResumeAnalysisResult } from '@/lib/types/resume-generation';
 import type { ResumeData } from '@/lib/resume-pdf';
 
@@ -189,17 +190,35 @@ export default function ResumeGeneratorPage() {
         analysisResult.currentScore.total + acceptedPoints
       );
 
+      // Generate job identifier for deduplication
+      const isUrl = jobDescription.trim().startsWith('http');
+      const extractedUrl = isUrl ? jobDescription.trim() : undefined;
+      const jobIdentifier = generateJobId(
+        extractedUrl
+          ? { url: extractedUrl }
+          : {
+              title: analysisResult.analysis.roleTitle,
+              company: analysisResult.analysis.companyName,
+            }
+      );
+
+      // Extract date posted from JD text (optional)
+      const datePosted = extractDatePosted(jobDescription);
+
       // Fire-and-forget logging - don't fail generation if logging fails
       fetch('/api/resume-generator/log', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           generationId,
+          jobId: jobIdentifier.jobId,
+          jobIdentifier,
           companyName: analysisResult.analysis.companyName,
           roleTitle: analysisResult.analysis.roleTitle,
           jobDescriptionFull: jobDescription,
-          inputType: jobDescription.startsWith('http') ? 'url' : 'text',
-          extractedUrl: jobDescription.startsWith('http') ? jobDescription : undefined,
+          datePosted,
+          inputType: isUrl ? 'url' : 'text',
+          extractedUrl,
           estimatedCompatibility: {
             before: analysisResult.currentScore.total,
             after: optimizedScore,

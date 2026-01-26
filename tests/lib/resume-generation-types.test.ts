@@ -179,11 +179,14 @@ describe('Resume Generation Types', () => {
 
   describe('ResumeGenerationSummary', () => {
     it('should have all summary fields', () => {
+      const now = new Date().toISOString();
       const summary: ResumeGenerationSummary = {
         id: 'path/to/log.json',
+        jobId: 'abc123def456',
         generationId: 'test-id',
         environment: 'production',
-        timestamp: new Date().toISOString(),
+        timestamp: now,
+        updatedAt: now,
         companyName: 'Test Company',
         roleTitle: 'Engineering Manager',
         scoreBefore: 72,
@@ -191,10 +194,13 @@ describe('Resume Generation Types', () => {
         applicationStatus: 'draft',
         url: 'https://blob.url/log.json',
         size: 1024,
+        generationCount: 1,
       };
 
       expect(summary.scoreAfter).toBeGreaterThan(summary.scoreBefore);
       expect(summary.size).toBeGreaterThan(0);
+      expect(summary.jobId).toHaveLength(12);
+      expect(summary.generationCount).toBeGreaterThanOrEqual(1);
     });
   });
 });
