@@ -230,7 +230,7 @@ export default function ResumeGeneratorHistoryPage() {
   const modalRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
-  const fetchGenerations = useCallback(async (append = false, currentFilters = filters) => {
+  const fetchGenerations = useCallback(async (append = false, currentFilters: ResumeGenerationFilters) => {
     try {
       setError(null);
       setIsLoading(true);
@@ -270,11 +270,11 @@ export default function ResumeGeneratorHistoryPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [cursor, filters]);
+  }, [cursor]);
 
   useEffect(() => {
     fetchGenerations(false, filters);
-  }, [filters]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filters, fetchGenerations]);
 
   const handleFilterChange = (newFilters: ResumeGenerationFilters) => {
     setFilters(newFilters);
@@ -356,6 +356,9 @@ export default function ResumeGeneratorHistoryPage() {
         const focusableElements = modalRef.current.querySelectorAll(
           'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
         );
+        // Guard clause: if no focusable elements, do nothing
+        if (focusableElements.length === 0) return;
+
         const firstElement = focusableElements[0] as HTMLElement;
         const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
 

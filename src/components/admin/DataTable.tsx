@@ -155,7 +155,9 @@ export function DataTable<T extends { id: string }>({
                       ? sortConfig.direction === 'asc'
                         ? 'ascending'
                         : 'descending'
-                      : undefined
+                      : isSortable
+                        ? 'none'
+                        : undefined
                   }
                   className={`px-4 py-3 text-left text-sm font-medium text-[var(--color-text-muted)] ${
                     isSortable

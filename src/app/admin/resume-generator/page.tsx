@@ -267,6 +267,13 @@ export default function ResumeGeneratorPage() {
       <button
         onClick={handleGeneratePdf}
         disabled={acceptedIndices.size === 0 || !resumeData}
+        aria-label={
+          !resumeData
+            ? 'Loading resume data...'
+            : acceptedIndices.size === 0
+              ? 'Accept at least one change to generate PDF'
+              : `Generate PDF with ${acceptedIndices.size} changes`
+        }
         className="rounded-lg bg-[var(--color-accent)] px-8 py-3 text-sm font-medium text-white hover:bg-[var(--color-accent)]/90 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {resumeData ? `Generate PDF (${acceptedIndices.size} changes)` : 'Loading...'}

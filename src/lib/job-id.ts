@@ -152,12 +152,12 @@ export function extractDatePosted(jdText: string): string | undefined {
     return new Date().toISOString().split('T')[0];
   }
 
-  // Try "Posted X days ago"
+  // Try "Posted X days ago" - use UTC to avoid timezone off-by-one errors
   const daysAgoMatch = text.match(/posted\s+(\d+)\s+days?\s+ago/i);
   if (daysAgoMatch) {
     const daysAgo = parseInt(daysAgoMatch[1], 10);
     const date = new Date();
-    date.setDate(date.getDate() - daysAgo);
+    date.setUTCDate(date.getUTCDate() - daysAgo);
     return date.toISOString().split('T')[0];
   }
 

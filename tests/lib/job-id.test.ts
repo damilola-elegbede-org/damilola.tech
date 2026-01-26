@@ -118,11 +118,13 @@ describe('extractDatePosted', () => {
     expect(extractDatePosted(jd)).toBe('2025-01-15');
   });
 
-  it('should extract "Posted X days ago" format', () => {
-    // This will be relative to current date, so just verify it returns something
+  it('should extract "Posted X days ago" format with correct date arithmetic', () => {
     const jd = 'Posted 5 days ago. We are looking for...';
     const result = extractDatePosted(jd);
-    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    // Verify actual date calculation using UTC
+    const expected = new Date();
+    expected.setUTCDate(expected.getUTCDate() - 5);
+    expect(result).toBe(expected.toISOString().split('T')[0]);
   });
 
   it('should extract "Posted on Month Day, Year" format', () => {
