@@ -19,6 +19,14 @@ jobs:
         project: [chromium, firefox, webkit, mobile-chrome, mobile-safari]
     steps:
       - uses: actions/checkout@v4
+      - name: Detect deployment environment
+        id: env
+        run: |
+          if [ "${{ github.event.deployment_status.environment }}" = "Production" ]; then
+            echo "is_production=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_production=false" >> $GITHUB_OUTPUT
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -35,7 +43,7 @@ jobs:
         env:
           PLAYWRIGHT_BASE_URL: ${{ github.event.deployment_status.target_url || 'http://localhost:3000' }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-          ADMIN_PASSWORD_PREVIEW: ${{ secrets.ADMIN_PASSWORD_PREVIEW }}
+          ADMIN_PASSWORD_PREVIEW: ${{ steps.env.outputs.is_production == 'true' && secrets.ADMIN_PASSWORD_PRODUCTION || secrets.ADMIN_PASSWORD_PREVIEW }}
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
