@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { ResumeGenerationsTable } from '@/components/admin/ResumeGenerationsTable';
 import { Pagination } from '@/components/admin/Pagination';
+import { trackEvent } from '@/lib/audit-client';
 import type {
   ResumeGenerationSummary,
   ResumeGenerationLog,
@@ -74,6 +75,15 @@ export default function ResumeGeneratorHistoryPage() {
       if (!res.ok) throw new Error('Failed to fetch generation details');
       const data = await res.json();
       setSelectedGeneration(data);
+
+      // Track viewing generation details
+      trackEvent('admin_resume_generation_viewed', {
+        metadata: {
+          generationId: data.generationId,
+          companyName: data.companyName,
+          roleTitle: data.roleTitle,
+        },
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load details');
     } finally {
@@ -275,6 +285,16 @@ export default function ResumeGeneratorHistoryPage() {
                       href={selectedGeneration.pdfUrl}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={() => {
+                        trackEvent('resume_generation_download', {
+                          metadata: {
+                            generationId: selectedGeneration.generationId,
+                            companyName: selectedGeneration.companyName,
+                            roleTitle: selectedGeneration.roleTitle,
+                            source: 'history',
+                          },
+                        });
+                      }}
                       className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--color-accent)]/90"
                     >
                       Download PDF

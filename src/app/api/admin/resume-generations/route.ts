@@ -1,6 +1,6 @@
 import { list } from '@vercel/blob';
 import { cookies } from 'next/headers';
-import { verifyToken } from '@/lib/admin-auth';
+import { verifyToken, ADMIN_COOKIE_NAME } from '@/lib/admin-auth';
 import type { ResumeGenerationSummary, ResumeGenerationLog } from '@/lib/types/resume-generation';
 
 // Use Node.js runtime for blob operations
@@ -19,7 +19,7 @@ export async function GET(req: Request) {
 
   // Verify admin authentication
   const cookieStore = await cookies();
-  const adminToken = cookieStore.get('admin-token')?.value;
+  const adminToken = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
   if (!adminToken || !(await verifyToken(adminToken))) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ResumeGeneratorForm } from '@/components/admin/ResumeGeneratorForm';
 import { CompatibilityScoreCard } from '@/components/admin/CompatibilityScoreCard';
 import { ChangePreviewPanel } from '@/components/admin/ChangePreviewPanel';
+import { trackEvent } from '@/lib/audit-client';
 import type { ResumeAnalysisResult } from '@/lib/types/resume-generation';
 import type { ResumeData } from '@/lib/resume-pdf';
 
@@ -436,6 +437,14 @@ export default function ResumeGeneratorPage() {
                 href={generatedPdfUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => {
+                  trackEvent('resume_generation_download', {
+                    metadata: {
+                      companyName: analysisResult?.analysis.companyName,
+                      roleTitle: analysisResult?.analysis.roleTitle,
+                    },
+                  });
+                }}
                 className="rounded-lg bg-[var(--color-accent)] px-6 py-2.5 text-sm font-medium text-white hover:bg-[var(--color-accent)]/90"
               >
                 Download PDF

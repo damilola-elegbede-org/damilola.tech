@@ -5,7 +5,7 @@
  *
  * Creates native text-based PDFs (not image-based) that ATS systems can parse.
  * Design matches the original Damilola Elegbede resume format:
- * - Helvetica font (similar to Helvetica Neue)
+ * - Helvetica font (PDF built-in)
  * - Black text on white background
  * - Clean, single-column layout
  * - Professional, minimal styling
@@ -23,6 +23,7 @@ import {
   pdf,
   Link,
 } from '@react-pdf/renderer';
+
 import type { ResumeAnalysisResult, ProposedChange } from '@/lib/types/resume-generation';
 
 // Resume data structure (matches resume-full.json)
@@ -51,93 +52,107 @@ export interface ResumeData {
     focus: string;
   }[];
   skills: {
-    leadership: string[];
-    cloud: string[];
-    systemArchitecture: string[];
-    devex: string[];
-    programming: string[];
-    domain: string[];
-  };
+    category: string;
+    items: string[];
+  }[];
 }
 
 // Styles matching the original resume design exactly
 const styles = StyleSheet.create({
   page: {
-    padding: 50,
-    paddingTop: 40,
+    padding: 45,
+    paddingTop: 35,
     fontFamily: 'Helvetica',
     fontSize: 10,
-    lineHeight: 1.3,
+    lineHeight: 1.2,
     color: '#000000',
     backgroundColor: '#ffffff',
   },
-  // Header section
+  // Header section - contact info only (no border, line goes after)
   header: {
-    marginBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#000000',
-    paddingBottom: 10,
+    marginBottom: 0,
   },
   name: {
     fontSize: 18,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Helvetica',
+    fontWeight: 'bold',
+    fontStyle: 'normal',  // Explicitly prevent italic
     textAlign: 'center',
     textTransform: 'uppercase',
     letterSpacing: 1,
+    marginBottom: 10,  // More space before contact info
   },
-  contactRow: {
+  contactRowFirst: {
     fontSize: 9,
     textAlign: 'center',
-    marginTop: 3,
+    color: '#000000',
+    // No marginBottom - tighter spacing to links row
+  },
+  contactRowSecond: {
+    fontSize: 9,
+    textAlign: 'center',
+    marginTop: 0,
+    marginBottom: 0,
     color: '#000000',
   },
   contactLink: {
     color: '#0066cc',
-    textDecoration: 'none',
+    textDecoration: 'underline',
+  },
+  // Divider line between contact info and title
+  dividerLine: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#000000',
+    marginTop: 0,
+    marginBottom: 8,
   },
   roleTitle: {
     fontSize: 14,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Helvetica',
+    fontWeight: 'bold',
     textAlign: 'center',
     textTransform: 'uppercase',
-    marginTop: 10,
   },
   tagline: {
     fontSize: 10,
     fontStyle: 'italic',
     textAlign: 'center',
     marginTop: 4,
+    marginBottom: 8,
   },
   // Section headers - centered, no border
   sectionHeader: {
     fontSize: 11,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Helvetica',
+    fontWeight: 'bold',
     textAlign: 'center',
     textTransform: 'uppercase',
-    marginTop: 14,
-    marginBottom: 8,
+    marginTop: 12,
+    marginBottom: 6,
   },
-  // Summary
+  // Summary - flows directly after tagline, no section header
   summary: {
     fontSize: 10,
-    lineHeight: 1.4,
+    lineHeight: 1.2,
     marginBottom: 4,
     textAlign: 'justify',
   },
   // Experience section - Company | Location first, then Title (Dates)
   job: {
-    marginBottom: 10,
+    marginBottom: 8,
   },
   jobCompanyLine: {
     flexDirection: 'row',
     marginBottom: 1,
   },
   companyBold: {
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Helvetica',
+    fontWeight: 'bold',
     fontSize: 10,
   },
   companyLocation: {
     fontSize: 10,
+    marginLeft: 4,
   },
   jobTitleLine: {
     flexDirection: 'row',
@@ -145,7 +160,8 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   jobTitleBold: {
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Helvetica',
+    fontWeight: 'bold',
     fontSize: 10,
   },
   jobDates: {
@@ -154,9 +170,9 @@ const styles = StyleSheet.create({
   jobDescription: {
     fontSize: 10,
     marginBottom: 3,
-    lineHeight: 1.3,
+    lineHeight: 1.2,
   },
-  // Bullets with ● character
+  // Bullets with • character (U+2022)
   bulletContainer: {
     flexDirection: 'row',
     marginLeft: 12,
@@ -165,22 +181,24 @@ const styles = StyleSheet.create({
   bullet: {
     width: 12,
     fontSize: 10,
+    color: '#000000',
   },
   bulletText: {
     flex: 1,
     fontSize: 10,
-    lineHeight: 1.3,
+    lineHeight: 1.2,
   },
   // Education section - multi-line format
   educationEntry: {
-    marginBottom: 6,
+    marginBottom: 4,
   },
   degreeLine: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   degreeBold: {
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Helvetica',
+    fontWeight: 'bold',
     fontSize: 10,
   },
   institution: {
@@ -195,12 +213,11 @@ const styles = StyleSheet.create({
   },
   // Skills section
   skillCategory: {
-    marginBottom: 3,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    marginBottom: 4,
   },
   skillLabel: {
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Helvetica',
+    fontWeight: 'bold',
     fontSize: 10,
   },
   skillList: {
@@ -296,13 +313,19 @@ function ResumePDF({ data, analysis, acceptedIndices, showFooter = false }: Resu
   return (
     <Document>
       <Page size="LETTER" style={styles.page}>
-        {/* Header */}
+        {/* Header - Contact Info */}
         <View style={styles.header}>
           <Text style={styles.name}>{resume.name.toUpperCase()}</Text>
-          <Text style={styles.contactRow}>
-            {resume.phone} | {resume.email} | {resume.location}
-          </Text>
-          <Text style={styles.contactRow}>
+          <View style={styles.contactRowFirst}>
+            <Text>
+              {resume.phone} |{' '}
+              <Link src={`mailto:${resume.email}`} style={styles.contactLink}>
+                {resume.email}
+              </Link>
+              {' '}| {resume.location}
+            </Text>
+          </View>
+          <Text style={styles.contactRowSecond}>
             <Link src={resume.linkedin} style={styles.contactLink}>
               {resume.linkedin}
             </Link>
@@ -315,22 +338,26 @@ function ResumePDF({ data, analysis, acceptedIndices, showFooter = false }: Resu
               </>
             )}
           </Text>
-          <Text style={styles.roleTitle}>{resume.title.toUpperCase()}</Text>
-          {resume.tagline && <Text style={styles.tagline}>{resume.tagline}</Text>}
         </View>
 
-        {/* Professional Summary */}
-        <Text style={styles.sectionHeader}>Professional Summary</Text>
+        {/* Divider Line */}
+        <View style={styles.dividerLine} />
+
+        {/* Title and Tagline */}
+        <Text style={styles.roleTitle}>{resume.title.toUpperCase()}</Text>
+        {resume.tagline && <Text style={styles.tagline}>{resume.tagline}</Text>}
+
+        {/* Summary - flows directly after tagline, no section header */}
         <Text style={styles.summary}>{resume.summary}</Text>
 
         {/* Professional Experience */}
         <Text style={styles.sectionHeader}>Professional Experience</Text>
         {resume.experience.map((job, jobIndex) => (
-          <View key={jobIndex} style={styles.job} wrap={false}>
+          <View key={jobIndex} style={styles.job}>
             {/* Company | Location */}
             <View style={styles.jobCompanyLine}>
               <Text style={styles.companyBold}>{job.company}</Text>
-              <Text style={styles.companyLocation}> | {job.location}</Text>
+              <Text style={styles.companyLocation}>| {job.location}</Text>
             </View>
             {/* Title (Dates) */}
             <View style={styles.jobTitleLine}>
@@ -343,15 +370,24 @@ function ResumePDF({ data, analysis, acceptedIndices, showFooter = false }: Resu
             )}
             {/* Bullets */}
             {job.responsibilities.map((responsibility, bulletIndex) => (
-              <View key={bulletIndex} style={styles.bulletContainer}>
-                <Text style={styles.bullet}>●</Text>
+              <View key={bulletIndex} style={styles.bulletContainer} wrap={false}>
+                <Text style={styles.bullet}>•</Text>
                 <Text style={styles.bulletText}>{responsibility}</Text>
               </View>
             ))}
           </View>
         ))}
 
-        {/* Education - Multi-line format */}
+        {/* Key Skills - BEFORE Education */}
+        <Text style={styles.sectionHeader}>Key Skills</Text>
+        {resume.skills.map((skill, index) => (
+          <Text key={index} style={styles.skillCategory}>
+            <Text style={styles.skillLabel}>{skill.category}: </Text>
+            <Text style={styles.skillList}>{skill.items.join(' | ')}</Text>
+          </Text>
+        ))}
+
+        {/* Education - AFTER Skills */}
         <Text style={styles.sectionHeader}>Education</Text>
         {resume.education.map((edu, eduIndex) => (
           <View key={eduIndex} style={styles.educationEntry}>
@@ -363,30 +399,6 @@ function ResumePDF({ data, analysis, acceptedIndices, showFooter = false }: Resu
             {edu.focus && <Text style={styles.focusLine}>Focus: {edu.focus}</Text>}
           </View>
         ))}
-
-        {/* Key Skills - changed from Core Competencies */}
-        <Text style={styles.sectionHeader}>Key Skills</Text>
-        <View style={styles.skillCategory}>
-          <Text style={styles.skillLabel}>Leadership: </Text>
-          <Text style={styles.skillList}>{resume.skills.leadership.join(' | ')}</Text>
-        </View>
-        <View style={styles.skillCategory}>
-          <Text style={styles.skillLabel}>Cloud & Infrastructure: </Text>
-          <Text style={styles.skillList}>{resume.skills.cloud.join(' | ')}</Text>
-        </View>
-        <View style={styles.skillCategory}>
-          <Text style={styles.skillLabel}>Technical: </Text>
-          <Text style={styles.skillList}>
-            {[
-              ...resume.skills.systemArchitecture.slice(0, 4),
-              ...resume.skills.devex.slice(0, 3),
-            ].join(' | ')}
-          </Text>
-        </View>
-        <View style={styles.skillCategory}>
-          <Text style={styles.skillLabel}>Programming: </Text>
-          <Text style={styles.skillList}>{resume.skills.programming.join(' | ')}</Text>
-        </View>
 
         {/* Footer (optional) */}
         {showFooter && (

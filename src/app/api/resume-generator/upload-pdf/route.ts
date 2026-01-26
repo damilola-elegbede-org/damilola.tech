@@ -1,6 +1,8 @@
 import { put } from '@vercel/blob';
 import { cookies } from 'next/headers';
 import { verifyToken, ADMIN_COOKIE_NAME } from '@/lib/admin-auth';
+import { logAdminEvent } from '@/lib/audit-server';
+import { getClientIp } from '@/lib/rate-limit';
 
 // Use Node.js runtime for blob operations
 export const runtime = 'nodejs';
@@ -17,6 +19,7 @@ function getEnvironment(): string {
 
 export async function POST(req: Request) {
   console.log('[resume-generator/upload-pdf] Request received');
+  const ip = getClientIp(req);
 
   // Verify admin authentication
   const cookieStore = await cookies();
@@ -83,6 +86,14 @@ export async function POST(req: Request) {
     });
 
     console.log('[resume-generator/upload-pdf] Upload successful:', blob.url);
+
+    // Log audit event for generation completed
+    await logAdminEvent('resume_generation_completed', {
+      companyName,
+      roleTitle,
+      filename,
+      fileSize: file.size,
+    }, ip);
 
     return Response.json({
       success: true,

@@ -1,6 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { isIP } from 'node:net';
 import { RESUME_GENERATOR_PROMPT } from '@/lib/generated/system-prompt';
+import { logAdminEvent } from '@/lib/audit-server';
+import { getClientIp } from '@/lib/rate-limit';
 // ResumeAnalysisResult parsing happens client-side for streaming support
 
 // Dynamic import for DNS to allow testing without mocking
@@ -363,6 +365,8 @@ async function getResumeGeneratorPrompt(): Promise<string> {
 
 export async function POST(req: Request) {
   console.log('[resume-generator] Request received');
+  const ip = getClientIp(req);
+
   try {
     // Check content-length to prevent DoS via large payloads
     const contentLength = req.headers.get('content-length');
@@ -476,6 +480,13 @@ export async function POST(req: Request) {
     console.log('[resume-generator] Loading system prompt (generated:', isGeneratedPromptAvailable, ')');
     const systemPrompt = await getResumeGeneratorPrompt();
     console.log('[resume-generator] System prompt loaded, length:', systemPrompt.length);
+
+    // Log audit event for generation started
+    await logAdminEvent('resume_generation_started', {
+      inputType: wasUrl ? 'url' : 'text',
+      extractedUrl: extractedUrl || undefined,
+      jobDescriptionLength: jobDescriptionText.length,
+    }, ip);
 
     console.log('[resume-generator] Calling Anthropic API (streaming)...');
 
