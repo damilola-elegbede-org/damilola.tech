@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { ResumeGeneratorForm } from '@/components/admin/ResumeGeneratorForm';
 import { CompatibilityScoreCard } from '@/components/admin/CompatibilityScoreCard';
 import { ChangePreviewPanel } from '@/components/admin/ChangePreviewPanel';
 import type { ResumeAnalysisResult } from '@/lib/types/resume-generation';
-import { buildResumeHtml } from '@/lib/resume-template';
+import { generateResumePdf, getResumeFilename, type ResumeData } from '@/lib/resume-pdf';
 
 type Phase = 'input' | 'analyzing' | 'preview' | 'generating' | 'complete';
 
@@ -18,10 +18,21 @@ export default function ResumeGeneratorPage() {
   const [acceptedIndices, setAcceptedIndices] = useState<Set<number>>(new Set());
   const [rejectedIndices, setRejectedIndices] = useState<Set<number>>(new Set());
   const [generatedPdfUrl, setGeneratedPdfUrl] = useState<string | null>(null);
+  const [streamingText, setStreamingText] = useState<string>('');
+  const [resumeData, setResumeData] = useState<ResumeData | null>(null);
+
+  // Fetch resume data on mount
+  useEffect(() => {
+    fetch('/api/resume-data')
+      .then((res) => res.json())
+      .then((data) => setResumeData(data))
+      .catch((err) => console.error('Failed to load resume data:', err));
+  }, []);
 
   const handleAnalyze = async (jd: string) => {
     setJobDescription(jd);
     setError(null);
+    setStreamingText('');
     setPhase('analyzing');
 
     try {
@@ -31,20 +42,61 @@ export default function ResumeGeneratorPage() {
         body: JSON.stringify({ jobDescription: jd }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
+        // For non-streaming error responses, parse JSON
+        const data = await response.json();
         throw new Error(data.error || 'Analysis failed');
       }
 
-      setAnalysisResult(data.result);
+      // Read streaming response
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body');
+      }
+
+      let fullText = '';
+      let isFirstLine = true;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = new TextDecoder().decode(value);
+        fullText += chunk;
+
+        // Extract metadata from first line (metadata contains wasUrl, extractedUrl)
+        if (isFirstLine && fullText.includes('\n')) {
+          const newlineIndex = fullText.indexOf('\n');
+          // Skip the metadata line, we don't need it client-side
+          fullText = fullText.substring(newlineIndex + 1);
+          isFirstLine = false;
+        }
+
+        // Update streaming text for progress display (without metadata)
+        if (!isFirstLine) {
+          setStreamingText(fullText);
+        }
+      }
+
+      // Parse the JSON result
+      let jsonText = fullText.trim();
+      // Clean potential markdown code blocks
+      if (jsonText.startsWith('```')) {
+        jsonText = jsonText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+      }
+
+      const result: ResumeAnalysisResult = JSON.parse(jsonText);
+
+      setAnalysisResult(result);
       // Pre-select all changes as accepted by default
-      setAcceptedIndices(new Set(data.result.proposedChanges.map((_: unknown, i: number) => i)));
+      setAcceptedIndices(new Set(result.proposedChanges.map((_: unknown, i: number) => i)));
       setRejectedIndices(new Set());
+      setStreamingText('');
       setPhase('preview');
     } catch (err) {
       console.error('Analysis error:', err);
       setError(err instanceof Error ? err.message : 'Analysis failed');
+      setStreamingText('');
       setPhase('input');
     }
   };
@@ -68,33 +120,19 @@ export default function ResumeGeneratorPage() {
   }, []);
 
   const handleGeneratePdf = async () => {
-    if (!analysisResult) return;
+    if (!analysisResult || !resumeData) return;
 
     setPhase('generating');
     setError(null);
 
     try {
-      // Import html2pdf dynamically (client-side only)
-      const html2pdf = (await import('html2pdf.js')).default;
-
-      // Build the optimized resume HTML
-      const resumeHtml = buildResumeHtml(analysisResult, acceptedIndices);
-
-      // Generate PDF
-      const pdfBlob = await html2pdf()
-        .set({
-          margin: [0.5, 0.5, 0.5, 0.5],
-          filename: `${analysisResult.analysis.companyName}-${analysisResult.analysis.roleTitle}.pdf`,
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2 },
-          jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
-        })
-        .from(resumeHtml)
-        .outputPdf('blob');
+      // Generate PDF using @react-pdf/renderer (native text-based PDF)
+      const pdfBlob = await generateResumePdf(resumeData, analysisResult, acceptedIndices);
 
       // Upload PDF to blob storage
+      const filename = getResumeFilename(analysisResult.analysis.companyName, analysisResult.analysis.roleTitle);
       const formData = new FormData();
-      formData.append('pdf', pdfBlob, 'resume.pdf');
+      formData.append('pdf', pdfBlob, filename);
       formData.append('companyName', analysisResult.analysis.companyName);
       formData.append('roleTitle', analysisResult.analysis.roleTitle);
 
@@ -171,6 +209,7 @@ export default function ResumeGeneratorPage() {
     setAcceptedIndices(new Set());
     setRejectedIndices(new Set());
     setGeneratedPdfUrl(null);
+    setStreamingText('');
   };
 
   // Calculate projected score
@@ -215,12 +254,22 @@ export default function ResumeGeneratorPage() {
 
       {/* Analyzing Phase */}
       {phase === 'analyzing' && (
-        <div className="flex h-64 flex-col items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-card)]">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
-          <p className="mt-4 text-[var(--color-text-muted)]">Analyzing job description...</p>
-          <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-            This may take a few seconds
-          </p>
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
+            <p className="text-[var(--color-text-muted)]">Analyzing job description...</p>
+          </div>
+          {streamingText ? (
+            <div className="mt-4 max-h-64 overflow-auto rounded-lg bg-[var(--color-bg)] p-4">
+              <pre className="whitespace-pre-wrap text-xs text-[var(--color-text-muted)] font-mono">
+                {streamingText.length > 500 ? '...' + streamingText.slice(-500) : streamingText}
+              </pre>
+            </div>
+          ) : (
+            <p className="text-sm text-[var(--color-text-muted)]">
+              Waiting for AI response...
+            </p>
+          )}
         </div>
       )}
 
@@ -309,10 +358,10 @@ export default function ResumeGeneratorPage() {
           <div className="flex gap-4">
             <button
               onClick={handleGeneratePdf}
-              disabled={acceptedIndices.size === 0}
+              disabled={acceptedIndices.size === 0 || !resumeData}
               className="flex-1 rounded-lg bg-[var(--color-accent)] px-6 py-3 text-sm font-medium text-white hover:bg-[var(--color-accent)]/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Generate PDF ({acceptedIndices.size} changes)
+              {resumeData ? `Generate PDF (${acceptedIndices.size} changes)` : 'Loading resume data...'}
             </button>
             <button
               onClick={handleReset}

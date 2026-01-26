@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { isIP } from 'node:net';
 import { RESUME_GENERATOR_PROMPT } from '@/lib/generated/system-prompt';
-import type { ResumeAnalysisResult } from '@/lib/types/resume-generation';
+// ResumeAnalysisResult parsing happens client-side for streaming support
 
 // Dynamic import for DNS to allow testing without mocking
 let dnsLookup: typeof import('node:dns/promises').lookup | null = null;
@@ -477,10 +477,10 @@ export async function POST(req: Request) {
     const systemPrompt = await getResumeGeneratorPrompt();
     console.log('[resume-generator] System prompt loaded, length:', systemPrompt.length);
 
-    console.log('[resume-generator] Calling Anthropic API...');
+    console.log('[resume-generator] Calling Anthropic API (streaming)...');
 
-    // Non-streaming API call for structured JSON output
-    const message = await client.messages.create({
+    // Streaming API call for progressive JSON output
+    const stream = client.messages.stream({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 8192,
       system: systemPrompt,
@@ -492,36 +492,39 @@ export async function POST(req: Request) {
       ],
     });
 
-    console.log('[resume-generator] API call complete');
+    // Return streaming response with metadata header
+    const metadataHeader = JSON.stringify({ wasUrl, extractedUrl });
 
-    // Extract text content from response
-    const textContent = message.content.find((c) => c.type === 'text');
-    if (!textContent || textContent.type !== 'text') {
-      console.error('[resume-generator] No text content in response');
-      return Response.json({ error: 'AI service returned unexpected response.' }, { status: 503 });
-    }
+    return new Response(
+      new ReadableStream({
+        async start(controller) {
+          try {
+            // Send metadata first (separated by newline)
+            controller.enqueue(new TextEncoder().encode(metadataHeader + '\n'));
 
-    // Parse JSON response
-    let result: ResumeAnalysisResult;
-    try {
-      // Clean potential markdown code blocks
-      let jsonText = textContent.text.trim();
-      if (jsonText.startsWith('```')) {
-        jsonText = jsonText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+            for await (const event of stream) {
+              if (
+                event.type === 'content_block_delta' &&
+                event.delta.type === 'text_delta'
+              ) {
+                controller.enqueue(new TextEncoder().encode(event.delta.text));
+              }
+            }
+            controller.close();
+            console.log('[resume-generator] Stream completed');
+          } catch (streamError) {
+            console.error('[resume-generator] Stream error:', streamError);
+            controller.error(streamError);
+          }
+        },
+      }),
+      {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Transfer-Encoding': 'chunked',
+        },
       }
-      result = JSON.parse(jsonText);
-    } catch (parseError) {
-      console.error('[resume-generator] Failed to parse JSON:', parseError);
-      console.error('[resume-generator] Raw response:', textContent.text);
-      return Response.json({ error: 'AI returned invalid response format.' }, { status: 503 });
-    }
-
-    // Return successful response
-    return Response.json({
-      result,
-      wasUrl,
-      extractedUrl,
-    });
+    );
   } catch (error) {
     console.error('[resume-generator] Error:', error);
     console.error('[resume-generator] Stack:', error instanceof Error ? error.stack : 'No stack');

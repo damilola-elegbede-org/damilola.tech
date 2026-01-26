@@ -23,6 +23,7 @@
     "@ai-sdk/anthropic": "^3.0.15",
     "@ai-sdk/react": "^3.0.41",
     "@anthropic-ai/sdk": "^0.71.2",
+    "@react-pdf/renderer": "^4.3.2",
     "@upstash/redis": "^1.36.1",
     "@vercel/blob": "^2.0.0",
     "ai": "^6.0.39",
