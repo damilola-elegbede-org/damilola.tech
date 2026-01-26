@@ -42,7 +42,7 @@ export async function GET(req: Request) {
       let cursor: string | undefined;
       // Regex patterns matching those in /api/admin/chats/route.ts
       const newFormatRegex =
-        /^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z)-([a-f0-9-]{36})(?:-.+)?\.json$/i;
+        /^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z)-([a-f0-9]{8})(?:-.+)?\.json$/i;
       const legacyFormatRegex =
         /^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\.json$/;
 
