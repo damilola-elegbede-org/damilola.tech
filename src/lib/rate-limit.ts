@@ -71,17 +71,29 @@ const CIRCUIT_BREAKER_RESET_MS = 30000; // 30 seconds
 let redisErrorCount = 0;
 let circuitBreakerOpenUntil = 0;
 
+// Max window for generic rate limits (1 hour) - used for cleanup threshold
+const GENERIC_CLEANUP_THRESHOLD_MS = 3600 * 1000;
+
 function startCleanup() {
   if (cleanupInterval || useRedis) return;
 
   cleanupInterval = setInterval(() => {
     const now = Date.now();
+
+    // Cleanup admin login entries
     for (const [key, entry] of memoryStore.entries()) {
       const windowExpired = now - entry.firstAttempt > WINDOW_SECONDS * 1000;
       const lockExpired = !entry.lockedUntil || now > entry.lockedUntil;
 
       if (windowExpired && lockExpired) {
         memoryStore.delete(key);
+      }
+    }
+
+    // Cleanup generic rate limit entries
+    for (const [key, entry] of genericMemoryStore.entries()) {
+      if (now - entry.windowStart > GENERIC_CLEANUP_THRESHOLD_MS) {
+        genericMemoryStore.delete(key);
       }
     }
   }, CLEANUP_INTERVAL_MS);

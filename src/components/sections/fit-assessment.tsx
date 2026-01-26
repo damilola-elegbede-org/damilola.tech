@@ -5,11 +5,11 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui';
 import { cn } from '@/lib/utils';
+import { useScrollReveal } from '@/hooks/use-scroll-reveal';
+import { trackEvent } from '@/lib/audit-client';
 
 // XSS protection: disallow dangerous HTML elements in markdown
 const DISALLOWED_ELEMENTS = ['script', 'iframe', 'object', 'embed', 'form', 'input', 'style'];
-import { useScrollReveal } from '@/hooks/use-scroll-reveal';
-import { trackEvent } from '@/lib/audit-client';
 
 interface ExampleJDs {
   strong: string;

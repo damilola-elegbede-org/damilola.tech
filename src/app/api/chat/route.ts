@@ -69,14 +69,14 @@ export async function POST(req: Request) {
     const isValidSessionStartedAt =
       typeof sessionStartedAt === 'string' && !Number.isNaN(Date.parse(sessionStartedAt));
 
-    // Rate limit check: use sessionId if valid, otherwise fall back to IP
-    const rateLimitIdentifier = isValidSessionId ? sessionId : getClientIp(req);
+    // Rate limit check: always use IP to prevent bypass via client-controlled sessionId
+    const ip = getClientIp(req);
     const rateLimitResult = await checkGenericRateLimit(
       RATE_LIMIT_CONFIGS.chat,
-      rateLimitIdentifier
+      ip
     );
     if (rateLimitResult.limited) {
-      console.log(`[chat] Rate limited: ${rateLimitIdentifier}`);
+      console.log(`[chat] Rate limited: ${ip}`);
       return createRateLimitResponse(rateLimitResult);
     }
 
