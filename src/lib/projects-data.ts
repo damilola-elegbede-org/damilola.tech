@@ -113,17 +113,18 @@ export const projectsData: Project[] = [
     stats: {
       label: 'Technical Metrics',
       items: [
-        '~3,600 source LOC with 78% test coverage',
-        '22 unit tests + 3 E2E suites across 5 browsers',
-        '18 React components with 4 streaming API routes',
+        '13K source LOC with 48% test-to-code ratio',
+        '34 unit tests + 6 E2E suites across 5 browsers',
+        '36 React components with 21 API routes (12 public + 9 admin)',
       ],
     },
     highlights: [
       'Full-context LLM (no RAG) with Anthropic prompt caching for cost optimization',
-      'Build-time prompt generation eliminates runtime blob fetches',
-      'Split-template architecture: shared context + role-specific instructions',
-      'Streaming responses with abort controller and ReadableStream management',
-      'Security-first: sensitive data in Vercel Blob, public repo clean',
+      'Production admin portal: JWT auth, 10 pages, real-time analytics dashboard',
+      'Distributed rate limiting: Redis + circuit breaker with graceful degradation',
+      'Comprehensive audit system: 18 event types with IP anonymization',
+      'ATS resume generator: Claude-powered optimization with PDF export',
+      'Security hardening: CSRF, SSRF prevention, timing-safe comparisons',
     ],
   },
   {
