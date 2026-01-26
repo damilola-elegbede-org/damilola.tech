@@ -52,10 +52,11 @@ export function ChatViewer({ chat }: ChatViewerProps) {
 
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-4">
         <h3 className="mb-4 font-semibold text-[var(--color-text)]">Conversation</h3>
-        <div className="space-y-4">
+        <ul role="log" aria-label="Chat conversation" className="space-y-4">
           {messages.map((msg) => (
-            <div
+            <li
               key={msg.id}
+              aria-label={`${msg.role === 'user' ? 'User' : 'Assistant'} message`}
               className={`rounded-lg p-3 ${
                 msg.role === 'user'
                   ? 'ml-8 bg-[var(--color-accent)]/10'
@@ -68,9 +69,9 @@ export function ChatViewer({ chat }: ChatViewerProps) {
               <p className="whitespace-pre-wrap text-sm text-[var(--color-text)]">
                 {msg.parts?.find((p) => p.type === 'text')?.text || ''}
               </p>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       </div>
     </div>
   );

@@ -49,8 +49,14 @@ export default function ChatDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
+      <div
+        className="flex h-64 items-center justify-center"
+        role="status"
+        aria-live="polite"
+        aria-label="Loading chat data"
+      >
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
+        <span className="sr-only">Loading...</span>
       </div>
     );
   }
