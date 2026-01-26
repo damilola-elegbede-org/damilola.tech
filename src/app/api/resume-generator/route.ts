@@ -2,7 +2,12 @@ import Anthropic from '@anthropic-ai/sdk';
 import { isIP } from 'node:net';
 import { RESUME_GENERATOR_PROMPT } from '@/lib/generated/system-prompt';
 import { logAdminEvent } from '@/lib/audit-server';
-import { getClientIp } from '@/lib/rate-limit';
+import {
+  checkGenericRateLimit,
+  createRateLimitResponse,
+  getClientIp,
+  RATE_LIMIT_CONFIGS,
+} from '@/lib/rate-limit';
 // ResumeAnalysisResult parsing happens client-side for streaming support
 
 // Dynamic import for DNS to allow testing without mocking
@@ -376,6 +381,16 @@ export async function POST(req: Request) {
       return Response.json({ error: 'Request body too large.' }, { status: 413 });
     }
 
+    // Rate limit check using IP
+    const rateLimitResult = await checkGenericRateLimit(
+      RATE_LIMIT_CONFIGS.resumeGenerator,
+      ip
+    );
+    if (rateLimitResult.limited) {
+      console.log(`[resume-generator] Rate limited: ${ip}`);
+      return createRateLimitResponse(rateLimitResult);
+    }
+
     const { jobDescription } = await req.json();
     console.log('[resume-generator] Job description length:', jobDescription?.length ?? 0);
 
@@ -491,6 +506,7 @@ export async function POST(req: Request) {
     console.log('[resume-generator] Calling Anthropic API (streaming)...');
 
     // Streaming API call for progressive JSON output
+    // Wrap job description in XML tags for prompt injection mitigation
     const stream = client.messages.stream({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 8192,
@@ -498,7 +514,7 @@ export async function POST(req: Request) {
       messages: [
         {
           role: 'user',
-          content: `Analyze this job description and provide ATS optimization recommendations for the resume. Return ONLY valid JSON, no markdown or code blocks.\n\nJob Description:\n${jobDescriptionText}`,
+          content: `Analyze this job description and provide ATS optimization recommendations for the resume. Return ONLY valid JSON, no markdown or code blocks.\n\n<job_description>${jobDescriptionText}</job_description>`,
         },
       ],
     });

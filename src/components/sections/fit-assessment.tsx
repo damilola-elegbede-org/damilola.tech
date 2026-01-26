@@ -5,6 +5,9 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui';
 import { cn } from '@/lib/utils';
+
+// XSS protection: disallow dangerous HTML elements in markdown
+const DISALLOWED_ELEMENTS = ['script', 'iframe', 'object', 'embed', 'form', 'input', 'style'];
 import { useScrollReveal } from '@/hooks/use-scroll-reveal';
 import { trackEvent } from '@/lib/audit-client';
 
@@ -432,7 +435,11 @@ export function FitAssessment() {
               </>
             )}
             <div ref={resultRef} className="prose prose-invert max-w-none">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                disallowedElements={DISALLOWED_ELEMENTS}
+                unwrapDisallowed
+              >
                 {completion || 'Analyzing job fit...'}
               </ReactMarkdown>
             </div>

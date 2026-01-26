@@ -1,5 +1,5 @@
 /**
- * Distributed rate limiter for admin login attempts.
+ * Distributed rate limiter for admin login attempts and public endpoints.
  *
  * Uses Upstash Redis for distributed state in production.
  * Falls back to in-memory storage when Redis is not configured.
@@ -7,11 +7,31 @@
 
 import { Redis } from '@upstash/redis';
 
-// Configuration
+// Admin login configuration
 const MAX_ATTEMPTS = 5; // Failed attempts before lockout
 const WINDOW_SECONDS = 15 * 60; // 15 minutes - attempt window
 const LOCKOUT_SECONDS = 15 * 60; // 15 minutes - lockout duration
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes - cleanup old entries (in-memory only)
+
+// Generic rate limit configuration
+export interface RateLimitConfig {
+  key: string;              // 'chat', 'fit-assessment', 'resume-generator'
+  limit: number;            // max requests
+  windowSeconds: number;    // time window
+}
+
+// Predefined configs for public endpoints
+export const RATE_LIMIT_CONFIGS = {
+  chat: { key: 'chat', limit: 50, windowSeconds: 300 },               // 50 per 5 min
+  fitAssessment: { key: 'fit-assessment', limit: 10, windowSeconds: 3600 },  // 10 per hour
+  resumeGenerator: { key: 'resume-generator', limit: 10, windowSeconds: 3600 }, // 10 per hour
+} as const;
+
+export interface GenericRateLimitResult {
+  limited: boolean;
+  remaining: number;
+  retryAfter?: number;
+}
 
 // Check if Redis is configured
 const useRedis = !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
@@ -37,6 +57,13 @@ interface RateLimitEntry {
 
 const memoryStore = new Map<string, RateLimitEntry>();
 let cleanupInterval: ReturnType<typeof setInterval> | null = null;
+
+// In-memory store for generic rate limits (sliding window counter)
+interface GenericRateLimitEntry {
+  count: number;
+  windowStart: number;
+}
+const genericMemoryStore = new Map<string, GenericRateLimitEntry>();
 
 function startCleanup() {
   if (cleanupInterval || useRedis) return;
@@ -261,4 +288,108 @@ export function getClientIp(req: Request): string {
 
   // Last resort fallback
   return 'unknown';
+}
+
+/**
+ * Generic rate limiter for public endpoints.
+ * Uses sliding window counter pattern.
+ * Increments counter on each call (check + consume in one operation).
+ */
+export async function checkGenericRateLimit(
+  config: RateLimitConfig,
+  identifier: string
+): Promise<GenericRateLimitResult> {
+  if (useRedis) {
+    return checkGenericRateLimitRedis(config, identifier);
+  }
+  return checkGenericRateLimitMemory(config, identifier);
+}
+
+async function checkGenericRateLimitRedis(
+  config: RateLimitConfig,
+  identifier: string
+): Promise<GenericRateLimitResult> {
+  const key = `ratelimit:${config.key}:${identifier}`;
+
+  try {
+    const client = getRedis();
+
+    // Increment counter atomically
+    const count = await client.incr(key);
+
+    // Set expiry on first request of window
+    if (count === 1) {
+      await client.expire(key, config.windowSeconds);
+    }
+
+    if (count > config.limit) {
+      // Get TTL for retry-after
+      const ttl = await client.ttl(key);
+      return {
+        limited: true,
+        remaining: 0,
+        retryAfter: ttl > 0 ? ttl : config.windowSeconds,
+      };
+    }
+
+    return {
+      limited: false,
+      remaining: config.limit - count,
+    };
+  } catch (error) {
+    console.error('[rate-limit] Redis error in generic rate limit:', error);
+    // On Redis error, fail closed to prevent bypass attacks
+    return { limited: true, remaining: 0, retryAfter: 60 };
+  }
+}
+
+function checkGenericRateLimitMemory(
+  config: RateLimitConfig,
+  identifier: string
+): GenericRateLimitResult {
+  startCleanup();
+
+  const key = `${config.key}:${identifier}`;
+  const now = Date.now();
+  const entry = genericMemoryStore.get(key);
+
+  if (!entry || now - entry.windowStart > config.windowSeconds * 1000) {
+    // New window
+    genericMemoryStore.set(key, { count: 1, windowStart: now });
+    return { limited: false, remaining: config.limit - 1 };
+  }
+
+  // Increment counter
+  entry.count++;
+
+  if (entry.count > config.limit) {
+    // Calculate retry-after (time until window resets)
+    const windowEnd = entry.windowStart + config.windowSeconds * 1000;
+    const retryAfter = Math.ceil((windowEnd - now) / 1000);
+    return {
+      limited: true,
+      remaining: 0,
+      retryAfter: retryAfter > 0 ? retryAfter : config.windowSeconds,
+    };
+  }
+
+  return {
+    limited: false,
+    remaining: config.limit - entry.count,
+  };
+}
+
+/**
+ * Create a 429 Too Many Requests response with Retry-After header.
+ */
+export function createRateLimitResponse(result: GenericRateLimitResult): Response {
+  return Response.json(
+    { error: 'Too many requests. Please try again later.' },
+    {
+      status: 429,
+      headers: {
+        'Retry-After': String(result.retryAfter || 60),
+      },
+    }
+  );
 }

@@ -3,6 +3,12 @@ import { CHATBOT_SYSTEM_PROMPT } from '@/lib/generated/system-prompt';
 import { getFullSystemPrompt } from '@/lib/system-prompt';
 import { saveConversationToBlob } from '@/lib/chat-storage-server';
 import { compactConversation } from '@/lib/chat-compaction';
+import {
+  checkGenericRateLimit,
+  createRateLimitResponse,
+  getClientIp,
+  RATE_LIMIT_CONFIGS,
+} from '@/lib/rate-limit';
 
 // Use Node.js runtime for reliable Anthropic SDK streaming
 export const runtime = 'nodejs';
@@ -55,6 +61,17 @@ export async function POST(req: Request) {
     const isValidSessionStartedAt =
       typeof sessionStartedAt === 'string' && !Number.isNaN(Date.parse(sessionStartedAt));
 
+    // Rate limit check: use sessionId if valid, otherwise fall back to IP
+    const rateLimitIdentifier = isValidSessionId ? sessionId : getClientIp(req);
+    const rateLimitResult = await checkGenericRateLimit(
+      RATE_LIMIT_CONFIGS.chat,
+      rateLimitIdentifier
+    );
+    if (rateLimitResult.limited) {
+      console.log(`[chat] Rate limited: ${rateLimitIdentifier}`);
+      return createRateLimitResponse(rateLimitResult);
+    }
+
     if (!validateMessages(messages)) {
       return Response.json(
         { error: 'Invalid messages format or content too long.' },
@@ -85,13 +102,14 @@ export async function POST(req: Request) {
     console.log('[chat] Starting stream, messages:', processedMessages.length);
 
     // Use Anthropic SDK streaming
+    // Wrap user messages in XML tags for prompt injection mitigation
     const stream = client.messages.stream({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 512, // Reduced to encourage brevity
       system: systemPrompt,
       messages: processedMessages.map((m) => ({
         role: m.role,
-        content: m.content,
+        content: m.role === 'user' ? `<user_message>${m.content}</user_message>` : m.content,
       })),
     });
 

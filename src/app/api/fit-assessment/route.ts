@@ -2,6 +2,12 @@ import Anthropic from '@anthropic-ai/sdk';
 import { isIP } from 'node:net';
 import { FIT_ASSESSMENT_PROMPT } from '@/lib/generated/system-prompt';
 import { getFitAssessmentPrompt } from '@/lib/system-prompt';
+import {
+  checkGenericRateLimit,
+  createRateLimitResponse,
+  getClientIp,
+  RATE_LIMIT_CONFIGS,
+} from '@/lib/rate-limit';
 
 // Dynamic import for DNS to allow testing without mocking
 let dnsLookup: typeof import('node:dns/promises').lookup | null = null;
@@ -322,6 +328,17 @@ export async function POST(req: Request) {
       return Response.json({ error: 'Request body too large.' }, { status: 413 });
     }
 
+    // Rate limit check using IP
+    const ip = getClientIp(req);
+    const rateLimitResult = await checkGenericRateLimit(
+      RATE_LIMIT_CONFIGS.fitAssessment,
+      ip
+    );
+    if (rateLimitResult.limited) {
+      console.log(`[fit-assessment] Rate limited: ${ip}`);
+      return createRateLimitResponse(rateLimitResult);
+    }
+
     const { prompt: jobDescription } = await req.json();
     console.log('[fit-assessment] Job description length:', jobDescription?.length ?? 0);
 
@@ -429,6 +446,7 @@ export async function POST(req: Request) {
     console.log('[fit-assessment] Calling Anthropic API (streaming)...');
 
     // Streaming API call for progressive text display
+    // Wrap job description in XML tags for prompt injection mitigation
     const stream = client.messages.stream({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 4096,
@@ -436,7 +454,7 @@ export async function POST(req: Request) {
       messages: [
         {
           role: 'user',
-          content: `Generate an Executive Fit Report for this job description:\n\n${jobDescriptionText}`,
+          content: `Generate an Executive Fit Report for this job description:\n\n<job_description>${jobDescriptionText}</job_description>`,
         },
       ],
     });
