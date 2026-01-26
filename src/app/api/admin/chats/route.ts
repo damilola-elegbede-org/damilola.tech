@@ -41,9 +41,9 @@ export async function GET(req: Request) {
         // Or legacy format: damilola.tech/chats/{env}/{uuid}.json
         const filename = blob.pathname.split('/').pop() || '';
 
-        // Try new format: {timestamp}-{uuid}.json (capture full UUID with hyphens)
+        // Try new format: {timestamp}-{shortId}.json (8-char hex ID from archive route)
         const newFormatMatch = filename.match(
-          /^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z)-([a-f0-9-]{36})(?:-.+)?\.json$/i
+          /^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z)-([a-f0-9]{8})(?:-.+)?\.json$/i
         );
 
         // Try legacy format: just {uuid}.json
