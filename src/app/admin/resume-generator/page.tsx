@@ -317,7 +317,7 @@ export default function ResumeGeneratorPage() {
       // Build logged changes with edit and rejection tracking
       const acceptedLoggedChanges: LoggedChange[] = analysisResult.proposedChanges
         .filter((_, i) => acceptedIndices.has(i))
-        .map((change, i) => {
+        .map((change) => {
           // Find original index
           const originalIndex = analysisResult.proposedChanges.indexOf(change);
           const review = reviewedChanges.get(originalIndex);

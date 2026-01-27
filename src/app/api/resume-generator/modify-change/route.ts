@@ -29,11 +29,12 @@ export async function POST(req: Request) {
     // Wrap user input in XML tags for prompt injection mitigation
     const prompt = `You are revising a single resume change for ATS optimization.
 
-Original change:
-- Section: ${originalChange.section}
-- Original text: ${originalChange.original}
-- Proposed modification: ${originalChange.modified}
-- Reason: ${originalChange.reason}
+<original_change>
+Section: ${originalChange.section}
+Original text: ${originalChange.original}
+Proposed modification: ${originalChange.modified}
+Reason: ${originalChange.reason}
+</original_change>
 
 <modify_request>${modifyPrompt}</modify_request>
 

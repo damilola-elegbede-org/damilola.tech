@@ -5,6 +5,9 @@ import { test, expect } from '@playwright/test';
  * Tests the interactive change review flow: analyze → review → edit → generate
  */
 test.describe('Resume Generator Review Workflow', () => {
+  // Configure timeout for tests that call real AI API
+  test.describe.configure({ timeout: 120_000 });
+
   // Skip all tests if no admin password is configured
   test.beforeEach(async ({ page }) => {
     const password = process.env.ADMIN_PASSWORD_PREVIEW;
@@ -85,14 +88,14 @@ test.describe('Resume Generator Review Workflow', () => {
     await page.getByRole('button', { name: /edit & accept/i }).first().click();
 
     // Verify edit mode is active
-    await expect(page.getByRole('textbox')).toBeVisible();
+    const editTextarea = page.getByLabel(/edit.*change/i);
+    await expect(editTextarea).toBeVisible();
     await expect(page.getByRole('button', { name: /save & accept/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /cancel/i })).toBeVisible();
 
     // Modify the text
-    const textarea = page.getByRole('textbox');
-    await textarea.clear();
-    await textarea.fill('My custom edited text for this change');
+    await editTextarea.clear();
+    await editTextarea.fill('My custom edited text for this change');
 
     // Save and accept
     await page.getByRole('button', { name: /save & accept/i }).click();
@@ -173,12 +176,13 @@ test.describe('Resume Generator Review Workflow', () => {
     // Click Accept All Pending
     await page.getByRole('button', { name: /accept all pending/i }).click();
 
-    // Verify all changes show as Accepted
+    // Verify all changes show as Accepted (use retrying assertion)
     const acceptedBadges = page.getByText('Accepted');
-    expect(await acceptedBadges.count()).toBeGreaterThan(0);
+    await expect(acceptedBadges.first()).toBeVisible();
 
     // No more Accept buttons should be visible for individual changes
     await expect(page.getByRole('button', { name: /accept all pending/i })).not.toBeVisible();
+    await expect(page.getByRole('button', { name: /^accept$/i })).toHaveCount(0);
   });
 
   test('generate PDF button disabled when no changes accepted', async ({ page }) => {
