@@ -251,6 +251,39 @@ function normalizeForMatching(name: string): string {
 }
 
 /**
+ * Escape special regex characters in a string
+ */
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Perform targeted string replacement.
+ * Replaces `original` with `modified` within `content`.
+ * Falls back to `modified` if `original` not found (backward compatibility).
+ */
+function targetedReplace(content: string, original: string, modified: string): string {
+  if (!original || !content) {
+    return modified; // Fallback for edge cases
+  }
+
+  // Try exact replacement first
+  if (content.includes(original)) {
+    return content.replace(original, modified);
+  }
+
+  // Try case-insensitive replacement
+  const regex = new RegExp(escapeRegExp(original), 'i');
+  if (regex.test(content)) {
+    return content.replace(regex, modified);
+  }
+
+  // Fallback: if original not found, return modified as-is
+  // This maintains backward compatibility with changes that expect full replacement
+  return modified;
+}
+
+/**
  * Apply accepted changes to resume content.
  * Handles summary, experience bullets, skills, and education sections.
  * Also applies skills reordering if provided.
@@ -267,7 +300,9 @@ function applyChanges(
     if (!acceptedIndices.has(index)) return;
 
     if (change.section === 'summary') {
-      result.summary = change.modified;
+      // Targeted replacement within summary
+      result.summary = targetedReplace(result.summary, change.original, change.modified);
+
     } else if (change.section.startsWith('experience.')) {
       // Parse section like "experience.verily.bullet1"
       const parts = change.section.split('.');
@@ -285,10 +320,16 @@ function applyChanges(
         if (expIndex >= 0 && bulletMatch) {
           const bulletIndex = parseInt(bulletMatch[1], 10) - 1;
           if (bulletIndex >= 0 && bulletIndex < result.experience[expIndex].responsibilities.length) {
-            result.experience[expIndex].responsibilities[bulletIndex] = change.modified;
+            // Targeted replacement within bullet
+            result.experience[expIndex].responsibilities[bulletIndex] = targetedReplace(
+              result.experience[expIndex].responsibilities[bulletIndex],
+              change.original,
+              change.modified
+            );
           }
         }
       }
+
     } else if (change.section.startsWith('skills.')) {
       // Parse section like "skills.technical" or "skills.leadership"
       const parts = change.section.split('.');
@@ -298,13 +339,32 @@ function applyChanges(
           (s) => normalizeForMatching(s.category).includes(categoryKey)
         );
         if (skillIndex >= 0) {
-          // The modified content should be the new items list (pipe or comma separated)
-          const newItems = change.modified.split(/[|,]/).map((s) => s.trim()).filter(Boolean);
-          if (newItems.length > 0) {
-            result.skills[skillIndex].items = newItems;
+          const currentItems = result.skills[skillIndex].items;
+
+          // Find the specific item that contains the original text
+          const itemIndex = currentItems.findIndex(
+            (item) => item.includes(change.original) ||
+                      item.toLowerCase().includes(change.original.toLowerCase())
+          );
+
+          if (itemIndex >= 0) {
+            // Targeted replacement within the matched item
+            currentItems[itemIndex] = targetedReplace(
+              currentItems[itemIndex],
+              change.original,
+              change.modified
+            );
+          } else {
+            // Fallback: if original not found in any item, check if modified is a full list
+            // (backward compatibility for changes that provide complete skill lists)
+            const newItems = change.modified.split(/[|,]/).map((s) => s.trim()).filter(Boolean);
+            if (newItems.length > 1) {
+              result.skills[skillIndex].items = newItems;
+            }
           }
         }
       }
+
     } else if (change.section.startsWith('education.')) {
       // Parse section like "education.mba.focus" or "education.0.focus"
       const parts = change.section.split('.');
@@ -322,9 +382,19 @@ function applyChanges(
 
         if (eduIndex >= 0 && eduIndex < result.education.length) {
           if (field === 'focus') {
-            result.education[eduIndex].focus = change.modified;
+            // Targeted replacement within focus
+            result.education[eduIndex].focus = targetedReplace(
+              result.education[eduIndex].focus || '',
+              change.original,
+              change.modified
+            );
           } else if (field === 'degree') {
-            result.education[eduIndex].degree = change.modified;
+            // Targeted replacement within degree
+            result.education[eduIndex].degree = targetedReplace(
+              result.education[eduIndex].degree,
+              change.original,
+              change.modified
+            );
           }
         }
       }
