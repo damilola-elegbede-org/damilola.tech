@@ -10,43 +10,18 @@ import { mkdir, writeFile } from 'fs/promises';
 import { join, basename } from 'path';
 import { list } from '@vercel/blob';
 import * as dotenv from 'dotenv';
+import {
+  getTargetDirectory,
+  isKnownFile,
+  isValidFilename,
+  TARGET_DIRS,
+} from '../src/lib/content-utils';
 
 // Load environment variables from .env.local
 dotenv.config({ path: '.env.local' });
 
 const BLOB_PATH_PREFIX = 'damilola.tech/content';
 const MAX_RESPONSE_SIZE = 10 * 1024 * 1024; // 10MB limit
-
-// File routing map: filename -> subdirectory in career-data/
-const FILE_ROUTING: Record<string, string> = {
-  // Instructions
-  'chatbot-instructions.md': 'instructions',
-  'fit-assessment-instructions.md': 'instructions',
-  'resume-generator-instructions.md': 'instructions',
-
-  // Templates
-  'shared-context.md': 'templates',
-
-  // Context
-  'ai-context.md': 'context',
-  'anecdotes.md': 'context',
-  'chatbot-architecture.md': 'context',
-  'leadership-philosophy.md': 'context',
-  'projects-context.md': 'context',
-  'technical-expertise.md': 'context',
-  'verily-feedback.md': 'context',
-
-  // Data
-  'resume-full.json': 'data',
-  'star-stories.json': 'data',
-
-  // Examples
-  'fit-example-strong.md': 'examples',
-  'fit-example-weak.md': 'examples',
-};
-
-// All possible target directories
-const TARGET_DIRS = ['instructions', 'templates', 'context', 'data', 'examples'];
 
 type FetchResult = { status: 'ok'; content: string } | { status: 'error'; error: unknown };
 
@@ -73,27 +48,6 @@ async function fetchFile(url: string, filename: string): Promise<FetchResult> {
     console.error(`  [ERROR] ${filename}: ${errorMsg}`);
     return { status: 'error', error };
   }
-}
-
-function getTargetDirectory(filename: string): string {
-  const dir = FILE_ROUTING[filename];
-  if (dir) {
-    return dir;
-  }
-
-  // Heuristic fallback for unknown files
-  if (filename.endsWith('-instructions.md')) {
-    return 'instructions';
-  }
-  if (filename.endsWith('.json')) {
-    return 'data';
-  }
-  if (filename.startsWith('fit-example-')) {
-    return 'examples';
-  }
-
-  // Default to context for unknown markdown files
-  return 'context';
 }
 
 async function main() {
@@ -143,7 +97,7 @@ async function main() {
     const filename = basename(rawFilename); // Prevent path traversal
 
     // Validate filename contains only safe characters
-    if (!/^[a-zA-Z0-9._-]+$/.test(filename)) {
+    if (!isValidFilename(filename)) {
       console.error(`  [SKIP] ${rawFilename}: Invalid filename characters`);
       errorCount++;
       continue;
@@ -154,9 +108,9 @@ async function main() {
     switch (result.status) {
       case 'ok': {
         const targetDir = getTargetDirectory(filename);
-        const isKnown = FILE_ROUTING[filename] !== undefined;
+        const knownFile = isKnownFile(filename);
 
-        if (!isKnown) {
+        if (!knownFile) {
           console.warn(`  [WARN] Unknown file "${filename}" - routing to ${targetDir}/`);
           unknownCount++;
         }

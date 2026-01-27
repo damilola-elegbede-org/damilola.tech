@@ -13,6 +13,7 @@
 
 import { execSync, spawnSync } from 'child_process';
 import { join } from 'path';
+import { generateCommitMessage } from '../src/lib/content-utils';
 
 const SUBMODULE_PATH = join(process.cwd(), 'career-data');
 
@@ -48,30 +49,6 @@ function getChangedFiles(cwd: string): string[] {
   } catch {
     return [];
   }
-}
-
-function generateCommitMessage(files: string[]): string {
-  // Analyze changed files to generate appropriate message
-  const categories = new Set<string>();
-
-  for (const file of files) {
-    if (file.includes('instructions/')) categories.add('instructions');
-    else if (file.includes('templates/')) categories.add('templates');
-    else if (file.includes('context/')) categories.add('context');
-    else if (file.includes('data/')) categories.add('data');
-    else if (file.includes('examples/')) categories.add('examples');
-    else if (file.includes('resume/')) categories.add('resume');
-    else categories.add('content');
-  }
-
-  const categoryList = Array.from(categories).sort().join(', ');
-
-  if (files.length === 1) {
-    const filename = files[0].split('/').pop() || files[0];
-    return `chore(career-data): update ${filename}`;
-  }
-
-  return `chore(career-data): update ${categoryList}`;
 }
 
 async function main() {

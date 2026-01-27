@@ -12,6 +12,7 @@ import { join } from 'path';
 import { createHash } from 'crypto';
 import { put } from '@vercel/blob';
 import * as dotenv from 'dotenv';
+import { CONTENT_DIRS, isValidFilename, detectDuplicates } from '../src/lib/content-utils';
 
 // Load environment variables from .env.local
 dotenv.config({ path: '.env.local' });
@@ -19,15 +20,6 @@ dotenv.config({ path: '.env.local' });
 const BLOB_PATH_PREFIX = 'damilola.tech/content';
 const BLOB_BASE_URL =
   process.env.BLOB_BASE_URL || 'https://mikya8vluytqhmff.public.blob.vercel-storage.com';
-
-// Content directories to walk (relative to project root)
-const CONTENT_DIRS = [
-  'career-data/instructions',
-  'career-data/templates',
-  'career-data/context',
-  'career-data/data',
-  'career-data/examples',
-];
 
 const MAX_RESPONSE_SIZE = 10 * 1024 * 1024; // 10MB limit
 
@@ -109,7 +101,7 @@ async function collectFilesFromDirectory(dir: string): Promise<FileInfo[]> {
 
     for (const filename of entries) {
       // Validate filename contains only safe characters (no path traversal)
-      if (!/^[a-zA-Z0-9._-]+$/.test(filename)) {
+      if (!isValidFilename(filename)) {
         console.error(`  [SKIP] ${dir}/${filename}: Invalid filename characters`);
         continue;
       }
@@ -171,17 +163,16 @@ async function main() {
   }
 
   // Check for duplicate filenames across directories
-  const filenameMap = new Map<string, string>();
-  for (const file of allFiles) {
-    const existing = filenameMap.get(file.filename);
-    if (existing) {
-      console.error(`\nError: Duplicate filename "${file.filename}" found in:`);
-      console.error(`  - ${existing}`);
-      console.error(`  - ${file.sourceDir}`);
-      console.error('All content files must have unique names.');
-      process.exit(1);
+  const duplicates = detectDuplicates(allFiles);
+  if (duplicates.size > 0) {
+    for (const [filename, dirs] of duplicates) {
+      console.error(`\nError: Duplicate filename "${filename}" found in:`);
+      for (const dir of dirs) {
+        console.error(`  - ${dir}`);
+      }
     }
-    filenameMap.set(file.filename, file.sourceDir);
+    console.error('All content files must have unique names.');
+    process.exit(1);
   }
 
   console.log(`Found ${allFiles.length} files to process\n`);

@@ -1,4 +1,5 @@
 import { list } from '@vercel/blob';
+import { CONTENT_DIRS } from './content-utils';
 
 // Cache for blob content to avoid repeated fetches
 const blobCache = new Map<string, string>();
@@ -188,15 +189,6 @@ export async function fetchAllContent(): Promise<ContentFiles> {
     chatbotArchitecture,
   };
 }
-
-// Content directories to search for local fallback (in priority order)
-const CONTENT_DIRS = [
-  'career-data/instructions',
-  'career-data/templates',
-  'career-data/context',
-  'career-data/data',
-  'career-data/examples',
-];
 
 /**
  * Try to find a file in one of the content directories.
