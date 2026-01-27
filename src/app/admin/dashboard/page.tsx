@@ -158,39 +158,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Quick links */}
-      <div className="flex flex-wrap gap-4">
-        <Link
-          href="/admin/resume-generator"
-          className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-accent)]/90"
-        >
-          Generate Resume →
-        </Link>
-        <Link
-          href="/admin/chats"
-          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-2 text-sm text-[var(--color-text)] transition-colors hover:border-[var(--color-accent)]"
-        >
-          View All Chats →
-        </Link>
-        <Link
-          href="/admin/fit-assessments"
-          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-2 text-sm text-[var(--color-text)] transition-colors hover:border-[var(--color-accent)]"
-        >
-          View All Assessments →
-        </Link>
-        <Link
-          href="/admin/audit"
-          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-2 text-sm text-[var(--color-text)] transition-colors hover:border-[var(--color-accent)]"
-        >
-          View Audit Log →
-        </Link>
-        <Link
-          href="/admin/traffic"
-          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-2 text-sm text-[var(--color-text)] transition-colors hover:border-[var(--color-accent)]"
-        >
-          View Traffic →
-        </Link>
-      </div>
     </div>
   );
 }
