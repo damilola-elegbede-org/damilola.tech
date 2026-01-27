@@ -76,23 +76,28 @@ function buildUrl(example: UtmExample, baseUrl: string): string {
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState(false);
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
+      setError(false);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard API not available
+    } catch (err) {
+      console.error('Clipboard copy failed:', err);
+      setError(true);
+      setTimeout(() => setError(false), 2000);
     }
   };
 
   return (
     <button
       onClick={handleCopy}
+      aria-label={copied ? 'Copied to clipboard' : error ? 'Copy failed' : 'Copy to clipboard'}
       className="shrink-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
     >
-      {copied ? 'Copied!' : 'Copy'}
+      {copied ? 'Copied!' : error ? 'Failed' : 'Copy'}
     </button>
   );
 }

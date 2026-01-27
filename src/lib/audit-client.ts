@@ -137,9 +137,10 @@ class AuditClient {
       const useBeacon = typeof navigator.sendBeacon === 'function';
 
       if (useBeacon && document.visibilityState === 'hidden') {
+        // Use Blob with Content-Type for proper JSON parsing on server
         navigator.sendBeacon(
           '/api/audit',
-          JSON.stringify(events)
+          new Blob([JSON.stringify(events)], { type: 'application/json' })
         );
       } else {
         await fetch('/api/audit', {

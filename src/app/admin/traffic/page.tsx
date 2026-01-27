@@ -56,6 +56,7 @@ export default function TrafficPage() {
 
   useEffect(() => {
     async function fetchStats() {
+      setError(null); // Clear previous errors before new fetch
       setIsLoading(true);
       try {
         const res = await fetch(`/api/admin/traffic?days=${days}`);
@@ -73,7 +74,7 @@ export default function TrafficPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center" role="status" aria-label="Loading traffic data">
+      <div className="flex h-64 items-center justify-center" role="status" aria-label="Loading traffic data" aria-live="polite" aria-busy="true">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
       </div>
     );
@@ -109,12 +110,14 @@ export default function TrafficPage() {
             id="days"
             value={days}
             onChange={(e) => setDays(parseInt(e.target.value, 10))}
+            aria-describedby="days-description"
             className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-1.5 text-sm text-[var(--color-text)]"
           >
             <option value={7}>Last 7 days</option>
             <option value={30}>Last 30 days</option>
             <option value={90}>Last 90 days</option>
           </select>
+          <span id="days-description" className="sr-only">Select time range to filter traffic data</span>
         </div>
       </div>
 

@@ -48,7 +48,8 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const environment = searchParams.get('env') || process.env.VERCEL_ENV || 'production';
-    const days = parseInt(searchParams.get('days') || '30', 10);
+    // Validate days parameter (1-365 range)
+    const days = Math.min(365, Math.max(1, parseInt(searchParams.get('days') || '30', 10)));
 
     // Calculate date range
     const endDate = new Date();
@@ -56,45 +57,65 @@ export async function GET(req: Request) {
     startDate.setDate(startDate.getDate() - days);
 
     // Fetch page_view events from audit log
-    const prefix = `damilola.tech/audit/${environment}/`;
+    // Use date-based prefixes to reduce search space
     const pageViewEvents: AuditEvent[] = [];
+    const MAX_BLOBS = 5000; // Limit total blobs to prevent memory exhaustion
+    let totalBlobsProcessed = 0;
 
-    let cursor: string | undefined;
-    do {
-      const result = await list({ prefix, cursor, limit: 1000 });
+    // Generate date prefixes for the date range to filter at list level
+    const datePrefixes: string[] = [];
+    const currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+      const dateStr = currentDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      datePrefixes.push(`damilola.tech/audit/${environment}/${dateStr}`);
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
 
-      // Filter for page_view events and fetch their contents
-      const pageViewBlobs = result.blobs.filter((blob) => {
-        const filename = blob.pathname.split('/').pop() || '';
-        return filename.includes('-page_view');
-      });
+    // Process each date prefix to get better filtering
+    for (const prefix of datePrefixes) {
+      if (totalBlobsProcessed >= MAX_BLOBS) break;
 
-      // Fetch events in parallel (batch of 50 to avoid overwhelming)
-      const batchSize = 50;
-      for (let i = 0; i < pageViewBlobs.length; i += batchSize) {
-        const batch = pageViewBlobs.slice(i, i + batchSize);
-        const fetchResults = await Promise.allSettled(
-          batch.map(async (blob) => {
-            const response = await fetch(blob.url);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return (await response.json()) as AuditEvent;
-          })
-        );
+      let cursor: string | undefined;
+      do {
+        const result = await list({ prefix, cursor, limit: 1000 });
 
-        for (const result of fetchResults) {
-          if (result.status === 'fulfilled') {
-            const event = result.value;
-            // Filter by date range
-            const eventDate = new Date(event.timestamp);
-            if (eventDate >= startDate && eventDate <= endDate) {
-              pageViewEvents.push(event);
+        // Filter for page_view events
+        const pageViewBlobs = result.blobs.filter((blob) => {
+          const filename = blob.pathname.split('/').pop() || '';
+          return filename.includes('-page_view');
+        });
+
+        // Fetch events in parallel with timeout (batch of 50)
+        const batchSize = 50;
+        const fetchTimeout = 10000; // 10 second timeout
+
+        for (let i = 0; i < pageViewBlobs.length && totalBlobsProcessed < MAX_BLOBS; i += batchSize) {
+          const batch = pageViewBlobs.slice(i, Math.min(i + batchSize, pageViewBlobs.length));
+          const fetchResults = await Promise.allSettled(
+            batch.map(async (blob) => {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), fetchTimeout);
+              try {
+                const response = await fetch(blob.url, { signal: controller.signal });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return (await response.json()) as AuditEvent;
+              } finally {
+                clearTimeout(timeoutId);
+              }
+            })
+          );
+
+          for (const result of fetchResults) {
+            if (result.status === 'fulfilled') {
+              pageViewEvents.push(result.value);
             }
           }
+          totalBlobsProcessed += batch.length;
         }
-      }
 
-      cursor = result.cursor ?? undefined;
-    } while (cursor);
+        cursor = result.cursor ?? undefined;
+      } while (cursor && totalBlobsProcessed < MAX_BLOBS);
+    }
 
     // Aggregate traffic data
     const sourceCount = new Map<string, number>();
