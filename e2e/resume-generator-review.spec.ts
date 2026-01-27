@@ -99,7 +99,8 @@ test.describe('Resume Generator Review Workflow', () => {
 
     // Verify change is now accepted with "Edited" badge
     await expect(page.getByText('Accepted').first()).toBeVisible();
-    await expect(page.getByText('Edited')).toBeVisible();
+    // Use locator for the specific Edited badge span to avoid matching other text containing "edited"
+    await expect(page.locator('span:text-is("Edited")').first()).toBeVisible();
   });
 
   test('can reject change with optional feedback', async ({ page }) => {
@@ -194,7 +195,8 @@ test.describe('Resume Generator Review Workflow', () => {
     await expect(page.getByText(/Proposed Changes/i)).toBeVisible({ timeout: 60000 });
 
     // Generate PDF button should be disabled when no changes are accepted
-    const generateButton = page.getByRole('button', { name: /generate pdf/i });
+    // Use .first() since there may be multiple generate buttons on the page
+    const generateButton = page.getByRole('button', { name: /generate pdf/i }).first();
     await expect(generateButton).toBeDisabled();
 
     // Accept a change
