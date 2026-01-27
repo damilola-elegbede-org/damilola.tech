@@ -141,6 +141,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     const blob = await put(blobPath, JSON.stringify(data, null, 2), {
       access: 'public',
       contentType: 'application/json',
+      allowOverwrite: true,
     });
 
     console.log('[admin/resume-generations/[id]] Updated successfully:', blob.url);
