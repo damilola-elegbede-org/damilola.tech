@@ -11,7 +11,15 @@ export const resumeData: ResumeData = {
   github: 'https://github.com/damilola-elegbede',
   location: 'Boulder, CO',
   openToRoles: ['Engineering Manager', 'Senior Engineering Manager', 'Director of Engineering'],
-  experienceTags: ['Ex-Verily', 'Ex-Qualcomm', 'MBA + MS CS'],
+  experienceTags: [
+    'Engineering Management',
+    'Team Leadership',
+    'Cross-functional Leadership',
+    'Strategic Planning',
+    'Stakeholder Management',
+    'People Management',
+    'MBA + MS CS',
+  ],
   experiences: [
     {
       id: 'verily',
