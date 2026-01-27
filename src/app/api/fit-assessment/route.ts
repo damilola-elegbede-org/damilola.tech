@@ -236,10 +236,13 @@ async function validateUrlForSsrf(urlString: string): Promise<string | null> {
         return 'This URL is not allowed.';
       }
     }
-  } catch {
+  } catch (error) {
     // DNS resolution failed - proceed anyway as the fetch will fail naturally
-    // This allows tests to work without DNS mocking
-    console.warn(`[fit-assessment] DNS resolution failed for ${hostname}, proceeding`);
+    // Note: This is fail-open behavior for testability. Tests use fake domains that
+    // don't resolve, and mocking Node's native dns/promises module is complex.
+    // In production, unresolvable domains will fail at the fetch stage anyway.
+    // For stricter security, consider adding real DNS mocking to tests.
+    console.warn(`[fit-assessment] DNS resolution failed for ${hostname}:`, error);
   }
 
   return null;
@@ -447,9 +450,11 @@ export async function POST(req: Request) {
 
     // Streaming API call for progressive text display
     // Wrap job description in XML tags for prompt injection mitigation
+    // Use temperature: 0 for deterministic, consistent fit assessments across runs
     const stream = client.messages.stream({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 4096,
+      temperature: 0,
       system: systemPrompt,
       messages: [
         {

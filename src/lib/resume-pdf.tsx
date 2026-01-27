@@ -24,7 +24,7 @@ import {
   Link,
 } from '@react-pdf/renderer';
 
-import type { ResumeAnalysisResult, ProposedChange } from '@/lib/types/resume-generation';
+import type { ResumeAnalysisResult, ProposedChange, SkillsReorder } from '@/lib/types/resume-generation';
 
 // Resume data structure (matches resume-full.json)
 export interface ResumeData {
@@ -239,16 +239,60 @@ interface ResumePDFProps {
   data: ResumeData;
   analysis: ResumeAnalysisResult;
   acceptedIndices: Set<number>;
+  effectiveChanges?: ProposedChange[];
   showFooter?: boolean;
 }
 
 /**
- * Apply accepted changes to resume content
+ * Normalize company/category name for matching (remove special chars, lowercase)
+ */
+function normalizeForMatching(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Escape special regex characters in a string
+ */
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Perform targeted string replacement.
+ * Replaces `original` with `modified` within `content`.
+ * Falls back to `modified` if `original` not found (backward compatibility).
+ */
+function targetedReplace(content: string, original: string, modified: string): string {
+  if (!original || !content) {
+    return modified; // Fallback for edge cases
+  }
+
+  // Try exact replacement first
+  if (content.includes(original)) {
+    return content.replace(original, modified);
+  }
+
+  // Try case-insensitive replacement
+  const regex = new RegExp(escapeRegExp(original), 'i');
+  if (regex.test(content)) {
+    return content.replace(regex, modified);
+  }
+
+  // Fallback: if original not found, return modified as-is
+  // This maintains backward compatibility with changes that expect full replacement
+  return modified;
+}
+
+/**
+ * Apply accepted changes to resume content.
+ * Handles summary, experience bullets, skills, and education sections.
+ * Also applies skills reordering if provided.
  */
 function applyChanges(
   resume: ResumeData,
   changes: ProposedChange[],
-  acceptedIndices: Set<number>
+  acceptedIndices: Set<number>,
+  skillsReorder?: SkillsReorder
 ): ResumeData {
   const result = JSON.parse(JSON.stringify(resume)) as ResumeData;
 
@@ -256,27 +300,129 @@ function applyChanges(
     if (!acceptedIndices.has(index)) return;
 
     if (change.section === 'summary') {
-      result.summary = change.modified;
+      // Targeted replacement within summary
+      result.summary = targetedReplace(result.summary, change.original, change.modified);
+
     } else if (change.section.startsWith('experience.')) {
       // Parse section like "experience.verily.bullet1"
       const parts = change.section.split('.');
       if (parts.length >= 3) {
-        const companyKey = parts[1].toLowerCase();
+        const companyKey = parts[1];
         const bulletMatch = parts[2].match(/bullet(\d+)/);
+        const normalizedKey = normalizeForMatching(companyKey);
 
-        const expIndex = result.experience.findIndex(
-          (exp) => exp.company.toLowerCase().includes(companyKey)
-        );
+        // Find experience with normalized matching for robustness
+        const expIndex = result.experience.findIndex((exp) => {
+          const normalizedExp = normalizeForMatching(exp.company);
+          return normalizedExp.includes(normalizedKey) || normalizedKey.includes(normalizedExp);
+        });
 
         if (expIndex >= 0 && bulletMatch) {
           const bulletIndex = parseInt(bulletMatch[1], 10) - 1;
           if (bulletIndex >= 0 && bulletIndex < result.experience[expIndex].responsibilities.length) {
-            result.experience[expIndex].responsibilities[bulletIndex] = change.modified;
+            // Targeted replacement within bullet
+            result.experience[expIndex].responsibilities[bulletIndex] = targetedReplace(
+              result.experience[expIndex].responsibilities[bulletIndex],
+              change.original,
+              change.modified
+            );
+          }
+        }
+      }
+
+    } else if (change.section.startsWith('skills.')) {
+      // Parse section like "skills.technical" or "skills.leadership"
+      const parts = change.section.split('.');
+      if (parts.length >= 2) {
+        const categoryKey = normalizeForMatching(parts[1]);
+        const skillIndex = result.skills.findIndex(
+          (s) => normalizeForMatching(s.category).includes(categoryKey)
+        );
+        if (skillIndex >= 0) {
+          const currentItems = result.skills[skillIndex].items;
+
+          // Check if original is a partial phrase within an item (targeted replacement)
+          // vs a full item or list (full replacement)
+          const itemIndex = currentItems.findIndex(
+            (item) => item.includes(change.original) ||
+                      item.toLowerCase().includes(change.original.toLowerCase())
+          );
+
+          // Parse modified to see if it's a list
+          const newItems = change.modified.split(/[|,]/).map((s) => s.trim()).filter(Boolean);
+
+          if (itemIndex >= 0 && newItems.length === 1) {
+            // Found original in an item AND modified is single item - do targeted replacement
+            currentItems[itemIndex] = targetedReplace(
+              currentItems[itemIndex],
+              change.original,
+              change.modified
+            );
+          } else if (newItems.length > 0) {
+            // Either original not found OR modified is a full list - replace entire items array
+            // This handles: full list changes, new skills, reordering
+            result.skills[skillIndex].items = newItems;
+          }
+        }
+      }
+
+    } else if (change.section.startsWith('education.')) {
+      // Parse section like "education.mba.focus" or "education.0.focus"
+      const parts = change.section.split('.');
+      if (parts.length >= 3) {
+        const eduKey = parts[1];
+        const field = parts[2];
+
+        // Try matching by degree keyword or by index
+        let eduIndex = parseInt(eduKey, 10);
+        if (isNaN(eduIndex)) {
+          eduIndex = result.education.findIndex(
+            (e) => normalizeForMatching(e.degree).includes(normalizeForMatching(eduKey))
+          );
+        }
+
+        if (eduIndex >= 0 && eduIndex < result.education.length) {
+          if (field === 'focus') {
+            // Targeted replacement within focus
+            result.education[eduIndex].focus = targetedReplace(
+              result.education[eduIndex].focus || '',
+              change.original,
+              change.modified
+            );
+          } else if (field === 'degree') {
+            // Targeted replacement within degree
+            result.education[eduIndex].degree = targetedReplace(
+              result.education[eduIndex].degree,
+              change.original,
+              change.modified
+            );
           }
         }
       }
     }
   });
+
+  // Apply skills reordering if provided
+  if (skillsReorder && skillsReorder.after.length > 0) {
+    const reorderedSkills: typeof result.skills = [];
+    const remainingSkills = [...result.skills];
+
+    // Add skills in the new order
+    for (const categoryName of skillsReorder.after) {
+      const normalizedTarget = normalizeForMatching(categoryName);
+      const idx = remainingSkills.findIndex(
+        (s) => normalizeForMatching(s.category).includes(normalizedTarget) ||
+               normalizedTarget.includes(normalizeForMatching(s.category))
+      );
+      if (idx >= 0) {
+        reorderedSkills.push(remainingSkills.splice(idx, 1)[0]);
+      }
+    }
+
+    // Append any skills not in the reorder list
+    reorderedSkills.push(...remainingSkills);
+    result.skills = reorderedSkills;
+  }
 
   return result;
 }
@@ -306,9 +452,11 @@ function expandDegree(degree: string): string {
  * - Education: Multi-line format
  * - Skills: "KEY SKILLS" title
  */
-function ResumePDF({ data, analysis, acceptedIndices, showFooter = false }: ResumePDFProps) {
-  const resume = applyChanges(data, analysis.proposedChanges, acceptedIndices);
-  const acceptedChanges = analysis.proposedChanges.filter((_, i) => acceptedIndices.has(i));
+function ResumePDF({ data, analysis, acceptedIndices, effectiveChanges, showFooter = false }: ResumePDFProps) {
+  // Use effectiveChanges if provided (contains user edits), otherwise fall back to proposedChanges
+  const changesToApply = effectiveChanges ?? analysis.proposedChanges;
+  const resume = applyChanges(data, changesToApply, acceptedIndices, analysis.skillsReorder);
+  const acceptedChanges = changesToApply.filter((_, i) => acceptedIndices.has(i));
 
   return (
     <Document>
@@ -368,9 +516,9 @@ function ResumePDF({ data, analysis, acceptedIndices, showFooter = false }: Resu
             {job.description && (
               <Text style={styles.jobDescription}>{job.description}</Text>
             )}
-            {/* Bullets */}
+            {/* Bullets - wrap={true} allows long text to flow to next line */}
             {job.responsibilities.map((responsibility, bulletIndex) => (
-              <View key={bulletIndex} style={styles.bulletContainer} wrap={false}>
+              <View key={bulletIndex} style={styles.bulletContainer} wrap={true}>
                 <Text style={styles.bullet}>•</Text>
                 <Text style={styles.bulletText}>{responsibility}</Text>
               </View>
@@ -418,15 +566,46 @@ function ResumePDF({ data, analysis, acceptedIndices, showFooter = false }: Resu
 
 /**
  * Generate a PDF blob from resume data and analysis results
+ * @param effectiveChanges Optional array of changes with user edits applied. If not provided, uses proposedChanges from analysis.
+ * @throws Error if PDF generation fails or produces empty output
  */
 export async function generateResumePdf(
   data: ResumeData,
   analysis: ResumeAnalysisResult,
-  acceptedIndices: Set<number>
+  acceptedIndices: Set<number>,
+  effectiveChanges?: ProposedChange[]
 ): Promise<Blob> {
-  const pdfDocument = <ResumePDF data={data} analysis={analysis} acceptedIndices={acceptedIndices} />;
-  const blob = await pdf(pdfDocument).toBlob();
-  return blob;
+  try {
+    const pdfDocument = <ResumePDF data={data} analysis={analysis} acceptedIndices={acceptedIndices} effectiveChanges={effectiveChanges} />;
+    // Use toString() to disable PDF compression (calls render(false) internally)
+    // Note: toString() is deprecated but functional - gives uncompressed output
+    // TODO: Monitor @react-pdf/renderer releases for non-deprecated alternative
+    // See: https://github.com/diegomura/react-pdf/issues - no official replacement yet
+    const pdfString = await pdf(pdfDocument).toString();
+    const blob = new Blob([pdfString], { type: 'application/pdf' });
+
+    if (blob.size === 0) {
+      throw new Error('Generated PDF is empty');
+    }
+
+    return blob;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(`PDF generation failed: ${message}`);
+  }
+}
+
+/**
+ * Apply changes to resume data and return the modified result.
+ * Exported for use in logging the optimized resume JSON.
+ */
+export function applyChangesToResume(
+  resume: ResumeData,
+  changes: ProposedChange[],
+  acceptedIndices: Set<number>,
+  skillsReorder?: SkillsReorder
+): ResumeData {
+  return applyChanges(resume, changes, acceptedIndices, skillsReorder);
 }
 
 /**

@@ -1,34 +1,113 @@
 'use client';
 
 import { useState } from 'react';
-import type { ProposedChange, Gap } from '@/lib/types/resume-generation';
+import type { ProposedChange, Gap, ReviewedChange } from '@/lib/types/resume-generation';
 
 interface ChangePreviewPanelProps {
   changes: ProposedChange[];
   gaps: Gap[];
-  onAcceptChange: (index: number) => void;
-  onRejectChange: (index: number) => void;
-  acceptedIndices: Set<number>;
-  rejectedIndices: Set<number>;
+  reviewedChanges: Map<number, ReviewedChange>;
+  onAcceptChange: (index: number, editedText?: string) => void;
+  onRejectChange: (index: number, feedback?: string) => void;
+  onRevertChange: (index: number) => void;
+  onModifyChange?: (index: number, prompt: string) => Promise<void>;
 }
+
+type CardMode = 'view' | 'edit' | 'reject' | 'modify';
 
 function ChangeCard({
   change,
-  isAccepted,
-  isRejected,
+  index,
+  review,
   onAccept,
   onReject,
+  onRevert,
+  onModify,
 }: {
   change: ProposedChange;
-  isAccepted: boolean;
-  isRejected: boolean;
-  onAccept: () => void;
-  onReject: () => void;
+  index: number;
+  review?: ReviewedChange;
+  onAccept: (editedText?: string) => void;
+  onReject: (feedback?: string) => void;
+  onRevert: () => void;
+  onModify?: (prompt: string) => Promise<void>;
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
+  const [mode, setMode] = useState<CardMode>('view');
+  const [editText, setEditText] = useState(change.modified);
+  const [feedback, setFeedback] = useState('');
+  const [modifyPrompt, setModifyPrompt] = useState('');
+  const [isModifying, setIsModifying] = useState(false);
+  const [modifyError, setModifyError] = useState<string | null>(null);
+
+  const status = review?.status ?? 'pending';
+  const isAccepted = status === 'accepted';
+  const isRejected = status === 'rejected';
+  const isPending = status === 'pending';
+  const wasEdited = review?.editedText !== undefined;
+
+  const handleEditClick = () => {
+    setEditText(change.modified);
+    setMode('edit');
+  };
+
+  const handleSaveEdit = () => {
+    onAccept(editText);
+    setMode('view');
+  };
+
+  const handleCancelEdit = () => {
+    setEditText(change.modified);
+    setMode('view');
+  };
+
+  const handleRejectClick = () => {
+    setFeedback('');
+    setMode('reject');
+  };
+
+  const handleConfirmReject = () => {
+    onReject(feedback || undefined);
+    setMode('view');
+  };
+
+  const handleCancelReject = () => {
+    setFeedback('');
+    setMode('view');
+  };
+
+  const handleModifyClick = () => {
+    setModifyPrompt('');
+    setModifyError(null);
+    setMode('modify');
+  };
+
+  const handleSubmitModify = async () => {
+    if (!onModify || !modifyPrompt.trim()) return;
+
+    setIsModifying(true);
+    setModifyError(null);
+
+    try {
+      await onModify(modifyPrompt);
+      setMode('view');
+      setModifyPrompt('');
+    } catch (err) {
+      setModifyError(err instanceof Error ? err.message : 'Failed to modify change');
+    } finally {
+      setIsModifying(false);
+    }
+  };
+
+  const handleCancelModify = () => {
+    setModifyPrompt('');
+    setModifyError(null);
+    setMode('view');
+  };
 
   return (
     <div
+      data-testid={`change-card-${index}`}
       className={`rounded-lg border ${
         isAccepted
           ? 'border-green-500/50 bg-green-500/5'
@@ -40,6 +119,7 @@ function ChangeCard({
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         aria-expanded={isExpanded}
+        aria-label={`Toggle change details for ${change.section}`}
         className="flex w-full items-center justify-between p-4 text-left"
       >
         <div className="flex items-center gap-3">
@@ -54,9 +134,19 @@ function ChangeCard({
               Accepted
             </span>
           )}
+          {isAccepted && wasEdited && (
+            <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
+              Edited
+            </span>
+          )}
           {isRejected && (
             <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-400">
               Rejected
+            </span>
+          )}
+          {isPending && (
+            <span className="rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs text-yellow-400">
+              Pending
             </span>
           )}
         </div>
@@ -81,22 +171,68 @@ function ChangeCard({
               </p>
             </div>
 
-            {/* Modified */}
-            <div>
-              <p className="mb-1 text-xs font-medium text-green-400">Proposed</p>
-              <p className="rounded-md bg-green-500/5 p-3 text-sm text-[var(--color-text)]">
-                {change.modified}
-              </p>
-            </div>
+            {/* Modified / Edit Mode */}
+            {mode === 'edit' ? (
+              <div>
+                <label htmlFor={`edit-textarea-${index}`} className="mb-1 block text-xs font-medium text-blue-400">
+                  Your Edit
+                </label>
+                <textarea
+                  id={`edit-textarea-${index}`}
+                  value={editText}
+                  onChange={(e) => setEditText(e.target.value)}
+                  aria-label="Edit proposed change text"
+                  className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-3 text-sm text-[var(--color-text)] focus:border-[var(--color-accent)] focus:outline-none"
+                  rows={4}
+                />
+              </div>
+            ) : (
+              <div>
+                <p className="mb-1 text-xs font-medium text-green-400">Proposed</p>
+                <p className="rounded-md bg-green-500/5 p-3 text-sm text-[var(--color-text)]">
+                  {wasEdited && isAccepted ? review?.editedText : change.modified}
+                </p>
+              </div>
+            )}
 
-            {/* Reason */}
-            <div>
-              <p className="mb-1 text-xs font-medium text-[var(--color-text-muted)]">Reason</p>
-              <p className="text-sm text-[var(--color-text-muted)]">{change.reason}</p>
-            </div>
+            {/* Rejected feedback display */}
+            {isRejected && review?.feedback && mode === 'view' && (
+              <div>
+                <p className="mb-1 text-xs font-medium text-red-400">Feedback</p>
+                <p className="rounded-md bg-red-500/5 p-3 text-sm text-[var(--color-text-muted)]">
+                  {review.feedback}
+                </p>
+              </div>
+            )}
 
-            {/* Keywords Added */}
-            {change.keywordsAdded.length > 0 && (
+            {/* Reject feedback input */}
+            {mode === 'reject' && (
+              <div>
+                <label htmlFor={`reject-feedback-${index}`} className="mb-1 block text-xs font-medium text-red-400">
+                  Rejection Feedback
+                </label>
+                <input
+                  id={`reject-feedback-${index}`}
+                  type="text"
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                  placeholder="Optional feedback for why you're rejecting this change..."
+                  aria-label="Rejection feedback (optional)"
+                  className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-3 text-sm text-[var(--color-text)] focus:border-red-500 focus:outline-none"
+                />
+              </div>
+            )}
+
+            {/* Reason (only in view mode for pending) */}
+            {mode === 'view' && (
+              <div>
+                <p className="mb-1 text-xs font-medium text-[var(--color-text-muted)]">Reason</p>
+                <p className="text-sm text-[var(--color-text-muted)]">{change.reason}</p>
+              </div>
+            )}
+
+            {/* Keywords Added (only in view mode for pending) */}
+            {mode === 'view' && change.keywordsAdded.length > 0 && (
               <div>
                 <p className="mb-1 text-xs font-medium text-[var(--color-text-muted)]">Keywords Added</p>
                 <div className="flex flex-wrap gap-1">
@@ -113,19 +249,125 @@ function ChangeCard({
             )}
 
             {/* Actions */}
-            {!isAccepted && !isRejected && (
+            {isPending && mode === 'view' && (
               <div className="flex gap-2 pt-2">
                 <button
-                  onClick={onAccept}
+                  onClick={() => onAccept(undefined)}
                   className="flex-1 rounded-md bg-green-500 px-3 py-2 text-sm font-medium text-white hover:bg-green-600"
                 >
                   Accept
                 </button>
                 <button
-                  onClick={onReject}
+                  onClick={handleEditClick}
+                  className="flex-1 rounded-md border border-[var(--color-accent)] px-3 py-2 text-sm font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10"
+                >
+                  Edit & Accept
+                </button>
+                {onModify && (
+                  <button
+                    onClick={handleModifyClick}
+                    className="flex-1 rounded-md border border-purple-500 px-3 py-2 text-sm font-medium text-purple-400 hover:bg-purple-500/10"
+                  >
+                    Modify
+                  </button>
+                )}
+                <button
+                  onClick={handleRejectClick}
                   className="flex-1 rounded-md border border-[var(--color-border)] px-3 py-2 text-sm font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-bg-alt)]"
                 >
                   Reject
+                </button>
+              </div>
+            )}
+
+            {/* Edit mode actions */}
+            {mode === 'edit' && (
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={handleSaveEdit}
+                  className="flex-1 rounded-md bg-green-500 px-3 py-2 text-sm font-medium text-white hover:bg-green-600"
+                >
+                  Save & Accept
+                </button>
+                <button
+                  onClick={handleCancelEdit}
+                  className="flex-1 rounded-md border border-[var(--color-border)] px-3 py-2 text-sm font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-bg-alt)]"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
+            {/* Reject mode actions */}
+            {mode === 'reject' && (
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={handleConfirmReject}
+                  className="flex-1 rounded-md bg-red-500 px-3 py-2 text-sm font-medium text-white hover:bg-red-600"
+                >
+                  Confirm Reject
+                </button>
+                <button
+                  onClick={handleCancelReject}
+                  className="flex-1 rounded-md border border-[var(--color-border)] px-3 py-2 text-sm font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-bg-alt)]"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
+            {/* Modify mode UI */}
+            {mode === 'modify' && (
+              <div className="space-y-3 pt-2">
+                <div>
+                  <label htmlFor={`modify-textarea-${index}`} className="mb-1 block text-xs font-medium text-purple-400">
+                    Modification Request
+                  </label>
+                  <textarea
+                    id={`modify-textarea-${index}`}
+                    value={modifyPrompt}
+                    onChange={(e) => setModifyPrompt(e.target.value)}
+                    placeholder="Describe how to modify this change (e.g., 'Make it more concise', 'Add more metrics', 'Use different keywords')..."
+                    aria-label="Describe how to modify this change"
+                    aria-describedby={modifyError ? `modify-error-${index}` : undefined}
+                    aria-disabled={isModifying}
+                    className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-3 text-sm text-[var(--color-text)] focus:border-purple-500 focus:outline-none"
+                    rows={3}
+                    disabled={isModifying}
+                  />
+                </div>
+                {modifyError && (
+                  <p id={`modify-error-${index}`} role="alert" aria-live="assertive" className="text-sm text-red-400">
+                    {modifyError}
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSubmitModify}
+                    disabled={isModifying || !modifyPrompt.trim()}
+                    className="flex-1 rounded-md bg-purple-500 px-3 py-2 text-sm font-medium text-white hover:bg-purple-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isModifying ? 'Revising...' : 'Submit'}
+                  </button>
+                  <button
+                    onClick={handleCancelModify}
+                    disabled={isModifying}
+                    className="flex-1 rounded-md border border-[var(--color-border)] px-3 py-2 text-sm font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-bg-alt)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Revert action for accepted/rejected */}
+            {(isAccepted || isRejected) && mode === 'view' && (
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={onRevert}
+                  className="flex-1 rounded-md border border-[var(--color-border)] px-3 py-2 text-sm font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-bg-alt)]"
+                >
+                  Revert to Pending
                 </button>
               </div>
             )}
@@ -184,30 +426,46 @@ function GapCard({ gap }: { gap: Gap }) {
 export function ChangePreviewPanel({
   changes,
   gaps,
+  reviewedChanges,
   onAcceptChange,
   onRejectChange,
-  acceptedIndices,
-  rejectedIndices,
+  onRevertChange,
+  onModifyChange,
 }: ChangePreviewPanelProps) {
-  const acceptAll = () => {
-    changes.forEach((_, index) => {
-      if (!acceptedIndices.has(index) && !rejectedIndices.has(index)) {
-        onAcceptChange(index);
-      }
-    });
-  };
-
-  const rejectAll = () => {
-    changes.forEach((_, index) => {
-      if (!acceptedIndices.has(index) && !rejectedIndices.has(index)) {
-        onRejectChange(index);
-      }
-    });
-  };
-
   const pendingCount = changes.filter(
-    (_, i) => !acceptedIndices.has(i) && !rejectedIndices.has(i)
+    (_, i) => !reviewedChanges.has(i) || reviewedChanges.get(i)?.status === 'pending'
   ).length;
+
+  const reviewedCount = changes.filter(
+    (_, i) => reviewedChanges.has(i) && reviewedChanges.get(i)?.status !== 'pending'
+  ).length;
+
+  const acceptAllPending = () => {
+    changes.forEach((_, index) => {
+      const review = reviewedChanges.get(index);
+      if (!review || review.status === 'pending') {
+        onAcceptChange(index, undefined);
+      }
+    });
+  };
+
+  const rejectAllPending = () => {
+    changes.forEach((_, index) => {
+      const review = reviewedChanges.get(index);
+      if (!review || review.status === 'pending') {
+        onRejectChange(index, undefined);
+      }
+    });
+  };
+
+  const revertAll = () => {
+    changes.forEach((_, index) => {
+      const review = reviewedChanges.get(index);
+      if (review && review.status !== 'pending') {
+        onRevertChange(index);
+      }
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -217,22 +475,32 @@ export function ChangePreviewPanel({
           <h3 className="text-lg font-semibold text-[var(--color-text)]">
             Proposed Changes ({changes.length})
           </h3>
-          {pendingCount > 0 && (
-            <div className="flex gap-2">
+          <div className="flex gap-2">
+            {pendingCount > 0 && (
+              <>
+                <button
+                  onClick={acceptAllPending}
+                  className="rounded-md bg-green-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-600"
+                >
+                  Accept All Pending
+                </button>
+                <button
+                  onClick={rejectAllPending}
+                  className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-sm font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-bg-alt)]"
+                >
+                  Reject All Pending
+                </button>
+              </>
+            )}
+            {reviewedCount > 0 && (
               <button
-                onClick={acceptAll}
-                className="rounded-md bg-green-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-600"
-              >
-                Accept All
-              </button>
-              <button
-                onClick={rejectAll}
+                onClick={revertAll}
                 className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-sm font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-bg-alt)]"
               >
-                Reject All
+                Revert All
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         <div className="space-y-3">
@@ -240,10 +508,12 @@ export function ChangePreviewPanel({
             <ChangeCard
               key={index}
               change={change}
-              isAccepted={acceptedIndices.has(index)}
-              isRejected={rejectedIndices.has(index)}
-              onAccept={() => onAcceptChange(index)}
-              onReject={() => onRejectChange(index)}
+              index={index}
+              review={reviewedChanges.get(index)}
+              onAccept={(editedText) => onAcceptChange(index, editedText)}
+              onReject={(feedback) => onRejectChange(index, feedback)}
+              onRevert={() => onRevertChange(index)}
+              onModify={onModifyChange ? (prompt) => onModifyChange(index, prompt) : undefined}
             />
           ))}
         </div>

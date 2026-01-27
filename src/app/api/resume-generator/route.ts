@@ -8,6 +8,13 @@ import {
   getClientIp,
   RATE_LIMIT_CONFIGS,
 } from '@/lib/rate-limit';
+import {
+  calculateATSScore,
+  resumeDataToText,
+  type ATSScore,
+  type ResumeData as ATSResumeData,
+} from '@/lib/ats-scorer';
+import { resumeData } from '@/lib/resume-data';
 // ResumeAnalysisResult parsing happens client-side for streaming support
 
 // Dynamic import for DNS to allow testing without mocking
@@ -325,6 +332,47 @@ async function fetchWithSizeLimit(
 }
 
 /**
+ * Build context about pre-calculated ATS score for Claude.
+ * This provides Claude with a deterministic baseline to work from.
+ */
+function buildScoreContext(atsScore: ATSScore): string {
+  const { breakdown, details } = atsScore;
+
+  return `<pre_calculated_ats_score>
+## IMPORTANT: Pre-Calculated ATS Score
+
+The system has calculated a deterministic baseline ATS score for this job description.
+Use this score as your "currentScore" in the response. DO NOT recalculate it.
+
+### Current Score: ${atsScore.total}/100
+
+### Breakdown:
+- Keyword Relevance: ${breakdown.keywordRelevance}/40
+- Skills Quality: ${breakdown.skillsQuality}/25
+- Experience Alignment: ${breakdown.experienceAlignment}/20
+- Format Parseability: ${breakdown.formatParseability}/15
+
+### Keyword Analysis:
+- Match Rate: ${details.matchRate}%
+- Keyword Density: ${details.keywordDensity}%
+- Matched Keywords (${details.matchedKeywords.length}): ${details.matchedKeywords.slice(0, 15).join(', ')}${details.matchedKeywords.length > 15 ? '...' : ''}
+- Missing Keywords (${details.missingKeywords.length}): ${details.missingKeywords.join(', ')}
+
+### Your Task:
+1. Use the currentScore values EXACTLY as provided above
+2. Focus on incorporating MISSING KEYWORDS naturally
+3. Propose changes that will increase the score toward 90+
+4. Calculate optimizedScore based on your proposed changes
+5. Each change should have an impactPoints estimate
+
+### Optimization Targets:
+- Target score: 90+ (if achievable with factual content)
+- If 90+ not achievable, explain the gap and maximize within bounds
+- Priority: Missing keywords > Keyword placement > Action verbs
+</pre_calculated_ats_score>`;
+}
+
+/**
  * Runtime fetch for the resume generator prompt (development fallback)
  */
 async function getResumeGeneratorPrompt(): Promise<string> {
@@ -496,31 +544,80 @@ export async function POST(req: Request) {
     const systemPrompt = await getResumeGeneratorPrompt();
     console.log('[resume-generator] System prompt loaded, length:', systemPrompt.length);
 
+    // Calculate deterministic ATS score before calling Claude
+    // This provides a consistent baseline score that Claude will use for optimization
+    console.log('[resume-generator] Calculating deterministic ATS score...');
+    const atsResumeData: ATSResumeData = {
+      title: resumeData.title,
+      yearsExperience: 15, // Based on resume data (2009-2024)
+      teamSize: '13 engineers',
+      skills: resumeData.skills.flatMap(s => s.items),
+      skillsByCategory: resumeData.skills,
+      experiences: resumeData.experiences.map(e => ({
+        title: e.title,
+        company: e.company,
+        highlights: e.highlights,
+      })),
+    };
+    const resumeText = resumeDataToText({
+      ...atsResumeData,
+      name: resumeData.name,
+      summary: resumeData.brandingStatement,
+      education: resumeData.education.map(e => ({
+        degree: e.degree,
+        institution: e.institution,
+      })),
+    });
+    const atsScore = calculateATSScore({
+      jobDescription: jobDescriptionText,
+      resumeText,
+      resumeData: atsResumeData,
+    });
+    console.log('[resume-generator] Deterministic ATS score:', atsScore.total);
+
     // Log audit event for generation started
     await logAdminEvent('resume_generation_started', {
       inputType: wasUrl ? 'url' : 'text',
       extractedUrl: extractedUrl || undefined,
       jobDescriptionLength: jobDescriptionText.length,
+      deterministicScore: atsScore.total,
     }, ip);
 
     console.log('[resume-generator] Calling Anthropic API (streaming)...');
 
+    // Build the user message with pre-calculated score
+    const scoreContext = buildScoreContext(atsScore);
+
     // Streaming API call for progressive JSON output
     // Wrap job description in XML tags for prompt injection mitigation
+    // Use temperature: 0 for deterministic, consistent scoring across runs
     const stream = client.messages.stream({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 8192,
+      temperature: 0,
       system: systemPrompt,
       messages: [
         {
           role: 'user',
-          content: `Analyze this job description and provide ATS optimization recommendations for the resume. Return ONLY valid JSON, no markdown or code blocks.\n\n<job_description>${jobDescriptionText}</job_description>`,
+          content: `${scoreContext}\n\nAnalyze this job description and provide ATS optimization recommendations for the resume. Return ONLY valid JSON, no markdown or code blocks.\n\n<job_description>${jobDescriptionText}</job_description>`,
         },
       ],
     });
 
     // Return streaming response with metadata header
-    const metadataHeader = JSON.stringify({ wasUrl, extractedUrl });
+    // Include deterministic score for client-side use
+    const metadataHeader = JSON.stringify({
+      wasUrl,
+      extractedUrl,
+      deterministicScore: {
+        total: atsScore.total,
+        breakdown: atsScore.breakdown,
+        matchedKeywords: atsScore.details.matchedKeywords,
+        missingKeywords: atsScore.details.missingKeywords,
+        matchRate: atsScore.details.matchRate,
+        keywordDensity: atsScore.details.keywordDensity,
+      },
+    });
 
     return new Response(
       new ReadableStream({
