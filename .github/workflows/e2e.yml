@@ -22,7 +22,9 @@ jobs:
       - name: Detect deployment environment
         id: env
         run: |
-          if [ "${{ github.event.deployment_status.environment }}" = "Production" ]; then
+          env_name="${{ github.event.deployment_status.environment }}"
+          env_name_lower="$(echo "$env_name" | tr '[:upper:]' '[:lower:]')"
+          if [[ "$env_name_lower" =~ ^production ]]; then
             echo "is_production=true" >> $GITHUB_OUTPUT
           else
             echo "is_production=false" >> $GITHUB_OUTPUT
