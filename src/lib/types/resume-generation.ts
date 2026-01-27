@@ -46,6 +46,44 @@ export interface ProposedChange {
   impactPoints: number;
 }
 
+/**
+ * Status of a change during the review workflow.
+ * - pending: Not yet reviewed by user
+ * - accepted: User approved the change
+ * - rejected: User rejected the change
+ */
+export type ChangeStatus = 'pending' | 'accepted' | 'rejected';
+
+/**
+ * A proposed change with user review information.
+ * Tracks edits, feedback, and review timestamp.
+ */
+export interface ReviewedChange {
+  /** The original AI-proposed change */
+  originalChange: ProposedChange;
+  /** Current review status */
+  status: ChangeStatus;
+  /** User's edited version of the proposed text (if edited before accepting) */
+  editedText?: string;
+  /** User feedback when rejecting a change */
+  feedback?: string;
+  /** ISO timestamp of when the review decision was made */
+  reviewedAt?: string;
+}
+
+/**
+ * Extended change type for logging with edit/rejection tracking.
+ * Used when persisting generation logs.
+ */
+export interface LoggedChange extends ProposedChange {
+  /** Whether the user edited the proposed text before accepting */
+  wasEdited: boolean;
+  /** The original AI-proposed text if user edited it */
+  originalModified?: string;
+  /** User's feedback if this change was rejected */
+  rejectionFeedback?: string;
+}
+
 export interface Gap {
   /** The JD requirement that's not met */
   requirement: string;
@@ -360,4 +398,26 @@ export interface ResumeGeneratorGenerateResponse {
   pdfUrl: string;
   /** Generation log ID for future reference */
   generationId: string;
+}
+
+/**
+ * Request to modify a proposed change using AI.
+ * User provides feedback on how to revise the change.
+ */
+export interface ModifyChangeRequest {
+  /** The original AI-proposed change to modify */
+  originalChange: ProposedChange;
+  /** User's instructions on how to modify the change */
+  modifyPrompt: string;
+  /** Job description for context */
+  jobDescription: string;
+}
+
+/**
+ * Response from the modify-change API.
+ * Contains the revised change based on user feedback.
+ */
+export interface ModifyChangeResponse {
+  /** The AI-revised change */
+  revisedChange: ProposedChange;
 }

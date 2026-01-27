@@ -447,9 +447,11 @@ export async function POST(req: Request) {
 
     // Streaming API call for progressive text display
     // Wrap job description in XML tags for prompt injection mitigation
+    // Use temperature: 0 for deterministic, consistent fit assessments across runs
     const stream = client.messages.stream({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 4096,
+      temperature: 0,
       system: systemPrompt,
       messages: [
         {

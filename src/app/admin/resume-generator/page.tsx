@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { ResumeGeneratorForm } from '@/components/admin/ResumeGeneratorForm';
 import { CompatibilityScoreCard } from '@/components/admin/CompatibilityScoreCard';
 import { ChangePreviewPanel } from '@/components/admin/ChangePreviewPanel';
 import { trackEvent } from '@/lib/audit-client';
 import { generateJobId, extractDatePosted } from '@/lib/job-id';
-import type { ResumeAnalysisResult } from '@/lib/types/resume-generation';
+import type { ResumeAnalysisResult, ReviewedChange, ProposedChange, LoggedChange, ScoreBreakdown } from '@/lib/types/resume-generation';
 import type { ResumeData } from '@/lib/resume-pdf';
 
 // Dynamically import PDF generator to avoid SSR issues with @react-pdf/renderer
@@ -15,16 +15,66 @@ import type { ResumeData } from '@/lib/resume-pdf';
 const generateResumePdfDynamic = async (
   data: ResumeData,
   analysis: import('@/lib/types/resume-generation').ResumeAnalysisResult,
-  acceptedIndices: Set<number>
+  acceptedIndices: Set<number>,
+  effectiveChanges: ProposedChange[]
 ): Promise<Blob> => {
   const { generateResumePdf } = await import('@/lib/resume-pdf');
-  return generateResumePdf(data, analysis, acceptedIndices);
+  return generateResumePdf(data, analysis, acceptedIndices, effectiveChanges);
 };
 
 const getResumeFilenameDynamic = (companyName: string, roleTitle: string): string => {
   const sanitize = (str: string) => str.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '-');
   return `${sanitize(companyName)}-${sanitize(roleTitle)}.pdf`;
 };
+
+// Dynamically import applyChangesToResume for logging
+const applyChangesToResumeDynamic = async (
+  resume: ResumeData,
+  changes: ProposedChange[],
+  acceptedIndices: Set<number>,
+  skillsReorder?: import('@/lib/types/resume-generation').SkillsReorder
+): Promise<ResumeData> => {
+  const { applyChangesToResume } = await import('@/lib/resume-pdf');
+  return applyChangesToResume(resume, changes, acceptedIndices, skillsReorder);
+};
+
+/**
+ * Calculate a dynamic breakdown based on accepted changes.
+ * Maps change sections to breakdown categories and estimates impact.
+ */
+function calculateDynamicBreakdown(
+  currentBreakdown: ScoreBreakdown,
+  proposedChanges: ProposedChange[],
+  acceptedIndices: Set<number>
+): ScoreBreakdown {
+  // Start with current breakdown
+  const result = { ...currentBreakdown };
+
+  // Sum up impact points by category based on section
+  for (const [index, change] of proposedChanges.entries()) {
+    if (!acceptedIndices.has(index)) continue;
+
+    // Map section to breakdown category and distribute impact
+    if (change.section === 'summary') {
+      // Summary changes primarily affect keyword relevance
+      result.keywordRelevance = Math.min(40, result.keywordRelevance + Math.ceil(change.impactPoints * 0.7));
+      result.experienceAlignment = Math.min(20, result.experienceAlignment + Math.floor(change.impactPoints * 0.3));
+    } else if (change.section.startsWith('experience.')) {
+      // Experience bullets affect keyword relevance and alignment
+      result.keywordRelevance = Math.min(40, result.keywordRelevance + Math.ceil(change.impactPoints * 0.6));
+      result.experienceAlignment = Math.min(20, result.experienceAlignment + Math.floor(change.impactPoints * 0.4));
+    } else if (change.section.startsWith('skills.')) {
+      // Skills changes primarily affect skills quality
+      result.skillsQuality = Math.min(25, result.skillsQuality + Math.ceil(change.impactPoints * 0.8));
+      result.keywordRelevance = Math.min(40, result.keywordRelevance + Math.floor(change.impactPoints * 0.2));
+    } else if (change.section.startsWith('education.')) {
+      // Education changes affect alignment
+      result.experienceAlignment = Math.min(20, result.experienceAlignment + change.impactPoints);
+    }
+  }
+
+  return result;
+}
 
 type Phase = 'input' | 'analyzing' | 'preview' | 'generating' | 'complete';
 
@@ -33,8 +83,7 @@ export default function ResumeGeneratorPage() {
   const [error, setError] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<ResumeAnalysisResult | null>(null);
   const [jobDescription, setJobDescription] = useState<string>('');
-  const [acceptedIndices, setAcceptedIndices] = useState<Set<number>>(new Set());
-  const [rejectedIndices, setRejectedIndices] = useState<Set<number>>(new Set());
+  const [reviewedChanges, setReviewedChanges] = useState<Map<number, ReviewedChange>>(new Map());
   const [generatedPdfUrl, setGeneratedPdfUrl] = useState<string | null>(null);
   const [streamingText, setStreamingText] = useState<string>('');
   const [resumeData, setResumeData] = useState<ResumeData | null>(null);
@@ -46,6 +95,38 @@ export default function ResumeGeneratorPage() {
       .then((data) => setResumeData(data))
       .catch((err) => console.error('Failed to load resume data:', err));
   }, []);
+
+  // Derive acceptedIndices from reviewedChanges for backward compatibility
+  const acceptedIndices = useMemo(() =>
+    new Set(
+      [...reviewedChanges.entries()]
+        .filter(([, r]) => r.status === 'accepted')
+        .map(([i]) => i)
+    ),
+    [reviewedChanges]
+  );
+
+  // Derive rejectedIndices from reviewedChanges for backward compatibility
+  const rejectedIndices = useMemo(() =>
+    new Set(
+      [...reviewedChanges.entries()]
+        .filter(([, r]) => r.status === 'rejected')
+        .map(([i]) => i)
+    ),
+    [reviewedChanges]
+  );
+
+  // Effective changes with user edits applied (for PDF generation)
+  const effectiveChanges = useMemo(() =>
+    analysisResult?.proposedChanges.map((change, i) => {
+      const review = reviewedChanges.get(i);
+      if (review?.editedText && review.status === 'accepted') {
+        return { ...change, modified: review.editedText };
+      }
+      return change;
+    }) ?? [],
+    [analysisResult, reviewedChanges]
+  );
 
   const handleAnalyze = async (jd: string) => {
     setJobDescription(jd);
@@ -110,9 +191,8 @@ export default function ResumeGeneratorPage() {
       const result: ResumeAnalysisResult = JSON.parse(jsonText);
 
       setAnalysisResult(result);
-      // Pre-select all changes as accepted by default
-      setAcceptedIndices(new Set(result.proposedChanges.map((_: unknown, i: number) => i)));
-      setRejectedIndices(new Set());
+      // Initialize all changes as pending (not auto-accepted)
+      setReviewedChanges(new Map());
       setStreamingText('');
       setPhase('preview');
     } catch (err) {
@@ -123,23 +203,72 @@ export default function ResumeGeneratorPage() {
     }
   };
 
-  const handleAcceptChange = useCallback((index: number) => {
-    setAcceptedIndices((prev) => new Set([...prev, index]));
-    setRejectedIndices((prev) => {
-      const newSet = new Set(prev);
-      newSet.delete(index);
-      return newSet;
+  const handleAcceptChange = useCallback((index: number, editedText?: string) => {
+    if (!analysisResult) return;
+
+    setReviewedChanges((prev) => {
+      const newMap = new Map(prev);
+      newMap.set(index, {
+        originalChange: analysisResult.proposedChanges[index],
+        status: 'accepted',
+        editedText,
+        reviewedAt: new Date().toISOString(),
+      });
+      return newMap;
+    });
+  }, [analysisResult]);
+
+  const handleRejectChange = useCallback((index: number, feedback?: string) => {
+    if (!analysisResult) return;
+
+    setReviewedChanges((prev) => {
+      const newMap = new Map(prev);
+      newMap.set(index, {
+        originalChange: analysisResult.proposedChanges[index],
+        status: 'rejected',
+        feedback,
+        reviewedAt: new Date().toISOString(),
+      });
+      return newMap;
+    });
+  }, [analysisResult]);
+
+  const handleRevertChange = useCallback((index: number) => {
+    setReviewedChanges((prev) => {
+      const newMap = new Map(prev);
+      newMap.delete(index);
+      return newMap;
     });
   }, []);
 
-  const handleRejectChange = useCallback((index: number) => {
-    setRejectedIndices((prev) => new Set([...prev, index]));
-    setAcceptedIndices((prev) => {
-      const newSet = new Set(prev);
-      newSet.delete(index);
-      return newSet;
+  const handleModifyChange = useCallback(async (index: number, prompt: string) => {
+    if (!analysisResult) return;
+
+    const response = await fetch('/api/resume-generator/modify-change', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        originalChange: analysisResult.proposedChanges[index],
+        modifyPrompt: prompt,
+        jobDescription,
+      }),
     });
-  }, []);
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || 'Failed to modify change');
+    }
+
+    const { revisedChange } = await response.json();
+
+    // Update the analysis result with revised change
+    setAnalysisResult((prev) => {
+      if (!prev) return prev;
+      const newChanges = [...prev.proposedChanges];
+      newChanges[index] = revisedChange;
+      return { ...prev, proposedChanges: newChanges };
+    });
+  }, [analysisResult, jobDescription]);
 
   const handleGeneratePdf = async () => {
     if (!analysisResult || !resumeData) return;
@@ -150,7 +279,8 @@ export default function ResumeGeneratorPage() {
     try {
       // Generate PDF using @react-pdf/renderer (native text-based PDF)
       // Uses dynamic import to avoid SSR issues
-      const pdfBlob = await generateResumePdfDynamic(resumeData, analysisResult, acceptedIndices);
+      // Pass effective changes (with user edits applied)
+      const pdfBlob = await generateResumePdfDynamic(resumeData, analysisResult, acceptedIndices, effectiveChanges);
 
       // Upload PDF to blob storage
       const filename = getResumeFilenameDynamic(analysisResult.analysis.companyName, analysisResult.analysis.roleTitle);
@@ -176,15 +306,39 @@ export default function ResumeGeneratorPage() {
       const generationId = typeof crypto !== 'undefined' && crypto.randomUUID
         ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const acceptedChanges = analysisResult.proposedChanges.filter((_, i) =>
-        acceptedIndices.has(i)
-      );
-      const rejectedChanges = analysisResult.proposedChanges.filter((_, i) =>
-        rejectedIndices.has(i)
-      );
+
+      // Build logged changes with edit and rejection tracking
+      const acceptedLoggedChanges: LoggedChange[] = analysisResult.proposedChanges
+        .filter((_, i) => acceptedIndices.has(i))
+        .map((change, i) => {
+          // Find original index
+          const originalIndex = analysisResult.proposedChanges.indexOf(change);
+          const review = reviewedChanges.get(originalIndex);
+          const wasEdited = review?.editedText !== undefined;
+
+          return {
+            ...change,
+            modified: wasEdited ? review!.editedText! : change.modified,
+            wasEdited,
+            originalModified: wasEdited ? change.modified : undefined,
+          };
+        });
+
+      const rejectedLoggedChanges: LoggedChange[] = analysisResult.proposedChanges
+        .filter((_, i) => rejectedIndices.has(i))
+        .map((change) => {
+          const originalIndex = analysisResult.proposedChanges.indexOf(change);
+          const review = reviewedChanges.get(originalIndex);
+
+          return {
+            ...change,
+            wasEdited: false,
+            rejectionFeedback: review?.feedback,
+          };
+        });
 
       // Calculate optimized score based on accepted changes
-      const acceptedPoints = acceptedChanges.reduce((sum, c) => sum + c.impactPoints, 0);
+      const acceptedPoints = acceptedLoggedChanges.reduce((sum, c) => sum + c.impactPoints, 0);
       const optimizedScore = Math.min(
         100,
         analysisResult.currentScore.total + acceptedPoints
@@ -205,6 +359,21 @@ export default function ResumeGeneratorPage() {
       // Extract date posted from JD text (optional)
       const datePosted = extractDatePosted(jobDescription);
 
+      // Calculate the actual breakdown based on accepted changes
+      const actualBreakdown = calculateDynamicBreakdown(
+        analysisResult.currentScore.breakdown,
+        analysisResult.proposedChanges,
+        acceptedIndices
+      );
+
+      // Apply changes to get the optimized resume JSON for logging
+      const optimizedResumeJson = await applyChangesToResumeDynamic(
+        resumeData,
+        effectiveChanges,
+        acceptedIndices,
+        analysisResult.skillsReorder
+      );
+
       // Fire-and-forget logging - don't fail generation if logging fails
       fetch('/api/resume-generator/log', {
         method: 'POST',
@@ -222,13 +391,13 @@ export default function ResumeGeneratorPage() {
           estimatedCompatibility: {
             before: analysisResult.currentScore.total,
             after: optimizedScore,
-            breakdown: analysisResult.optimizedScore.breakdown,
+            breakdown: actualBreakdown,
           },
-          changesAccepted: acceptedChanges,
-          changesRejected: rejectedChanges,
+          changesAccepted: acceptedLoggedChanges,
+          changesRejected: rejectedLoggedChanges,
           gapsIdentified: analysisResult.gaps,
           pdfUrl,
-          optimizedResumeJson: {},
+          optimizedResumeJson,
         }),
       }).catch((err) => {
         console.error('[resume-generator] Failed to log generation:', err);
@@ -247,8 +416,7 @@ export default function ResumeGeneratorPage() {
     setError(null);
     setAnalysisResult(null);
     setJobDescription('');
-    setAcceptedIndices(new Set());
-    setRejectedIndices(new Set());
+    setReviewedChanges(new Map());
     setGeneratedPdfUrl(null);
     setStreamingText('');
   };
@@ -260,6 +428,16 @@ export default function ResumeGeneratorPage() {
         .filter((_, i) => acceptedIndices.has(i))
         .reduce((sum, c) => sum + c.impactPoints, 0)
     : 0;
+
+  // Calculate dynamic breakdown based on accepted changes
+  const projectedBreakdown = useMemo(() => {
+    if (!analysisResult) return null;
+    return calculateDynamicBreakdown(
+      analysisResult.currentScore.breakdown,
+      analysisResult.proposedChanges,
+      acceptedIndices
+    );
+  }, [analysisResult, acceptedIndices]);
 
   // Reusable action buttons component
   const ActionButtons = () => (
@@ -392,7 +570,7 @@ export default function ResumeGeneratorPage() {
             <CompatibilityScoreCard
               title="Projected Score"
               score={Math.min(100, projectedScore)}
-              breakdown={analysisResult.optimizedScore.breakdown}
+              breakdown={projectedBreakdown ?? analysisResult.optimizedScore.breakdown}
               assessment={`After ${acceptedIndices.size} accepted changes`}
             />
           </div>
@@ -402,10 +580,12 @@ export default function ResumeGeneratorPage() {
             <ChangePreviewPanel
               changes={analysisResult.proposedChanges}
               gaps={analysisResult.gaps}
+              reviewedChanges={reviewedChanges}
               onAcceptChange={handleAcceptChange}
               onRejectChange={handleRejectChange}
-              acceptedIndices={acceptedIndices}
-              rejectedIndices={rejectedIndices}
+              onRevertChange={handleRevertChange}
+              onModifyChange={handleModifyChange}
+              jobDescription={jobDescription}
             />
           </div>
 
@@ -494,4 +674,3 @@ export default function ResumeGeneratorPage() {
     </div>
   );
 }
-
