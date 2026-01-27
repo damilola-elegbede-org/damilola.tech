@@ -12,6 +12,7 @@ import { join } from 'path';
 import { createHash } from 'crypto';
 import { put } from '@vercel/blob';
 import * as dotenv from 'dotenv';
+import { isValidResumeFilename } from '../src/lib/content-utils';
 
 // Load environment variables from .env.local
 dotenv.config({ path: '.env.local' });
@@ -127,7 +128,7 @@ async function main() {
 
   for (const filename of pdfFiles) {
     // Validate filename contains only safe characters (allow spaces for resume name)
-    if (!/^[a-zA-Z0-9._\- ]+$/.test(filename)) {
+    if (!isValidResumeFilename(filename)) {
       console.error(`  [SKIP] ${filename}: Invalid filename characters`);
       errorCount++;
       continue;

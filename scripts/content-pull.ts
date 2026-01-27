@@ -132,7 +132,7 @@ async function main() {
     console.log(
       `\nNote: ${unknownCount} file(s) were not in the routing map and were placed using heuristics.`
     );
-    console.log('Consider updating FILE_ROUTING in scripts/content-pull.ts if needed.');
+    console.log('Consider updating FILE_ROUTING in src/lib/content-utils.ts if needed.');
   }
 }
 

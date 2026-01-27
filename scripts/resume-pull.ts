@@ -10,6 +10,7 @@ import { mkdir, writeFile } from 'fs/promises';
 import { join, basename } from 'path';
 import { list } from '@vercel/blob';
 import * as dotenv from 'dotenv';
+import { isValidResumeFilename } from '../src/lib/content-utils';
 
 // Load environment variables from .env.local
 dotenv.config({ path: '.env.local' });
@@ -98,7 +99,7 @@ async function main() {
     const filename = basename(rawFilename); // Prevent path traversal
 
     // Validate filename (allow spaces for resume name)
-    if (!/^[a-zA-Z0-9._\- ]+$/.test(filename)) {
+    if (!isValidResumeFilename(filename)) {
       console.error(`  [SKIP] ${rawFilename}: Invalid filename characters`);
       errorCount++;
       continue;
