@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { formatNumber } from '@/lib/format-number';
+import { truncateSessionId } from '@/lib/session';
 import { formatInMT } from '@/lib/timezone';
 
 interface SessionData {
@@ -59,22 +60,6 @@ const ITEMS_PER_PAGE = 20;
 
 function formatCurrency(value: number): string {
   return `$${value.toFixed(2)}`;
-}
-
-function truncateSessionId(sessionId: string): string {
-  // Known prefixed patterns - show prefix + first 8 chars of UUID
-  const knownPrefixes = ['chat-', 'fit-assessment-', 'resume-generator-'];
-  for (const prefix of knownPrefixes) {
-    if (sessionId.startsWith(prefix)) {
-      return sessionId.length <= 30 ? sessionId : `${sessionId.slice(0, prefix.length + 8)}...`;
-    }
-  }
-  // Legacy anonymous patterns
-  if (sessionId === 'anonymous') return sessionId;
-  if (sessionId.endsWith('-anonymous') && sessionId.length <= 30) return sessionId;
-  // Plain UUIDs
-  if (sessionId.length <= 20) return sessionId;
-  return `${sessionId.slice(0, 16)}...`;
 }
 
 export default function UsagePage() {

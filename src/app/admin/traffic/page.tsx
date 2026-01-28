@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { formatNumber } from '@/lib/format-number';
+import { truncateSessionId } from '@/lib/session';
 import { formatInMT } from '@/lib/timezone';
 
 interface TrafficBreakdown {
@@ -75,22 +76,6 @@ function getPresetDates(preset: '7d' | '30d' | '90d'): { start: string; end: str
     start: formatDateForInput(start),
     end: formatDateForInput(end),
   };
-}
-
-function truncateSessionId(sessionId: string): string {
-  // Known prefixed patterns - show prefix + first 8 chars of UUID
-  const knownPrefixes = ['chat-', 'fit-assessment-', 'resume-generator-'];
-  for (const prefix of knownPrefixes) {
-    if (sessionId.startsWith(prefix)) {
-      return sessionId.length <= 30 ? sessionId : `${sessionId.slice(0, prefix.length + 8)}...`;
-    }
-  }
-  // Legacy anonymous patterns
-  if (sessionId === 'anonymous') return sessionId;
-  if (sessionId.endsWith('-anonymous') && sessionId.length <= 30) return sessionId;
-  // Plain UUIDs or short strings
-  if (sessionId.length <= 12) return sessionId;
-  return `${sessionId.slice(0, 8)}...`;
 }
 
 const ITEMS_PER_PAGE = 20;

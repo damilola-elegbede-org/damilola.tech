@@ -473,6 +473,9 @@ export async function POST(req: Request) {
       ],
     });
 
+    // Generate session ID before streaming to ensure correlation between success and error logs
+    const fitSessionId = `fit-assessment-${crypto.randomUUID()}`;
+
     // Return streaming response
     return new Response(
       new ReadableStream({
@@ -493,7 +496,6 @@ export async function POST(req: Request) {
             try {
               const finalMessage = await stream.finalMessage();
               const usage = finalMessage.usage;
-              const fitSessionId = `fit-assessment-${crypto.randomUUID()}`;
               console.log(JSON.stringify({
                 type: 'api_usage',
                 timestamp: new Date().toISOString(),
@@ -521,11 +523,11 @@ export async function POST(req: Request) {
             }
           } catch (streamError) {
             console.error('[fit-assessment] Stream error:', streamError);
-            // Log error for anomaly detection
+            // Log error for anomaly detection (uses same sessionId for correlation)
             console.log(JSON.stringify({
               type: 'api_usage_error',
               timestamp: new Date().toISOString(),
-              sessionId: `fit-assessment-${crypto.randomUUID()}`,
+              sessionId: fitSessionId,
               endpoint: 'fit-assessment',
               error: streamError instanceof Error ? streamError.message : 'Unknown',
             }));

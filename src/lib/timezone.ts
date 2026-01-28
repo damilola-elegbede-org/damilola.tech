@@ -7,21 +7,48 @@ export const MT_TIMEZONE = 'America/Denver';
 
 /**
  * Get UTC timestamps for start and end of a day in Mountain Time.
+ * Correctly handles DST transitions by computing separate offsets for start and end.
  * @param dateStr - Date string in YYYY-MM-DD format
- * @returns Object with startUTC and endUTC timestamps in milliseconds
+ * @returns Object with startUTC and endUTC timestamps in milliseconds. Returns NaN for invalid dates.
  */
 export function getMTDayBounds(dateStr: string): { startUTC: number; endUTC: number } {
-  const [year, month, day] = dateStr.split('-').map(Number);
+  const parts = dateStr.split('-').map(Number);
+  const [year, month, day] = parts;
 
-  // Use midday to reliably check DST status
-  const midday = new Date(Date.UTC(year, month - 1, day, 18, 0, 0));
-  const offsetHours = getMTOffsetHours(midday);
+  // Validate that we parsed valid numbers
+  if (
+    parts.length !== 3 ||
+    !Number.isFinite(year) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(day)
+  ) {
+    return { startUTC: NaN, endUTC: NaN };
+  }
 
-  // Midnight MT = offsetHours:00 UTC (e.g., midnight MST = 07:00 UTC)
-  const startUTC = Date.UTC(year, month - 1, day, offsetHours, 0, 0, 0);
+  // Validate date components are semantically valid
+  // Date.UTC normalizes invalid dates (e.g., Feb 30 -> Mar 1), so we must check
+  const probe = new Date(Date.UTC(year, month - 1, day));
+  if (
+    probe.getUTCFullYear() !== year ||
+    probe.getUTCMonth() !== month - 1 ||
+    probe.getUTCDate() !== day
+  ) {
+    return { startUTC: NaN, endUTC: NaN };
+  }
 
-  // 23:59:59.999 MT = (23 + offsetHours):59:59.999 UTC
-  const endUTC = Date.UTC(year, month - 1, day, 23 + offsetHours, 59, 59, 999);
+  // Compute offset for the actual midnight instant (start of day)
+  // On DST transition days, midnight may use different offset than midday
+  const startOffset = getMTOffsetHours(new Date(Date.UTC(year, month - 1, day, 0, 0, 0)));
+
+  // Compute offset for the actual end of day instant
+  // On DST transition days, 23:59:59 may use different offset than midnight
+  const endOffset = getMTOffsetHours(new Date(Date.UTC(year, month - 1, day, 23, 59, 59)));
+
+  // Midnight MT = startOffset:00 UTC (e.g., midnight MST = 07:00 UTC, MDT = 06:00 UTC)
+  const startUTC = Date.UTC(year, month - 1, day, startOffset, 0, 0, 0);
+
+  // 23:59:59.999 MT = (23 + endOffset):59:59.999 UTC
+  const endUTC = Date.UTC(year, month - 1, day, 23 + endOffset, 59, 59, 999);
 
   return { startUTC, endUTC };
 }
