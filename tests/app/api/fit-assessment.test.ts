@@ -18,6 +18,14 @@ vi.mock('@anthropic-ai/sdk', () => {
         delta: { type: 'text_delta', text: '# Fit Assessment: Test Role' },
       };
     },
+    finalMessage: () => Promise.resolve({
+      usage: {
+        input_tokens: 1000,
+        output_tokens: 500,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0,
+      },
+    }),
   };
 
   return {
@@ -84,6 +92,14 @@ describe('fit-assessment API route', () => {
               delta: { type: 'text_delta', text: '# Fit Assessment: Test Role' },
             };
           },
+          finalMessage: () => Promise.resolve({
+            usage: {
+              input_tokens: 1000,
+              output_tokens: 500,
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+            },
+          }),
         };
         return {
           default: class MockAnthropic {
@@ -130,6 +146,14 @@ describe('fit-assessment API route', () => {
               delta: { type: 'text_delta', text: '# Fit Assessment: Test Role' },
             };
           },
+          finalMessage: () => Promise.resolve({
+            usage: {
+              input_tokens: 1000,
+              output_tokens: 500,
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+            },
+          }),
         };
         return {
           default: class MockAnthropic {
@@ -170,6 +194,14 @@ describe('fit-assessment API route', () => {
               delta: { type: 'text_delta', text: '# Fit Assessment: Test Role' },
             };
           },
+          finalMessage: () => Promise.resolve({
+            usage: {
+              input_tokens: 1000,
+              output_tokens: 500,
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+            },
+          }),
         };
         return {
           default: class MockAnthropic {
@@ -212,6 +244,14 @@ describe('fit-assessment API route', () => {
               delta: { type: 'text_delta', text: '# Fit Assessment: Test Role' },
             };
           },
+          finalMessage: () => Promise.resolve({
+            usage: {
+              input_tokens: 1000,
+              output_tokens: 500,
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+            },
+          }),
         };
         return {
           default: class MockAnthropic {
@@ -254,6 +294,14 @@ describe('fit-assessment API route', () => {
               delta: { type: 'text_delta', text: '# Fit Assessment: Test Role' },
             };
           },
+          finalMessage: () => Promise.resolve({
+            usage: {
+              input_tokens: 1000,
+              output_tokens: 500,
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+            },
+          }),
         };
         return {
           default: class MockAnthropic {
@@ -295,6 +343,14 @@ describe('fit-assessment API route', () => {
               delta: { type: 'text_delta', text: '# Fit Assessment: Test Role' },
             };
           },
+          finalMessage: () => Promise.resolve({
+            usage: {
+              input_tokens: 1000,
+              output_tokens: 500,
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+            },
+          }),
         };
         return {
           default: class MockAnthropic {
@@ -336,6 +392,14 @@ describe('fit-assessment API route', () => {
               delta: { type: 'text_delta', text: '# Fit Assessment: Test Role' },
             };
           },
+          finalMessage: () => Promise.resolve({
+            usage: {
+              input_tokens: 1000,
+              output_tokens: 500,
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+            },
+          }),
         };
         return {
           default: class MockAnthropic {
@@ -379,6 +443,14 @@ describe('fit-assessment API route', () => {
               delta: { type: 'text_delta', text: '# Fit Assessment: Test Role' },
             };
           },
+          finalMessage: () => Promise.resolve({
+            usage: {
+              input_tokens: 1000,
+              output_tokens: 500,
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+            },
+          }),
         };
         return {
           default: class MockAnthropic {
@@ -430,6 +502,14 @@ describe('fit-assessment API route', () => {
               delta: { type: 'text_delta', text: '# Fit Assessment: Test Role' },
             };
           },
+          finalMessage: () => Promise.resolve({
+            usage: {
+              input_tokens: 1000,
+              output_tokens: 500,
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+            },
+          }),
         };
         return {
           default: class MockAnthropic {
@@ -473,6 +553,14 @@ describe('fit-assessment API route', () => {
               delta: { type: 'text_delta', text: '# Fit Assessment: Test Role' },
             };
           },
+          finalMessage: () => Promise.resolve({
+            usage: {
+              input_tokens: 1000,
+              output_tokens: 500,
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+            },
+          }),
         };
         return {
           default: class MockAnthropic {
@@ -511,6 +599,14 @@ describe('fit-assessment API route', () => {
               delta: { type: 'text_delta', text: '# Fit Assessment: Test Role' },
             };
           },
+          finalMessage: () => Promise.resolve({
+            usage: {
+              input_tokens: 1000,
+              output_tokens: 500,
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+            },
+          }),
         };
         return {
           default: class MockAnthropic {
@@ -549,6 +645,14 @@ describe('fit-assessment API route', () => {
               delta: { type: 'text_delta', text: '# Fit Assessment: Test Role' },
             };
           },
+          finalMessage: () => Promise.resolve({
+            usage: {
+              input_tokens: 1000,
+              output_tokens: 500,
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+            },
+          }),
         };
         return {
           default: class MockAnthropic {
@@ -587,6 +691,14 @@ describe('fit-assessment API route', () => {
               delta: { type: 'text_delta', text: '# Fit Assessment: Test Role' },
             };
           },
+          finalMessage: () => Promise.resolve({
+            usage: {
+              input_tokens: 1000,
+              output_tokens: 500,
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+            },
+          }),
         };
         return {
           default: class MockAnthropic {
@@ -626,6 +738,14 @@ describe('fit-assessment API route', () => {
               delta: { type: 'text_delta', text: '# Fit Assessment: Test Role' },
             };
           },
+          finalMessage: () => Promise.resolve({
+            usage: {
+              input_tokens: 1000,
+              output_tokens: 500,
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+            },
+          }),
         };
         return {
           default: class MockAnthropic {
@@ -664,6 +784,14 @@ describe('fit-assessment API route', () => {
               delta: { type: 'text_delta', text: '# Fit Assessment: Test Role' },
             };
           },
+          finalMessage: () => Promise.resolve({
+            usage: {
+              input_tokens: 1000,
+              output_tokens: 500,
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+            },
+          }),
         };
         return {
           default: class MockAnthropic {
@@ -702,6 +830,14 @@ describe('fit-assessment API route', () => {
               delta: { type: 'text_delta', text: '# Fit Assessment: Test Role' },
             };
           },
+          finalMessage: () => Promise.resolve({
+            usage: {
+              input_tokens: 1000,
+              output_tokens: 500,
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+            },
+          }),
         };
         return {
           default: class MockAnthropic {
@@ -743,6 +879,14 @@ describe('fit-assessment API route', () => {
               delta: { type: 'text_delta', text: '# Fit Assessment: Test Role' },
             };
           },
+          finalMessage: () => Promise.resolve({
+            usage: {
+              input_tokens: 1000,
+              output_tokens: 500,
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+            },
+          }),
         };
         return {
           default: class MockAnthropic {
@@ -786,6 +930,14 @@ describe('fit-assessment API route', () => {
               delta: { type: 'text_delta', text: '# Fit Assessment: Test Role' },
             };
           },
+          finalMessage: () => Promise.resolve({
+            usage: {
+              input_tokens: 1000,
+              output_tokens: 500,
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+            },
+          }),
         };
         return {
           default: class MockAnthropic {

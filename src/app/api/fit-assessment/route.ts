@@ -451,11 +451,18 @@ export async function POST(req: Request) {
     // Streaming API call for progressive text display
     // Wrap job description in XML tags for prompt injection mitigation
     // Use temperature: 0 for deterministic, consistent fit assessments across runs
+    // Enable prompt caching for the system prompt (90% cost reduction on cache hits)
     const stream = client.messages.stream({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 4096,
       temperature: 0,
-      system: systemPrompt,
+      system: [
+        {
+          type: 'text',
+          text: systemPrompt,
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
       messages: [
         {
           role: 'user',
@@ -479,8 +486,31 @@ export async function POST(req: Request) {
             }
             controller.close();
             console.log('[fit-assessment] Stream completed');
+
+            // Log usage metrics for cost tracking
+            const finalMessage = await stream.finalMessage();
+            const usage = finalMessage.usage;
+            console.log(JSON.stringify({
+              type: 'api_usage',
+              timestamp: new Date().toISOString(),
+              sessionId: 'anon',
+              endpoint: 'fit-assessment',
+              model: 'claude-sonnet-4-20250514',
+              inputTokens: usage.input_tokens,
+              outputTokens: usage.output_tokens,
+              cacheCreation: usage.cache_creation_input_tokens ?? 0,
+              cacheRead: usage.cache_read_input_tokens ?? 0,
+            }));
           } catch (streamError) {
             console.error('[fit-assessment] Stream error:', streamError);
+            // Log error for anomaly detection
+            console.log(JSON.stringify({
+              type: 'api_usage_error',
+              timestamp: new Date().toISOString(),
+              sessionId: 'anon',
+              endpoint: 'fit-assessment',
+              error: streamError instanceof Error ? streamError.message : 'Unknown',
+            }));
             controller.error(streamError);
           }
         },
