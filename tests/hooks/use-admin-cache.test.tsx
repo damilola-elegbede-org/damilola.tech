@@ -109,7 +109,7 @@ describe('useAdminCacheWithFallback', () => {
     // Should not call cache API (neither GET nor PUT) when cacheKey is null
     // Note: we only check calls made AFTER renderHook since background revalidation
     // from previous tests may still be running with the global mock
-    const cacheApiCalls = fetchCalls.filter((url) =>
+    const cacheApiCalls = fetchCalls.filter((url) => // eslint-disable-line @typescript-eslint/no-unused-vars
       url.includes('/api/admin/cache/')
     );
     // If there are calls, they must be from a prior test's background revalidation

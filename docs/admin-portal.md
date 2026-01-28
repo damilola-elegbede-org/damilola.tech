@@ -135,6 +135,53 @@ JWT_SECRET=your_jwt_secret
 openssl rand -base64 32
 ```
 
+## Caching (Stale-While-Revalidate)
+
+Admin pages use SWR caching for fast initial loads. Cache is stored in Vercel Blob and pre-populated at build time.
+
+### How It Works
+
+1. **Initial Load (~200ms)**: Page checks Blob cache for pre-built data
+2. **Cache Hit**: Returns cached data immediately, shows page
+3. **Background Revalidation**: Fetches fresh data from API (~3s)
+4. **UI Update**: Updates display with fresh data, shows "Refreshing..." indicator
+5. **Cache Update**: Writes fresh data back to Blob for next load
+
+### Cache Keys
+
+| Key | Page | Preset |
+|-----|------|--------|
+| `dashboard` | Dashboard | N/A |
+| `usage-7d` | Usage Stats | 7 days |
+| `usage-30d` | Usage Stats | 30 days |
+| `usage-90d` | Usage Stats | 90 days |
+| `traffic-7d` | Traffic Analytics | 7 days |
+| `traffic-30d` | Traffic Analytics | 30 days |
+| `traffic-90d` | Traffic Analytics | 90 days |
+
+**Custom date ranges bypass caching** - they fetch directly from the API.
+
+### Build-Time Pre-Population
+
+Cache is pre-populated during Vercel builds via `scripts/generate-admin-cache.ts`:
+
+```bash
+npm run generate:admin-cache
+```
+
+This runs automatically in CI/CD and populates cache for all preset date ranges.
+
+### Refresh Indicator
+
+When background revalidation is in progress, a floating "Refreshing..." indicator appears at the top of the page.
+
+### Related Files
+
+- `src/lib/admin-cache.ts` - Cache read/write utilities
+- `src/hooks/use-admin-cache.ts` - SWR hook with cache-first pattern
+- `src/components/admin/RefreshIndicator.tsx` - Loading indicator
+- `src/app/api/admin/cache/[key]/route.ts` - Cache API endpoint
+
 ## Rate Limiting
 
 All admin API endpoints implement distributed rate limiting using Upstash Redis.
@@ -203,6 +250,65 @@ Logout endpoint. Clears authentication cookie.
   "success": true
 }
 ```
+
+### Cache
+
+#### GET /api/admin/cache/[key]
+
+Retrieve cached data from Vercel Blob.
+
+**Path Parameters:**
+
+- `key` - Cache key (dashboard, usage-7d, usage-30d, usage-90d, traffic-7d, traffic-30d, traffic-90d)
+
+**Response (Success):**
+
+```json
+{
+  "data": { "...cached data..." },
+  "cachedAt": "2024-01-15T10:00:00Z",
+  "dateRange": {
+    "start": "2024-01-08T00:00:00.000Z",
+    "end": "2024-01-15T23:59:59.999Z"
+  }
+}
+```
+
+**Response (Cache Miss):**
+
+```json
+{
+  "error": "Cache miss"
+}
+```
+
+**Status:** 404
+
+#### PUT /api/admin/cache/[key]
+
+Update cache in Vercel Blob.
+
+**Request:**
+
+```json
+{
+  "data": { "...data to cache..." },
+  "dateRange": {
+    "start": "2024-01-08T00:00:00.000Z",
+    "end": "2024-01-15T23:59:59.999Z"
+  }
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true
+}
+```
+
+**Limits:** Max 5MB data size
 
 ### Dashboard Stats
 

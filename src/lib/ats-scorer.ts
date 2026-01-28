@@ -152,7 +152,6 @@ function calculateKeywordScore(
 function calculateSkillsScore(
   extractedKeywords: ExtractedKeywords,
   resumeData: ResumeData,
-  _matchResult: MatchResult
 ): number {
   let score = 0;
 
@@ -423,7 +422,7 @@ export function calculateATSScore(input: ScoringInput): ATSScore {
 
   // 4. Calculate each score component
   const keywordRelevance = calculateKeywordScore(matchResult, extractedKeywords.all.length, resumeWordCount);
-  const skillsQuality = calculateSkillsScore(extractedKeywords, resumeData, matchResult);
+  const skillsQuality = calculateSkillsScore(extractedKeywords, resumeData);
   const experienceAlignment = calculateExperienceScore(jobDescription, resumeData, extractedKeywords);
 
   // Format parseability is constant for our ATS-optimized PDF
