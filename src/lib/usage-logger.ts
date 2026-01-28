@@ -355,11 +355,11 @@ export async function getAggregatedStats(): Promise<{
       Math.round(byEndpoint[endpoint].costUsd * 1_000_000) / 1_000_000;
   }
 
-  // Calculate cache hit rate: cached tokens / (cached + non-cached input tokens)
-  const totalInputWithCache = totalInputTokens + totalCacheReadTokens;
+  // Calculate cache hit rate: cached tokens / total input tokens
+  // Note: totalInputTokens already includes cached tokens (inputTokens = uncached + cached)
   const cacheHitRate =
-    totalInputWithCache > 0
-      ? Math.round((totalCacheReadTokens / totalInputWithCache) * 1000) / 10
+    totalInputTokens > 0
+      ? Math.round((totalCacheReadTokens / totalInputTokens) * 1000) / 10
       : 0;
 
   // Calculate cost savings from caching
