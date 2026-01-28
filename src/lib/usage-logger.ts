@@ -220,16 +220,27 @@ function calculateTotals(requests: UsageRequest[]): UsageSession['totals'] {
   );
 }
 
+export interface ListSessionsOptions {
+  limit?: number;
+  startDate?: string; // ISO date string (YYYY-MM-DD)
+  endDate?: string; // ISO date string (YYYY-MM-DD)
+}
+
 /**
  * List all sessions in the current environment.
  * Returns session summaries sorted by lastUpdatedAt (most recent first).
+ * Optionally filters by date range based on createdAt timestamp.
  */
-export async function listSessions(options?: {
-  limit?: number;
-}): Promise<UsageSession[]> {
+export async function listSessions(options?: ListSessionsOptions): Promise<UsageSession[]> {
   const env = process.env.VERCEL_ENV || 'development';
   const prefix = `damilola.tech/usage/${env}/sessions/`;
   const limit = options?.limit ?? 100;
+  const { startDate, endDate } = options ?? {};
+
+  // Parse date range for filtering
+  const startTime = startDate ? new Date(startDate).getTime() : null;
+  // endDate is inclusive, so we need to include the entire day
+  const endTime = endDate ? new Date(endDate + 'T23:59:59.999Z').getTime() : null;
 
   try {
     // List all session blobs
@@ -249,11 +260,11 @@ export async function listSessions(options?: {
     // Filter to only JSON files
     const sessionBlobs = allBlobs.filter((blob) => blob.pathname.endsWith('.json'));
 
-    // Fetch sessions in parallel batches
-    const sessions: UsageSession[] = [];
+    // Fetch all sessions in parallel batches (we need all to filter by date)
+    const allSessions: UsageSession[] = [];
     const batchSize = 10;
 
-    for (let i = 0; i < Math.min(sessionBlobs.length, limit); i += batchSize) {
+    for (let i = 0; i < sessionBlobs.length; i += batchSize) {
       const batch = sessionBlobs.slice(i, i + batchSize);
       const batchResults = await Promise.allSettled(
         batch.map(async (blob) => {
@@ -265,27 +276,44 @@ export async function listSessions(options?: {
 
       for (const result of batchResults) {
         if (result.status === 'fulfilled' && result.value) {
-          sessions.push(result.value);
+          allSessions.push(result.value);
         }
       }
     }
 
+    // Filter by date range if provided
+    let filteredSessions = allSessions;
+    if (startTime || endTime) {
+      filteredSessions = allSessions.filter((session) => {
+        const createdTime = new Date(session.createdAt).getTime();
+        if (startTime && createdTime < startTime) return false;
+        if (endTime && createdTime > endTime) return false;
+        return true;
+      });
+    }
+
     // Sort by lastUpdatedAt (most recent first)
-    sessions.sort(
+    filteredSessions.sort(
       (a, b) => new Date(b.lastUpdatedAt).getTime() - new Date(a.lastUpdatedAt).getTime()
     );
 
-    return sessions.slice(0, limit);
+    return filteredSessions.slice(0, limit);
   } catch (error) {
     console.warn('[usage-logger] Failed to list sessions:', error);
     return [];
   }
 }
 
+export interface AggregateOptions {
+  startDate?: string; // ISO date string (YYYY-MM-DD)
+  endDate?: string; // ISO date string (YYYY-MM-DD)
+}
+
 /**
  * Get aggregated usage statistics across all sessions.
+ * Optionally filters by date range.
  */
-export async function getAggregatedStats(): Promise<{
+export async function getAggregatedStats(options?: AggregateOptions): Promise<{
   totalSessions: number;
   totalRequests: number;
   totalInputTokens: number;
@@ -308,7 +336,11 @@ export async function getAggregatedStats(): Promise<{
     costUsd: number;
   }>;
 }> {
-  const sessions = await listSessions({ limit: 500 });
+  const sessions = await listSessions({
+    limit: 500,
+    startDate: options?.startDate,
+    endDate: options?.endDate,
+  });
 
   const byEndpoint: Record<string, {
     requestCount: number;

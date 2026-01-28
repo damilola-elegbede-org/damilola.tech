@@ -31,6 +31,27 @@ interface UsageStats {
   }>;
   sessions: SessionData[];
   environment: string;
+  dateRange: {
+    start: string | null;
+    end: string | null;
+  };
+}
+
+type PresetType = '7d' | '30d' | '90d' | 'custom';
+
+function formatDateForInput(date: Date): string {
+  return date.toISOString().split('T')[0];
+}
+
+function getPresetDates(preset: '7d' | '30d' | '90d'): { start: string; end: string } {
+  const end = new Date();
+  const start = new Date();
+  const daysMap = { '7d': 7, '30d': 30, '90d': 90 };
+  start.setDate(start.getDate() - daysMap[preset]);
+  return {
+    start: formatDateForInput(start),
+    end: formatDateForInput(end),
+  };
 }
 
 const ITEMS_PER_PAGE = 20;
@@ -71,11 +92,21 @@ export default function UsagePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [preset, setPreset] = useState<PresetType>('30d');
+  const [startDate, setStartDate] = useState(() => getPresetDates('30d').start);
+  const [endDate, setEndDate] = useState(() => getPresetDates('30d').end);
 
   useEffect(() => {
     async function fetchStats() {
+      setError(null);
+      setIsLoading(true);
+      setCurrentPage(1); // Reset pagination when filters change
       try {
-        const res = await fetch('/api/admin/usage');
+        const params = new URLSearchParams({
+          startDate,
+          endDate,
+        });
+        const res = await fetch(`/api/admin/usage?${params}`);
         if (!res.ok) throw new Error('Failed to fetch usage stats');
         const data = await res.json();
         setStats(data);
@@ -86,7 +117,26 @@ export default function UsagePage() {
       }
     }
     fetchStats();
-  }, []);
+  }, [startDate, endDate]);
+
+  const handlePresetClick = (newPreset: '7d' | '30d' | '90d') => {
+    const dates = getPresetDates(newPreset);
+    setPreset(newPreset);
+    setStartDate(dates.start);
+    setEndDate(dates.end);
+  };
+
+  const handleStartDateChange = (value: string) => {
+    setPreset('custom');
+    setStartDate(value);
+  };
+
+  const handleEndDateChange = (value: string) => {
+    setPreset('custom');
+    setEndDate(value);
+  };
+
+  const isValidDateRange = startDate <= endDate;
 
   if (isLoading) {
     return (
@@ -112,7 +162,7 @@ export default function UsagePage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[var(--color-text)]">API Usage</h1>
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">
@@ -128,6 +178,56 @@ export default function UsagePage() {
             <p>Cache read: <span className="text-[var(--color-text)]">$0.30</span>/M</p>
           </div>
         </div>
+      </div>
+
+      {/* Date Range Selector */}
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-sm text-[var(--color-text-muted)]">Time:</span>
+        <div className="flex gap-1" role="group" aria-label="Preset time ranges">
+          {(['7d', '30d', '90d'] as const).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => handlePresetClick(p)}
+              className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                preset === p
+                  ? 'bg-[var(--color-accent)] text-white'
+                  : 'border border-[var(--color-border)] bg-[var(--color-card)] text-[var(--color-text)] hover:bg-[var(--color-border)]'
+              }`}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+        <span className="text-[var(--color-text-muted)]">|</span>
+        <div className="flex items-center gap-2">
+          <label htmlFor="startDate" className="text-sm text-[var(--color-text-muted)]">
+            From:
+          </label>
+          <input
+            type="date"
+            id="startDate"
+            value={startDate}
+            onChange={(e) => handleStartDateChange(e.target.value)}
+            max={endDate}
+            className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1 text-sm text-[var(--color-text)]"
+          />
+          <label htmlFor="endDate" className="text-sm text-[var(--color-text-muted)]">
+            To:
+          </label>
+          <input
+            type="date"
+            id="endDate"
+            value={endDate}
+            onChange={(e) => handleEndDateChange(e.target.value)}
+            min={startDate}
+            max={formatDateForInput(new Date())}
+            className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1 text-sm text-[var(--color-text)]"
+          />
+        </div>
+        {!isValidDateRange && (
+          <span className="text-sm text-red-400">End date must be after start date</span>
+        )}
       </div>
 
       {/* KPI Cards */}
