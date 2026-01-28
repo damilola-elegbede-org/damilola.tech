@@ -48,6 +48,9 @@ export interface CacheEntry<T> {
 // Blob path prefix for admin cache
 const CACHE_PATH_PREFIX = 'damilola.tech/admin-cache';
 
+// Configurable timeout (default 5s, can be increased for cold starts)
+const CACHE_TIMEOUT_MS = parseInt(process.env.ADMIN_CACHE_TIMEOUT_MS || '5000', 10);
+
 /**
  * Get the blob path for a cache key.
  */
@@ -85,13 +88,14 @@ export async function readAdminCache<T>(
       return null;
     }
 
-    // Fetch the content
+    // Fetch the content with configurable timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(() => controller.abort(), CACHE_TIMEOUT_MS);
 
     try {
       const response = await fetch(blob.url, { signal: controller.signal });
       if (!response.ok) {
+        console.warn(`[admin-cache] Cache fetch returned ${response.status} for ${key}`);
         return null;
       }
 
@@ -101,7 +105,9 @@ export async function readAdminCache<T>(
       clearTimeout(timeoutId);
     }
   } catch (error) {
-    console.error(`[admin-cache] Error reading cache ${key}:`, error);
+    const errorType = error instanceof Error ? error.name : 'Unknown';
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`[admin-cache] Error reading cache ${key} (${errorType}): ${errorMsg}`);
     return null;
   }
 }
