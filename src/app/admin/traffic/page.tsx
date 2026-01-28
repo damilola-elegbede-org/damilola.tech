@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { formatNumber } from '@/lib/format-number';
+import { formatInMT } from '@/lib/timezone';
 
 interface TrafficBreakdown {
   source: string;
@@ -74,17 +75,6 @@ function getPresetDates(preset: '7d' | '30d' | '90d'): { start: string; end: str
     start: formatDateForInput(start),
     end: formatDateForInput(end),
   };
-}
-
-function formatTimestamp(timestamp: string): string {
-  const date = new Date(timestamp);
-  return date.toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }
 
 function truncateSessionId(sessionId: string): string {
@@ -510,7 +500,7 @@ export default function TrafficPage() {
                   {paginatedEvents.map((event, index) => (
                     <tr key={`${event.sessionId}-${event.timestamp}-${index}`} className="border-b border-[var(--color-border)]/50">
                       <td className="py-2 text-sm text-[var(--color-text-muted)]">
-                        {formatTimestamp(event.timestamp)}
+                        {formatInMT(new Date(event.timestamp))}
                       </td>
                       <td className="py-2 text-sm font-mono text-[var(--color-text)]" title={event.sessionId}>
                         {truncateSessionId(event.sessionId)}

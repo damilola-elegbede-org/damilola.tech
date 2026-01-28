@@ -1,4 +1,5 @@
 import { put, list, head } from '@vercel/blob';
+import { getMTDayBounds } from './timezone';
 
 /**
  * API Usage Logger
@@ -237,10 +238,9 @@ export async function listSessions(options?: ListSessionsOptions): Promise<Usage
   const limit = options?.limit ?? 100;
   const { startDate, endDate } = options ?? {};
 
-  // Parse date range for filtering
-  const startTime = startDate ? new Date(startDate).getTime() : null;
-  // endDate is inclusive, so we need to include the entire day
-  const endTime = endDate ? new Date(endDate + 'T23:59:59.999Z').getTime() : null;
+  // Parse date range for filtering (interpret dates in Mountain Time)
+  const startTime = startDate ? getMTDayBounds(startDate).startUTC : null;
+  const endTime = endDate ? getMTDayBounds(endDate).endUTC : null;
 
   try {
     // List all session blobs

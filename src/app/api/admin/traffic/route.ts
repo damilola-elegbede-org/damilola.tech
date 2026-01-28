@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { list } from '@vercel/blob';
 import { verifyToken, ADMIN_COOKIE_NAME } from '@/lib/admin-auth';
+import { getMTDayBounds } from '@/lib/timezone';
 import type { AuditEvent, TrafficSource } from '@/lib/types';
 
 export const runtime = 'nodejs';
@@ -68,22 +69,22 @@ export async function GET(req: Request) {
     let endDate: Date;
 
     if (startDateParam && endDateParam) {
-      // Use explicit date range
-      startDate = new Date(startDateParam);
-      endDate = new Date(endDateParam);
+      // Use explicit date range (interpret dates in Mountain Time)
+      const startBounds = getMTDayBounds(startDateParam);
+      const endBounds = getMTDayBounds(endDateParam);
+
+      startDate = new Date(startBounds.startUTC);
+      endDate = new Date(endBounds.endUTC);
 
       // Validate dates
       if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-        return Response.json({ error: 'Invalid date format. Use ISO 8601 format.' }, { status: 400 });
+        return Response.json({ error: 'Invalid date format. Use YYYY-MM-DD format.' }, { status: 400 });
       }
 
       // Ensure end date is not before start date
       if (endDate < startDate) {
         return Response.json({ error: 'End date must be after start date.' }, { status: 400 });
       }
-
-      // Set end date to end of day for inclusive range
-      endDate.setHours(23, 59, 59, 999);
     } else {
       // Fall back to days parameter with validation
       const rawDays = Number.parseInt(searchParams.get('days') ?? '30', 10);

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { formatNumber } from '@/lib/format-number';
+import { formatInMT } from '@/lib/timezone';
 
 interface SessionData {
   sessionId: string;
@@ -58,17 +59,6 @@ const ITEMS_PER_PAGE = 20;
 
 function formatCurrency(value: number): string {
   return `$${value.toFixed(2)}`;
-}
-
-
-function formatTimestamp(timestamp: string): string {
-  const date = new Date(timestamp);
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }
 
 function truncateSessionId(sessionId: string): string {
@@ -356,7 +346,7 @@ export default function UsagePage() {
                     {formatCurrency(session.costUsd)}
                   </td>
                   <td className="py-2 text-right text-sm text-[var(--color-text-muted)]">
-                    {formatTimestamp(session.lastUpdatedAt)}
+                    {formatInMT(new Date(session.lastUpdatedAt))}
                   </td>
                 </tr>
               ))}
