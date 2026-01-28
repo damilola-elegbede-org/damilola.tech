@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { RefreshIndicator } from '@/components/admin/RefreshIndicator';
 import { formatNumber } from '@/lib/format-number';
 import { truncateSessionId } from '@/lib/session';
 import { formatInMT } from '@/lib/timezone';
@@ -136,17 +137,10 @@ export default function UsagePage() {
 
   return (
     <div className="space-y-8">
+      <RefreshIndicator isRefreshing={isValidating && !isLoading} />
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-[var(--color-text)]">API Usage</h1>
-            {isValidating && (
-              <div className="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
-                Refreshing...
-              </div>
-            )}
-          </div>
+          <h1 className="text-2xl font-bold text-[var(--color-text)]">API Usage</h1>
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">
             Environment: {stats?.environment || 'unknown'}
           </p>

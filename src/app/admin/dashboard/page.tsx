@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { StatsCard } from '@/components/admin/StatsCard';
+import { RefreshIndicator } from '@/components/admin/RefreshIndicator';
 import { formatNumber } from '@/lib/format-number';
 import { useAdminCacheWithFallback } from '@/hooks/use-admin-cache';
 import { CACHE_KEYS } from '@/lib/admin-cache';
@@ -49,19 +50,12 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--color-text)]">Dashboard</h1>
-          <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-            Environment: {stats?.environment || 'unknown'}
-          </p>
-        </div>
-        {isValidating && (
-          <div className="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
-            Refreshing...
-          </div>
-        )}
+      <RefreshIndicator isRefreshing={isValidating && !isLoading} />
+      <div>
+        <h1 className="text-2xl font-bold text-[var(--color-text)]">Dashboard</h1>
+        <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+          Environment: {stats?.environment || 'unknown'}
+        </p>
       </div>
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
