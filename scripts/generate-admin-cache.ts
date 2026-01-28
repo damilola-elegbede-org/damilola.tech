@@ -8,6 +8,11 @@
  *
  * Run: npm run generate-admin-cache
  * Or automatically via: npm run build (prebuild hook)
+ *
+ * Configuration via environment variables:
+ * - FAIL_BUILD_ON_CACHE_ERROR: Set to "true" to fail build on cache errors (default: false)
+ * - MAX_BLOBS_LIMIT: Maximum blobs to process (default: 5000)
+ * - CONCURRENCY_LIMIT: Maximum concurrent blob fetches (default: 10)
  */
 
 import { put, list } from '@vercel/blob';
@@ -18,6 +23,11 @@ import {
 } from '../src/lib/admin-cache';
 import { getAggregatedStats, listSessions } from '../src/lib/usage-logger';
 import type { AuditEvent, TrafficSource } from '../src/lib/types';
+
+// Configuration from environment
+const FAIL_BUILD_ON_CACHE_ERROR = process.env.FAIL_BUILD_ON_CACHE_ERROR === 'true';
+const MAX_BLOBS_LIMIT = parseInt(process.env.MAX_BLOBS_LIMIT || '5000', 10);
+const CONCURRENCY_LIMIT = parseInt(process.env.CONCURRENCY_LIMIT || '10', 10);
 
 interface CacheEntry<T> {
   data: T;
@@ -185,20 +195,27 @@ async function generateDashboardStats(env: string): Promise<DashboardStats> {
 
   const resumeByStatus: Record<string, number> = {};
   const FETCH_TIMEOUT = 5000; // 5 second timeout
-  const statusResults = await Promise.allSettled(
-    resumeGenResult.blobs.map(async (blob) => {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
-      try {
-        const response = await fetch(blob.url, { signal: controller.signal });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
-        return data.applicationStatus || 'draft';
-      } finally {
-        clearTimeout(timeoutId);
-      }
-    })
-  );
+
+  // Process in batches to control concurrency
+  const statusResults: PromiseSettledResult<string>[] = [];
+  for (let i = 0; i < resumeGenResult.blobs.length; i += CONCURRENCY_LIMIT) {
+    const batch = resumeGenResult.blobs.slice(i, i + CONCURRENCY_LIMIT);
+    const batchResults = await Promise.allSettled(
+      batch.map(async (blob) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+        try {
+          const response = await fetch(blob.url, { signal: controller.signal });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const data = await response.json();
+          return data.applicationStatus || 'draft';
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      })
+    );
+    statusResults.push(...batchResults);
+  }
 
   for (const result of statusResults) {
     if (result.status === 'fulfilled') {
@@ -332,7 +349,6 @@ async function generateTrafficStats(
   end.setHours(23, 59, 59, 999);
 
   const pageViewEvents: AuditEvent[] = [];
-  const MAX_BLOBS = 5000;
   let totalBlobsProcessed = 0;
 
   // Generate date prefixes
@@ -347,7 +363,7 @@ async function generateTrafficStats(
   // Process each date prefix
   let limitReached = false;
   for (const prefix of datePrefixes) {
-    if (totalBlobsProcessed >= MAX_BLOBS) {
+    if (totalBlobsProcessed >= MAX_BLOBS_LIMIT) {
       limitReached = true;
       break;
     }
@@ -366,7 +382,7 @@ async function generateTrafficStats(
 
       for (
         let i = 0;
-        i < pageViewBlobs.length && totalBlobsProcessed < MAX_BLOBS;
+        i < pageViewBlobs.length && totalBlobsProcessed < MAX_BLOBS_LIMIT;
         i += batchSize
       ) {
         const batch = pageViewBlobs.slice(
@@ -398,13 +414,13 @@ async function generateTrafficStats(
       }
 
       cursor = result.cursor ?? undefined;
-    } while (cursor && totalBlobsProcessed < MAX_BLOBS);
+    } while (cursor && totalBlobsProcessed < MAX_BLOBS_LIMIT);
   }
 
   // Warn if limit was reached
   if (limitReached) {
     console.warn(
-      `[generate-admin-cache] Reached MAX_BLOBS limit (${MAX_BLOBS}), traffic data may be incomplete for ${startDate} to ${endDate}`
+      `[generate-admin-cache] Reached MAX_BLOBS_LIMIT limit (${MAX_BLOBS_LIMIT}), traffic data may be incomplete for ${startDate} to ${endDate}`
     );
   }
 
@@ -583,6 +599,10 @@ generateAdminCache()
   })
   .catch((error: Error) => {
     console.error('Fatal error:', error.message);
-    // Don't fail the build
+    if (FAIL_BUILD_ON_CACHE_ERROR) {
+      console.error('Build failing due to FAIL_BUILD_ON_CACHE_ERROR=true');
+      process.exit(1);
+    }
+    console.warn('Continuing build despite cache error (set FAIL_BUILD_ON_CACHE_ERROR=true to fail)');
     process.exit(0);
   });

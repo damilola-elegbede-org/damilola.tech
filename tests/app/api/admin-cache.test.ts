@@ -490,8 +490,8 @@ describe('admin cache API route', () => {
       const response = await PUT(request, { params: Promise.resolve({ key: 'usage-7d' }) });
       const data = await response.json();
 
-      expect(response.status).toBe(500);
-      expect(data.error).toBe('Failed to write cache');
+      expect(response.status).toBe(400);
+      expect(data.error).toBe('Invalid JSON in request body');
     });
   });
 });

@@ -25,6 +25,7 @@ vi.mock('@/lib/admin-auth', () => ({
 
 describe('resume-generator log API route', () => {
   const originalEnv = { ...process.env };
+  const originalFetch = global.fetch;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -38,6 +39,7 @@ describe('resume-generator log API route', () => {
 
   afterEach(() => {
     process.env = { ...originalEnv };
+    global.fetch = originalFetch;
   });
 
   const validLogData = {

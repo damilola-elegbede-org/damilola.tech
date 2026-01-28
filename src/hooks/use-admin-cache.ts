@@ -53,6 +53,8 @@ export function useAdminCacheWithFallback<T>({
 
   // Track if we've triggered background revalidation
   const revalidationTriggeredRef = useRef(false);
+  // Track cache timestamp to check staleness
+  const cacheTimestampRef = useRef<string | null>(null);
 
   // Generate SWR key - stable for same cacheKey/dateRange combination
   const swrKey = cacheKey
@@ -96,13 +98,22 @@ export function useAdminCacheWithFallback<T>({
       if (cacheRes.ok) {
         const entry = await cacheRes.json();
         if (entry?.data) {
+          // Track cache timestamp for staleness check
+          cacheTimestampRef.current = entry.cachedAt || null;
           // Cache hit - return cached data immediately
           // SWR will handle background revalidation via revalidateOnMount
           return entry.data as T;
         }
+        console.warn(`[useAdminCache] Cache hit but no data for ${cacheKey}`);
+      } else if (cacheRes.status === 404) {
+        // Normal cache miss
+        console.debug?.(`[useAdminCache] Cache miss for ${cacheKey}`);
+      } else {
+        console.warn(`[useAdminCache] Cache fetch failed for ${cacheKey}: ${cacheRes.status}`);
       }
-    } catch {
-      // Cache miss or error, continue to fresh fetch
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.warn(`[useAdminCache] Cache read error for ${cacheKey}: ${errorMsg}`);
     }
 
     // No cache - fetch fresh (slow ~3s)
@@ -117,11 +128,22 @@ export function useAdminCacheWithFallback<T>({
       revalidateOnReconnect: false,
       dedupingInterval: 5000,
       keepPreviousData: true,
-      // After initial cache hit, trigger background revalidation
+      // After initial cache hit, trigger background revalidation if cache is stale
       onSuccess: (cachedData) => {
         // Only revalidate once per mount when we got data from cache
         if (cacheKey && !revalidationTriggeredRef.current && cachedData) {
           revalidationTriggeredRef.current = true;
+
+          // Skip revalidation if cache is fresh (less than 1 minute old)
+          if (cacheTimestampRef.current) {
+            const cacheAge = Date.now() - new Date(cacheTimestampRef.current).getTime();
+            const STALE_THRESHOLD_MS = 60 * 1000; // 1 minute
+            if (cacheAge < STALE_THRESHOLD_MS) {
+              console.debug?.(`[useAdminCache] Cache fresh for ${cacheKey}, skipping revalidation`);
+              return;
+            }
+          }
+
           // Schedule background revalidation after returning cached data
           setTimeout(async () => {
             try {

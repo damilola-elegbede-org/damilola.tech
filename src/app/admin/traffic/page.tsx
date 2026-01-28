@@ -250,37 +250,65 @@ export default function TrafficPage() {
             Traffic by Source
           </h2>
           {pieData.length > 0 ? (
-            <div className="h-80" role="img" aria-label={`Pie chart showing traffic distribution across ${pieData.length} sources`}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
-                    {pieData.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            <>
+              <div className="h-80" role="img" aria-label={`Pie chart showing traffic distribution across ${pieData.length} sources`}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={2}
+                      dataKey="value"
+                    >
+                      {pieData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'var(--color-card)',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: '8px',
+                      }}
+                      labelStyle={{ color: 'var(--color-text)' }}
+                      itemStyle={{ color: 'var(--color-text)' }}
+                    />
+                    <Legend
+                      wrapperStyle={{ color: 'var(--color-text-muted)' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              {/* Accessible table alternative for screen readers */}
+              <details className="mt-4">
+                <summary className="cursor-pointer text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+                  View chart data as table
+                </summary>
+                <table className="mt-2 w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--color-border)]">
+                      <th className="py-2 text-left text-[var(--color-text-muted)]">Source</th>
+                      <th className="py-2 text-right text-[var(--color-text-muted)]">Sessions</th>
+                      <th className="py-2 text-right text-[var(--color-text-muted)]">%</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pieData.map((item) => (
+                      <tr key={item.name} className="border-b border-[var(--color-border)]">
+                        <td className="py-2 text-[var(--color-text)]">{item.name}</td>
+                        <td className="py-2 text-right text-[var(--color-text)]">{item.value}</td>
+                        <td className="py-2 text-right text-[var(--color-text-muted)]">
+                          {((item.value / pieData.reduce((sum, d) => sum + d.value, 0)) * 100).toFixed(1)}%
+                        </td>
+                      </tr>
                     ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'var(--color-card)',
-                      border: '1px solid var(--color-border)',
-                      borderRadius: '8px',
-                    }}
-                    labelStyle={{ color: 'var(--color-text)' }}
-                    itemStyle={{ color: 'var(--color-text)' }}
-                  />
-                  <Legend
-                    wrapperStyle={{ color: 'var(--color-text-muted)' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+                  </tbody>
+                </table>
+              </details>
+            </>
           ) : (
             <div className="flex h-80 items-center justify-center text-[var(--color-text-muted)]">
               No traffic data available

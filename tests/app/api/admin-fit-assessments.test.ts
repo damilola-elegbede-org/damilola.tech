@@ -456,10 +456,10 @@ describe('admin fit assessments API route', () => {
       const response = await GET(request);
 
       expect(response.status).toBe(200);
-      // parseInt returns NaN for invalid input, which gets passed through
+      // parseInt returns NaN for invalid input, route defaults to 50
       expect(mockList).toHaveBeenCalledWith(
         expect.objectContaining({
-          limit: NaN,
+          limit: 50,
         })
       );
     });

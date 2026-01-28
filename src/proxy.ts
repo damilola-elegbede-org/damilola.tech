@@ -1,30 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { jwtVerify } from 'jose';
-
-// Note: These are duplicated from src/lib/admin-auth.ts because that module
-// imports Node.js crypto (for timingSafeEqual), which was incompatible with
-// Edge Runtime middleware. The proxy uses Node.js runtime, but keeping
-// duplication for safety. Must be kept in sync with the shared module.
-const ADMIN_COOKIE_NAME = 'admin_session';
-
-function getJwtSecret(): Uint8Array {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    throw new Error('JWT_SECRET not configured');
-  }
-  return new TextEncoder().encode(secret);
-}
-
-async function verifyToken(token: string): Promise<boolean> {
-  try {
-    const secret = getJwtSecret();
-    await jwtVerify(token, secret);
-    return true;
-  } catch {
-    return false;
-  }
-}
+import { ADMIN_COOKIE_NAME, verifyToken } from '@/lib/admin-auth';
 
 export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
