@@ -135,6 +135,7 @@ export async function writeAdminCache<T>(
       access: 'public',
       token,
       addRandomSuffix: false,
+      allowOverwrite: true,
     });
   } catch (error) {
     console.error(`[admin-cache] Error writing cache ${key}:`, error);
