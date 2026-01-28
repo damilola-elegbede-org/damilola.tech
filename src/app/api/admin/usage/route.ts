@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 import { verifyToken, ADMIN_COOKIE_NAME } from '@/lib/admin-auth';
-import { getAggregatedStats } from '@/lib/usage-logger';
+import { getAggregatedStats, listSessions } from '@/lib/usage-logger';
 
 export const runtime = 'nodejs';
 
@@ -13,11 +13,26 @@ export async function GET() {
   }
 
   try {
-    const stats = await getAggregatedStats();
+    const [stats, allSessions] = await Promise.all([
+      getAggregatedStats(),
+      listSessions({ limit: 500 }),
+    ]);
     const environment = process.env.VERCEL_ENV || 'development';
+
+    // Transform sessions to include per-session details for the table
+    const sessions = allSessions.map((s) => ({
+      sessionId: s.sessionId,
+      requestCount: s.totals.requestCount,
+      inputTokens: s.totals.inputTokens,
+      outputTokens: s.totals.outputTokens,
+      cacheReadTokens: s.totals.cacheReadTokens,
+      costUsd: s.totals.estimatedCostUsd,
+      lastUpdatedAt: s.lastUpdatedAt,
+    }));
 
     return Response.json({
       ...stats,
+      sessions,
       environment,
     });
   } catch (error) {
