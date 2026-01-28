@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import useSWR from 'swr';
 import type { CacheKey } from '@/lib/admin-cache';
 
@@ -55,6 +55,12 @@ export function useAdminCacheWithFallback<T>({
   const revalidationTriggeredRef = useRef(false);
   // Track cache timestamp to check staleness
   const cacheTimestampRef = useRef<string | null>(null);
+
+  // Reset refs when cache key or date range changes
+  useEffect(() => {
+    revalidationTriggeredRef.current = false;
+    cacheTimestampRef.current = null;
+  }, [cacheKey, dateRange?.start, dateRange?.end]);
 
   // Generate SWR key - stable for same cacheKey/dateRange combination
   const swrKey = cacheKey

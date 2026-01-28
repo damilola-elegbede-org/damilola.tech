@@ -27,7 +27,7 @@ import type { AuditEvent, TrafficSource } from '../src/lib/types';
 // Configuration from environment
 const FAIL_BUILD_ON_CACHE_ERROR = process.env.FAIL_BUILD_ON_CACHE_ERROR === 'true';
 const MAX_BLOBS_LIMIT = parseInt(process.env.MAX_BLOBS_LIMIT || '5000', 10);
-const CONCURRENCY_LIMIT = parseInt(process.env.CONCURRENCY_LIMIT || '10', 10);
+const CONCURRENCY_LIMIT = Math.max(1, parseInt(process.env.CONCURRENCY_LIMIT || '10', 10));
 
 interface CacheEntry<T> {
   data: T;
