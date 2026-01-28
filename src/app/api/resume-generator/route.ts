@@ -644,20 +644,24 @@ export async function POST(req: Request) {
             controller.close();
             console.log('[resume-generator] Stream completed');
 
-            // Log usage metrics for cost tracking
-            const finalMessage = await stream.finalMessage();
-            const usage = finalMessage.usage;
-            console.log(JSON.stringify({
-              type: 'api_usage',
-              timestamp: new Date().toISOString(),
-              sessionId: 'anon',
-              endpoint: 'resume-generator',
-              model: 'claude-sonnet-4-20250514',
-              inputTokens: usage.input_tokens,
-              outputTokens: usage.output_tokens,
-              cacheCreation: usage.cache_creation_input_tokens ?? 0,
-              cacheRead: usage.cache_read_input_tokens ?? 0,
-            }));
+            // Log usage metrics for cost tracking (fire-and-forget)
+            try {
+              const finalMessage = await stream.finalMessage();
+              const usage = finalMessage.usage;
+              console.log(JSON.stringify({
+                type: 'api_usage',
+                timestamp: new Date().toISOString(),
+                sessionId: 'anon',
+                endpoint: 'resume-generator',
+                model: 'claude-sonnet-4-20250514',
+                inputTokens: usage.input_tokens,
+                outputTokens: usage.output_tokens,
+                cacheCreation: usage.cache_creation_input_tokens ?? 0,
+                cacheRead: usage.cache_read_input_tokens ?? 0,
+              }));
+            } catch (usageError) {
+              console.warn('[resume-generator] Failed to log usage:', usageError);
+            }
           } catch (streamError) {
             console.error('[resume-generator] Stream error:', streamError);
             // Log error for anomaly detection

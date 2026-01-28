@@ -171,20 +171,24 @@ export async function POST(req: Request) {
               (err) => console.warn('[chat] Failed to save conversation:', err)
             );
           }
-          // Log usage metrics for cost tracking
-          const finalMessage = await stream.finalMessage();
-          const usage = finalMessage.usage;
-          console.log(JSON.stringify({
-            type: 'api_usage',
-            timestamp: new Date().toISOString(),
-            sessionId: isValidSessionId ? `sess_${sessionId.slice(0, 8)}` : 'anon',
-            endpoint: 'chat',
-            model: 'claude-sonnet-4-20250514',
-            inputTokens: usage.input_tokens,
-            outputTokens: usage.output_tokens,
-            cacheCreation: usage.cache_creation_input_tokens ?? 0,
-            cacheRead: usage.cache_read_input_tokens ?? 0,
-          }));
+          // Log usage metrics for cost tracking (fire-and-forget)
+          try {
+            const finalMessage = await stream.finalMessage();
+            const usage = finalMessage.usage;
+            console.log(JSON.stringify({
+              type: 'api_usage',
+              timestamp: new Date().toISOString(),
+              sessionId: isValidSessionId ? `sess_${sessionId.slice(0, 8)}` : 'anon',
+              endpoint: 'chat',
+              model: 'claude-sonnet-4-20250514',
+              inputTokens: usage.input_tokens,
+              outputTokens: usage.output_tokens,
+              cacheCreation: usage.cache_creation_input_tokens ?? 0,
+              cacheRead: usage.cache_read_input_tokens ?? 0,
+            }));
+          } catch (usageError) {
+            console.warn('[chat] Failed to log usage:', usageError);
+          }
         } catch (error) {
           console.error('[chat] Stream error:', error);
           // Log error for anomaly detection
