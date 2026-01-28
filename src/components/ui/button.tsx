@@ -24,7 +24,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             'text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-alt)] focus-visible:ring-[var(--color-accent)]':
               variant === 'ghost',
             // Sizes
-            'h-8 px-3 text-sm': size === 'sm',
+            'h-9 px-3 text-sm': size === 'sm',
             'h-10 px-5 text-base': size === 'md',
             'h-12 px-6 text-lg': size === 'lg',
           },

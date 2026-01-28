@@ -378,7 +378,7 @@ export function FitAssessment() {
           value={jobDescription}
           onChange={(e) => setJobDescription(e.target.value)}
           placeholder="Paste job description or URL here..."
-          className="mb-4 h-[30rem] w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-4 text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+          className="mb-4 h-[20rem] md:h-[30rem] w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-4 text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
           aria-label="Job description"
         />
 
