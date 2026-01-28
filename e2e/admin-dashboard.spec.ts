@@ -14,6 +14,9 @@ test.describe('Admin Dashboard', () => {
     await page.getByLabel('Password').fill(password);
     await page.getByRole('button', { name: 'Sign In' }).click();
     await expect(page).toHaveURL('/admin/dashboard');
+
+    // Wait for dashboard to finish loading (spinner disappears, heading appears)
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 10000 });
   });
 
   test('displays dashboard heading', async ({ page }) => {

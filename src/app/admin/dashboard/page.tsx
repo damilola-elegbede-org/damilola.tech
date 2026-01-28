@@ -27,9 +27,10 @@ export default function DashboardPage() {
   useEffect(() => {
     async function fetchStats() {
       try {
-        const res = await fetch('/api/admin/stats');
-        if (!res.ok) throw new Error('Failed to fetch stats');
-        const data = await res.json();
+        const statsRes = await fetch('/api/admin/stats');
+
+        if (!statsRes.ok) throw new Error('Failed to fetch stats');
+        const data = await statsRes.json();
         setStats(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');

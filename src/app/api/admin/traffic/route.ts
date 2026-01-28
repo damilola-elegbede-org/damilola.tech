@@ -24,12 +24,22 @@ interface LandingPageBreakdown {
   percentage: number;
 }
 
+interface RawEvent {
+  timestamp: string;
+  sessionId: string;
+  source: string;
+  medium: string;
+  campaign: string | null;
+  landingPage: string;
+}
+
 interface TrafficStats {
   totalSessions: number;
   bySource: TrafficBreakdown[];
   byMedium: TrafficBreakdown[];
   byCampaign: CampaignBreakdown[];
   topLandingPages: LandingPageBreakdown[];
+  rawEvents: RawEvent[];
   environment: string;
   dateRange: {
     start: string;
@@ -153,6 +163,7 @@ export async function GET(req: Request) {
     const campaignCount = new Map<string, number>();
     const landingPageCount = new Map<string, number>();
     const sessionsSeen = new Set<string>();
+    const rawEvents: RawEvent[] = [];
 
     for (const event of pageViewEvents) {
       // Count unique sessions
@@ -165,8 +176,18 @@ export async function GET(req: Request) {
       // Extract source info (use 'direct' if no traffic source data)
       const source = trafficSource?.source || 'direct';
       const medium = trafficSource?.medium || 'none';
-      const campaign = trafficSource?.campaign;
+      const campaign = trafficSource?.campaign || null;
       const landingPage = trafficSource?.landingPage || event.path;
+
+      // Collect raw event data
+      rawEvents.push({
+        timestamp: event.timestamp,
+        sessionId: event.sessionId || 'unknown',
+        source,
+        medium,
+        campaign,
+        landingPage,
+      });
 
       // Aggregate counts
       sourceCount.set(source, (sourceCount.get(source) || 0) + 1);
@@ -176,6 +197,9 @@ export async function GET(req: Request) {
       }
       landingPageCount.set(landingPage, (landingPageCount.get(landingPage) || 0) + 1);
     }
+
+    // Sort raw events by timestamp (most recent first)
+    rawEvents.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
     const totalEvents = pageViewEvents.length;
 
@@ -221,6 +245,7 @@ export async function GET(req: Request) {
       byMedium,
       byCampaign,
       topLandingPages,
+      rawEvents,
       environment,
       dateRange: {
         start: startDate.toISOString(),

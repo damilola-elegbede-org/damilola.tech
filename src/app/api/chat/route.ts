@@ -9,6 +9,7 @@ import {
   getClientIp,
   RATE_LIMIT_CONFIGS,
 } from '@/lib/rate-limit';
+import { logUsage } from '@/lib/usage-logger';
 
 // Use Node.js runtime for reliable Anthropic SDK streaming
 export const runtime = 'nodejs';
@@ -57,6 +58,7 @@ function escapeXml(value: string): string {
 
 export async function POST(req: Request) {
   console.log('[chat] Request received');
+  const startTime = Date.now();
   try {
     // Check content-length to prevent DoS via large payloads
     const contentLength = req.headers.get('content-length');
@@ -123,10 +125,17 @@ export async function POST(req: Request) {
 
     // Use Anthropic SDK streaming
     // Wrap user messages in XML tags for prompt injection mitigation
+    // Enable prompt caching for the system prompt (90% cost reduction on cache hits)
     const stream = client.messages.stream({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 512, // Reduced to encourage brevity
-      system: systemPrompt,
+      system: [
+        {
+          type: 'text',
+          text: systemPrompt,
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
       messages: processedMessages.map((m) => ({
         role: m.role,
         content:
@@ -164,8 +173,45 @@ export async function POST(req: Request) {
               (err) => console.warn('[chat] Failed to save conversation:', err)
             );
           }
+          // Log usage metrics for cost tracking (fire-and-forget)
+          try {
+            const finalMessage = await stream.finalMessage();
+            const usage = finalMessage.usage;
+            console.log(JSON.stringify({
+              type: 'api_usage',
+              timestamp: new Date().toISOString(),
+              sessionId: isValidSessionId ? `sess_${sessionId.slice(0, 8)}` : 'anon',
+              endpoint: 'chat',
+              model: 'claude-sonnet-4-20250514',
+              inputTokens: usage.input_tokens,
+              outputTokens: usage.output_tokens,
+              cacheCreation: usage.cache_creation_input_tokens ?? 0,
+              cacheRead: usage.cache_read_input_tokens ?? 0,
+            }));
+
+            // Log to Vercel Blob for usage dashboard (fire-and-forget)
+            logUsage(isValidSessionId ? sessionId : 'anonymous', {
+              endpoint: 'chat',
+              model: 'claude-sonnet-4-20250514',
+              inputTokens: usage.input_tokens,
+              outputTokens: usage.output_tokens,
+              cacheCreation: usage.cache_creation_input_tokens ?? 0,
+              cacheRead: usage.cache_read_input_tokens ?? 0,
+              durationMs: Date.now() - startTime,
+            }).catch((err) => console.warn('[chat] Failed to log usage to blob:', err));
+          } catch (usageError) {
+            console.warn('[chat] Failed to log usage:', usageError);
+          }
         } catch (error) {
           console.error('[chat] Stream error:', error);
+          // Log error for anomaly detection
+          console.log(JSON.stringify({
+            type: 'api_usage_error',
+            timestamp: new Date().toISOString(),
+            sessionId: isValidSessionId ? `sess_${sessionId.slice(0, 8)}` : 'anon',
+            endpoint: 'chat',
+            error: error instanceof Error ? error.message : 'Unknown',
+          }));
           controller.error(error);
         }
       },

@@ -22,12 +22,22 @@ interface LandingPageBreakdown {
   percentage: number;
 }
 
+interface RawEvent {
+  timestamp: string;
+  sessionId: string;
+  source: string;
+  medium: string;
+  campaign: string | null;
+  landingPage: string;
+}
+
 interface TrafficStats {
   totalSessions: number;
   bySource: TrafficBreakdown[];
   byMedium: TrafficBreakdown[];
   byCampaign: CampaignBreakdown[];
   topLandingPages: LandingPageBreakdown[];
+  rawEvents: RawEvent[];
   environment: string;
   dateRange: {
     start: string;
@@ -65,6 +75,24 @@ function getPresetDates(preset: '7d' | '30d' | '90d'): { start: string; end: str
   };
 }
 
+function formatTimestamp(timestamp: string): string {
+  const date = new Date(timestamp);
+  return date.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function truncateSessionId(sessionId: string): string {
+  if (sessionId.length <= 12) return sessionId;
+  return `${sessionId.slice(0, 8)}...`;
+}
+
+const ITEMS_PER_PAGE = 20;
+
 export default function TrafficPage() {
   const [stats, setStats] = useState<TrafficStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -72,11 +100,13 @@ export default function TrafficPage() {
   const [preset, setPreset] = useState<PresetType>('30d');
   const [startDate, setStartDate] = useState(() => getPresetDates('30d').start);
   const [endDate, setEndDate] = useState(() => getPresetDates('30d').end);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     async function fetchStats() {
       setError(null);
       setIsLoading(true);
+      setCurrentPage(1); // Reset pagination when filters change
       try {
         const params = new URLSearchParams({
           startDate,
@@ -137,7 +167,7 @@ export default function TrafficPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[var(--color-text)]">Traffic Sources</h1>
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">
@@ -145,7 +175,8 @@ export default function TrafficPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-sm text-[var(--color-text-muted)]">Time range:</span>
+          {/* Time range selector */}
+          <span className="text-sm text-[var(--color-text-muted)]">Time:</span>
           <div className="flex gap-1" role="group" aria-label="Preset time ranges">
             {(['7d', '30d', '90d'] as const).map((p) => (
               <button
@@ -425,6 +456,116 @@ export default function TrafficPage() {
           </table>
         </div>
       </div>
+
+      {/* Individual page views table */}
+      {(() => {
+        const totalPages = Math.ceil((stats?.rawEvents.length || 0) / ITEMS_PER_PAGE);
+        const paginatedEvents = stats?.rawEvents.slice(
+          (currentPage - 1) * ITEMS_PER_PAGE,
+          currentPage * ITEMS_PER_PAGE
+        ) || [];
+
+        return (
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-6">
+            <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">
+              Individual Page Views
+            </h2>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-[var(--color-border)]">
+                    <th className="pb-2 text-left text-sm font-medium text-[var(--color-text-muted)]">
+                      Timestamp
+                    </th>
+                    <th className="pb-2 text-left text-sm font-medium text-[var(--color-text-muted)]">
+                      Session
+                    </th>
+                    <th className="pb-2 text-left text-sm font-medium text-[var(--color-text-muted)]">
+                      Source
+                    </th>
+                    <th className="pb-2 text-left text-sm font-medium text-[var(--color-text-muted)]">
+                      Medium
+                    </th>
+                    <th className="pb-2 text-left text-sm font-medium text-[var(--color-text-muted)]">
+                      Campaign
+                    </th>
+                    <th className="pb-2 text-left text-sm font-medium text-[var(--color-text-muted)]">
+                      Landing Page
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedEvents.map((event, index) => (
+                    <tr key={`${event.sessionId}-${event.timestamp}-${index}`} className="border-b border-[var(--color-border)]/50">
+                      <td className="py-2 text-sm text-[var(--color-text-muted)]">
+                        {formatTimestamp(event.timestamp)}
+                      </td>
+                      <td className="py-2 text-sm font-mono text-[var(--color-text)]" title={event.sessionId}>
+                        {truncateSessionId(event.sessionId)}
+                      </td>
+                      <td className="py-2 text-sm text-[var(--color-text)]">
+                        {event.source}
+                      </td>
+                      <td className="py-2 text-sm text-[var(--color-text)]">
+                        {event.medium}
+                      </td>
+                      <td className="py-2 text-sm text-[var(--color-text-muted)]">
+                        {event.campaign || '-'}
+                      </td>
+                      <td className="py-2 text-sm font-mono text-[var(--color-text)]">
+                        {event.landingPage}
+                      </td>
+                    </tr>
+                  ))}
+                  {paginatedEvents.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-4 text-center text-sm text-[var(--color-text-muted)]">
+                        No page views available
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination controls */}
+            {totalPages > 1 && (
+              <div className="mt-4 flex items-center justify-between border-t border-[var(--color-border)] pt-4">
+                <p className="text-sm text-[var(--color-text-muted)]">
+                  Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, stats?.rawEvents.length || 0)} of {stats?.rawEvents.length || 0} page views
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-1.5 text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-border)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Previous
+                  </button>
+                  <span className="text-sm text-[var(--color-text-muted)]">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-1.5 text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-border)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {stats?.rawEvents && stats.rawEvents.length > 0 && totalPages <= 1 && (
+              <p className="mt-3 text-xs text-[var(--color-text-muted)]">
+                Showing {stats.rawEvents.length} page view{stats.rawEvents.length !== 1 ? 's' : ''}
+              </p>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
