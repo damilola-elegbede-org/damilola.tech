@@ -1,3 +1,5 @@
+import { formatNumber } from '@/lib/format-number';
+
 interface StatsCardProps {
   title: string;
   value: string | number;
@@ -6,12 +8,14 @@ interface StatsCardProps {
 }
 
 export function StatsCard({ title, value, subtitle, icon }: StatsCardProps) {
+  const displayValue = typeof value === 'number' ? formatNumber(value) : value;
+
   return (
     <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-6">
       <div className="flex items-start justify-between">
         <div>
           <p className="text-sm font-medium text-[var(--color-text-muted)]">{title}</p>
-          <p className="mt-2 text-3xl font-semibold text-[var(--color-text)]">{value}</p>
+          <p className="mt-2 text-3xl font-semibold text-[var(--color-text)]">{displayValue}</p>
           {subtitle && (
             <p className="mt-1 text-sm text-[var(--color-text-muted)]">{subtitle}</p>
           )}

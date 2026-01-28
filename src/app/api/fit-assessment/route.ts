@@ -493,10 +493,11 @@ export async function POST(req: Request) {
             try {
               const finalMessage = await stream.finalMessage();
               const usage = finalMessage.usage;
+              const fitSessionId = `fit-assessment-${crypto.randomUUID()}`;
               console.log(JSON.stringify({
                 type: 'api_usage',
                 timestamp: new Date().toISOString(),
-                sessionId: 'anon',
+                sessionId: fitSessionId,
                 endpoint: 'fit-assessment',
                 model: 'claude-sonnet-4-20250514',
                 inputTokens: usage.input_tokens,
@@ -506,7 +507,7 @@ export async function POST(req: Request) {
               }));
 
               // Log to Vercel Blob for usage dashboard (fire-and-forget)
-              logUsage('fit-assessment-anonymous', {
+              logUsage(fitSessionId, {
                 endpoint: 'fit-assessment',
                 model: 'claude-sonnet-4-20250514',
                 inputTokens: usage.input_tokens,
@@ -524,7 +525,7 @@ export async function POST(req: Request) {
             console.log(JSON.stringify({
               type: 'api_usage_error',
               timestamp: new Date().toISOString(),
-              sessionId: 'anon',
+              sessionId: `fit-assessment-${crypto.randomUUID()}`,
               endpoint: 'fit-assessment',
               error: streamError instanceof Error ? streamError.message : 'Unknown',
             }));

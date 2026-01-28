@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { StatsCard } from '@/components/admin/StatsCard';
+import { formatNumber } from '@/lib/format-number';
 
 interface TrafficSourceSummary {
   source: string;
@@ -105,7 +106,7 @@ export default function DashboardPage() {
                 <p className="text-sm capitalize text-[var(--color-text-muted)]">
                   {status}
                 </p>
-                <p className="text-xl font-semibold text-[var(--color-text)]">{count}</p>
+                <p className="text-xl font-semibold text-[var(--color-text)]">{formatNumber(count)}</p>
               </div>
             ))}
           </div>
@@ -132,7 +133,7 @@ export default function DashboardPage() {
                 <p className="text-sm capitalize text-[var(--color-text-muted)]">
                   {item.source}
                 </p>
-                <p className="text-xl font-semibold text-[var(--color-text)]">{item.count}</p>
+                <p className="text-xl font-semibold text-[var(--color-text)]">{formatNumber(item.count)}</p>
                 <p className="text-xs text-[var(--color-text-muted)]">{item.percentage}%</p>
               </div>
             ))}
@@ -152,7 +153,7 @@ export default function DashboardPage() {
                 <p className="text-sm text-[var(--color-text-muted)]">
                   {type.replace(/_/g, ' ')}
                 </p>
-                <p className="text-xl font-semibold text-[var(--color-text)]">{count}</p>
+                <p className="text-xl font-semibold text-[var(--color-text)]">{formatNumber(count)}</p>
               </div>
             ))}
           </div>

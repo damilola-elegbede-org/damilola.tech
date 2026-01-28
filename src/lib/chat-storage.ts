@@ -133,6 +133,36 @@ export async function archiveSession(
 }
 
 /**
+ * Initialize a session if one doesn't exist.
+ * Creates a new session with a chat-prefixed UUID.
+ * This should be called BEFORE the first message is sent.
+ *
+ * @returns The session ID (existing or newly created)
+ */
+export function initializeSession(): string {
+  if (!isLocalStorageAvailable()) return `chat-${generateUUID()}`;
+
+  const existing = getRawSession();
+  if (existing?.sessionId) return existing.sessionId;
+
+  const sessionId = `chat-${generateUUID()}`;
+  const session: StoredSession = {
+    messages: [],
+    timestamp: Date.now(),
+    startedAt: new Date().toISOString(),
+    sessionId,
+  };
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+  } catch (error) {
+    console.warn('Failed to initialize chat session:', error);
+  }
+
+  return sessionId;
+}
+
+/**
  * Save chat messages to localStorage
  * Preserves startedAt and sessionId from existing session
  */
@@ -146,7 +176,7 @@ export function saveSession(messages: StoredMessage[]): void {
     messages,
     timestamp: Date.now(),
     startedAt: existing?.startedAt || new Date().toISOString(),
-    sessionId: existing?.sessionId || generateUUID(),
+    sessionId: existing?.sessionId || `chat-${generateUUID()}`,
   };
 
   try {

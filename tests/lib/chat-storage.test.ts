@@ -6,6 +6,7 @@ import {
   getSessionId,
   getSessionStartedAt,
   archiveSession,
+  initializeSession,
   type StoredMessage,
 } from '@/lib/chat-storage';
 
@@ -348,7 +349,7 @@ describe('chat-storage', () => {
       expect(secondSave.startedAt).toBe(originalStartedAt);
     });
 
-    it('saveSession generates sessionId on first save', () => {
+    it('saveSession generates sessionId with chat- prefix on first save', () => {
       const messages: StoredMessage[] = [
         { id: '1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] },
       ];
@@ -357,9 +358,9 @@ describe('chat-storage', () => {
 
       const savedData = JSON.parse(localStorageMock['damilola-chat-session']);
       expect(savedData.sessionId).toBeDefined();
-      // UUID v4 format check
+      // chat- prefixed UUID v4 format check
       expect(savedData.sessionId).toMatch(
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        /^chat-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
       );
     });
 
@@ -412,6 +413,54 @@ describe('chat-storage', () => {
     it('getSessionStartedAt returns null when no session exists', () => {
       const startedAt = getSessionStartedAt();
       expect(startedAt).toBeNull();
+    });
+  });
+
+  describe('initializeSession', () => {
+    it('creates a new session with chat- prefixed ID', () => {
+      const sessionId = initializeSession();
+
+      expect(sessionId).toMatch(
+        /^chat-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      );
+
+      const savedData = JSON.parse(localStorageMock['damilola-chat-session']);
+      expect(savedData.sessionId).toBe(sessionId);
+      expect(savedData.messages).toEqual([]);
+      expect(savedData.startedAt).toBeDefined();
+    });
+
+    it('returns existing session ID if session already exists', () => {
+      const existingSessionId = 'chat-12345678-1234-1234-1234-123456789012';
+      const session = {
+        messages: [],
+        timestamp: Date.now(),
+        startedAt: new Date().toISOString(),
+        sessionId: existingSessionId,
+      };
+      localStorageMock['damilola-chat-session'] = JSON.stringify(session);
+
+      const sessionId = initializeSession();
+
+      expect(sessionId).toBe(existingSessionId);
+    });
+
+    it('works when localStorage is unavailable', () => {
+      Object.defineProperty(window, 'localStorage', {
+        value: {
+          setItem: () => { throw new Error('QuotaExceededError'); },
+          getItem: () => { throw new Error('SecurityError'); },
+          removeItem: () => { throw new Error('SecurityError'); },
+        },
+        writable: true,
+      });
+
+      const sessionId = initializeSession();
+
+      // Should return a valid prefixed UUID even when storage fails
+      expect(sessionId).toMatch(
+        /^chat-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      );
     });
   });
 

@@ -16,8 +16,8 @@ import {
   loadSession,
   saveSession,
   clearSession,
-  getSessionId,
   getSessionStartedAt,
+  initializeSession,
   type StoredMessage,
 } from '@/lib/chat-storage';
 import { trackEvent } from '@/lib/audit-client';
@@ -95,6 +95,9 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
   // Send message with streaming fetch
   const sendMessage = useCallback(
     async (userText: string) => {
+      // Ensure session exists before sending (generates chat-{uuid} if needed)
+      const sessionId = initializeSession();
+
       // Abort any existing request
       abortControllerRef.current?.abort();
       const abortController = new AbortController();
@@ -136,7 +139,7 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: apiMessages,
-            sessionId: getSessionId(),
+            sessionId,
             sessionStartedAt: getSessionStartedAt(),
           }),
           signal: abortController.signal,

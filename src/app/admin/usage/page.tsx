@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { formatNumber } from '@/lib/format-number';
 
 interface SessionData {
   sessionId: string;
@@ -38,15 +39,6 @@ function formatCurrency(value: number): string {
   return `$${value.toFixed(2)}`;
 }
 
-function formatNumber(value: number): string {
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`;
-  }
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}K`;
-  }
-  return value.toLocaleString();
-}
 
 function formatTimestamp(timestamp: string): string {
   const date = new Date(timestamp);
@@ -59,8 +51,17 @@ function formatTimestamp(timestamp: string): string {
 }
 
 function truncateSessionId(sessionId: string): string {
+  // Known prefixed patterns - show prefix + first 8 chars of UUID
+  const knownPrefixes = ['chat-', 'fit-assessment-', 'resume-generator-'];
+  for (const prefix of knownPrefixes) {
+    if (sessionId.startsWith(prefix)) {
+      return sessionId.length <= 30 ? sessionId : `${sessionId.slice(0, prefix.length + 8)}...`;
+    }
+  }
+  // Legacy anonymous patterns
   if (sessionId === 'anonymous') return sessionId;
   if (sessionId.endsWith('-anonymous') && sessionId.length <= 30) return sessionId;
+  // Plain UUIDs
   if (sessionId.length <= 20) return sessionId;
   return `${sessionId.slice(0, 16)}...`;
 }

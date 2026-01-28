@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { formatNumber } from '@/lib/format-number';
 
 interface TrafficBreakdown {
   source: string;
@@ -87,6 +88,17 @@ function formatTimestamp(timestamp: string): string {
 }
 
 function truncateSessionId(sessionId: string): string {
+  // Known prefixed patterns - show prefix + first 8 chars of UUID
+  const knownPrefixes = ['chat-', 'fit-assessment-', 'resume-generator-'];
+  for (const prefix of knownPrefixes) {
+    if (sessionId.startsWith(prefix)) {
+      return sessionId.length <= 30 ? sessionId : `${sessionId.slice(0, prefix.length + 8)}...`;
+    }
+  }
+  // Legacy anonymous patterns
+  if (sessionId === 'anonymous') return sessionId;
+  if (sessionId.endsWith('-anonymous') && sessionId.length <= 30) return sessionId;
+  // Plain UUIDs or short strings
   if (sessionId.length <= 12) return sessionId;
   return `${sessionId.slice(0, 8)}...`;
 }
@@ -230,7 +242,7 @@ export default function TrafficPage() {
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-6">
           <p className="text-sm text-[var(--color-text-muted)]">Total Sessions</p>
           <p className="mt-1 text-3xl font-bold text-[var(--color-text)]">
-            {stats?.totalSessions.toLocaleString() || 0}
+            {formatNumber(stats?.totalSessions || 0)}
           </p>
         </div>
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-6">
@@ -333,7 +345,7 @@ export default function TrafficPage() {
                       </div>
                     </td>
                     <td className="py-2 text-right text-sm text-[var(--color-text)]">
-                      {item.count.toLocaleString()}
+                      {formatNumber(item.count)}
                     </td>
                     <td className="py-2 text-right text-sm text-[var(--color-text-muted)]">
                       {item.percentage}%
@@ -363,7 +375,7 @@ export default function TrafficPage() {
             <div key={item.medium} className="rounded-lg bg-[var(--color-bg)] p-3">
               <p className="text-sm text-[var(--color-text-muted)]">{item.medium || 'none'}</p>
               <p className="text-xl font-semibold text-[var(--color-text)]">
-                {item.count.toLocaleString()}
+                {formatNumber(item.count)}
               </p>
               <p className="text-xs text-[var(--color-text-muted)]">{item.percentage}%</p>
             </div>
@@ -400,7 +412,7 @@ export default function TrafficPage() {
                   <tr key={item.campaign} className="border-b border-[var(--color-border)]/50">
                     <td className="py-2 text-sm text-[var(--color-text)]">{item.campaign}</td>
                     <td className="py-2 text-right text-sm text-[var(--color-text)]">
-                      {item.count.toLocaleString()}
+                      {formatNumber(item.count)}
                     </td>
                     <td className="py-2 text-right text-sm text-[var(--color-text-muted)]">
                       {item.percentage}%
@@ -438,7 +450,7 @@ export default function TrafficPage() {
                 <tr key={item.path} className="border-b border-[var(--color-border)]/50">
                   <td className="py-2 text-sm font-mono text-[var(--color-text)]">{item.path}</td>
                   <td className="py-2 text-right text-sm text-[var(--color-text)]">
-                    {item.count.toLocaleString()}
+                    {formatNumber(item.count)}
                   </td>
                   <td className="py-2 text-right text-sm text-[var(--color-text-muted)]">
                     {item.percentage}%

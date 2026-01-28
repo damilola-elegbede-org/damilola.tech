@@ -650,10 +650,11 @@ export async function POST(req: Request) {
             try {
               const finalMessage = await stream.finalMessage();
               const usage = finalMessage.usage;
+              const resumeSessionId = `resume-generator-${crypto.randomUUID()}`;
               console.log(JSON.stringify({
                 type: 'api_usage',
                 timestamp: new Date().toISOString(),
-                sessionId: 'anon',
+                sessionId: resumeSessionId,
                 endpoint: 'resume-generator',
                 model: 'claude-sonnet-4-20250514',
                 inputTokens: usage.input_tokens,
@@ -663,7 +664,7 @@ export async function POST(req: Request) {
               }));
 
               // Log to Vercel Blob for usage dashboard (fire-and-forget)
-              logUsage('resume-generator-anonymous', {
+              logUsage(resumeSessionId, {
                 endpoint: 'resume-generator',
                 model: 'claude-sonnet-4-20250514',
                 inputTokens: usage.input_tokens,
@@ -681,7 +682,7 @@ export async function POST(req: Request) {
             console.log(JSON.stringify({
               type: 'api_usage_error',
               timestamp: new Date().toISOString(),
-              sessionId: 'anon',
+              sessionId: `resume-generator-${crypto.randomUUID()}`,
               endpoint: 'resume-generator',
               error: streamError instanceof Error ? streamError.message : 'Unknown',
             }));
