@@ -1,14 +1,16 @@
 /**
- * Content Commit Script
+ * Content Ship Script
  *
- * Commits career-data submodule changes and stages the pointer update in the main repo.
- * This script handles the 4-step workflow:
+ * Commits career-data submodule changes, commits the pointer update in the main repo,
+ * and pushes both to remote.
+ *
+ * This script handles the 6-step workflow:
  * 1. Stage all changes in career-data submodule
  * 2. Commit in submodule with appropriate message
  * 3. Push to career-data remote (origin main)
  * 4. Stage pointer update in main repo (git add career-data)
- *
- * After running, use /commit or your normal workflow to commit the main repo.
+ * 5. Commit main repo with submodule pointer update
+ * 6. Push main repo to remote
  */
 
 import { execSync, spawnSync } from 'child_process';
@@ -52,7 +54,7 @@ function getChangedFiles(cwd: string): string[] {
 }
 
 async function main() {
-  console.log('Content Commit - Submodule workflow\n');
+  console.log('Content Ship - Submodule workflow\n');
 
   // Step 0: Check if submodule exists
   try {
@@ -120,12 +122,43 @@ async function main() {
   console.log('Staging submodule pointer update in main repo...');
   exec('git add career-data', { cwd: process.cwd() });
 
-  console.log('\nDone! The submodule pointer is now staged in the main repo.');
+  // Step 6: Commit main repo
+  console.log('Committing main repo...');
+  const mainCommitResult = spawnSync(
+    'git',
+    ['commit', '-m', 'chore: update career-data submodule pointer'],
+    {
+      cwd: process.cwd(),
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }
+  );
+
+  if (mainCommitResult.status !== 0) {
+    console.error('Error committing main repo:');
+    console.error(mainCommitResult.stderr || mainCommitResult.stdout);
+    process.exit(1);
+  }
+  console.log('Committed main repo.\n');
+
+  // Step 7: Push main repo
+  console.log('Pushing main repo to remote...');
+  try {
+    exec('git push', { cwd: process.cwd() });
+    console.log('Pushed main repo.\n');
+  } catch (error) {
+    const err = error as Error;
+    console.error('Error pushing main repo:');
+    console.error(err.message);
+    console.error('\nThe commit was created locally but not pushed.');
+    console.error('You may need to push manually: git push');
+    process.exit(1);
+  }
+
+  console.log('Done! Both repos are committed and pushed.');
   console.log('');
-  console.log('Next steps:');
-  console.log('  1. Run /commit or "git commit" to commit the main repo');
-  console.log('  2. Push the main repo as usual');
-  console.log('  3. Run "npm run content:push" to sync to Vercel Blob');
+  console.log('Next step:');
+  console.log('  Run "npm run content:push" to sync to Vercel Blob');
 }
 
 main().catch((error) => {
