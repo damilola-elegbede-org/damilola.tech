@@ -246,8 +246,15 @@ export async function listSessions(options?: {
       return [];
     }
 
-    // Filter to only .json files (session files, not directories)
-    const sessionBlobs = allBlobs.filter((blob) => blob.pathname.endsWith('.json'));
+    // Filter to only session files directly under sessions/ (not in subdirectories)
+    // Old format: sessions/{sessionId}.json - valid UsageSession
+    // New format: sessions/{sessionId}/{timestamp}.json - invalid (UsageRequest, not UsageSession)
+    const sessionBlobs = allBlobs.filter((blob) => {
+      if (!blob.pathname.endsWith('.json')) return false;
+      // Check that file is directly under sessions/, not in a subdirectory
+      const afterPrefix = blob.pathname.slice(prefix.length);
+      return !afterPrefix.includes('/');
+    });
 
     // Fetch sessions in parallel batches
     const sessions: UsageSession[] = [];
@@ -259,7 +266,12 @@ export async function listSessions(options?: {
         batch.map(async (blob) => {
           const response = await fetch(blob.url);
           if (!response.ok) return null;
-          return (await response.json()) as UsageSession;
+          const data = await response.json();
+          // Validate that this is a proper UsageSession, not a UsageRequest
+          if (!data.sessionId || !data.requests || !data.totals) {
+            return null;
+          }
+          return data as UsageSession;
         })
       );
 
