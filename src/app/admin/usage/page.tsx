@@ -59,8 +59,10 @@ function formatTimestamp(timestamp: string): string {
 }
 
 function truncateSessionId(sessionId: string): string {
-  if (sessionId.length <= 12) return sessionId;
-  return `${sessionId.slice(0, 8)}...`;
+  if (sessionId === 'anonymous') return sessionId;
+  if (sessionId.endsWith('-anonymous')) return sessionId;
+  if (sessionId.length <= 20) return sessionId;
+  return `${sessionId.slice(0, 16)}...`;
 }
 
 export default function UsagePage() {
@@ -109,11 +111,22 @@ export default function UsagePage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-[var(--color-text)]">API Usage</h1>
-        <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-          Environment: {stats?.environment || 'unknown'}
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-[var(--color-text)]">API Usage</h1>
+          <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+            Environment: {stats?.environment || 'unknown'}
+          </p>
+        </div>
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-3 text-xs">
+          <p className="font-medium text-[var(--color-text-muted)] mb-2">Claude Sonnet 4 Pricing</p>
+          <div className="space-y-1 text-[var(--color-text-muted)]">
+            <p>Input: <span className="text-[var(--color-text)]">$3.00</span>/M</p>
+            <p>Output: <span className="text-[var(--color-text)]">$15.00</span>/M</p>
+            <p>Cache write: <span className="text-[var(--color-text)]">$3.75</span>/M</p>
+            <p>Cache read: <span className="text-[var(--color-text)]">$0.30</span>/M</p>
+          </div>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -121,7 +134,7 @@ export default function UsagePage() {
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-4">
           <p className="text-sm text-[var(--color-text-muted)]">API Calls</p>
           <p className="mt-1 text-2xl font-bold text-[var(--color-text)]">
-            {stats?.totalRequests.toLocaleString() || 0}
+            {formatNumber(stats?.totalRequests || 0)}
           </p>
           <p className="mt-1 text-xs text-[var(--color-text-muted)]">
             {stats?.totalSessions || 0} sessions
