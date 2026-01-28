@@ -77,8 +77,8 @@ function calculateCostWithPricing(
   },
   pricing: typeof PRICING[string]
 ): number {
-  // Input tokens that weren't read from cache
-  const uncachedInput = request.inputTokens - request.cacheRead;
+  // Input tokens that weren't read from cache (clamp to 0 to avoid negative values)
+  const uncachedInput = Math.max(0, request.inputTokens - request.cacheRead);
 
   const cost =
     (uncachedInput / 1_000_000) * pricing.inputPerMillion +
@@ -104,33 +104,62 @@ export function calculateCostSavings(request: {
 }
 
 /**
- * Get the blob path for a session.
+ * Get the blob path prefix for a session's requests.
+ * Uses append-only model: each request is stored as a separate blob.
  */
-function getSessionPath(sessionId: string): string {
+function getSessionPrefix(sessionId: string): string {
   const env = process.env.VERCEL_ENV || 'development';
-  return `damilola.tech/usage/${env}/sessions/${sessionId}.json`;
+  return `damilola.tech/usage/${env}/sessions/${sessionId}/`;
+}
+
+/**
+ * Get the blob path for a single request within a session.
+ */
+function getRequestPath(sessionId: string, timestamp: string): string {
+  // Use timestamp + random suffix for uniqueness
+  const randomSuffix = Math.random().toString(36).slice(2, 8);
+  return `${getSessionPrefix(sessionId)}${timestamp.replace(/[:.]/g, '-')}-${randomSuffix}.json`;
 }
 
 /**
  * Fetch an existing session from blob storage.
+ * Aggregates all individual request blobs for the session.
  */
 export async function getSession(sessionId: string): Promise<UsageSession | null> {
   try {
-    const path = getSessionPath(sessionId);
+    const prefix = getSessionPrefix(sessionId);
 
-    // List blobs with exact prefix to find the session
-    const result = await list({ prefix: path, limit: 1 });
+    // List all request blobs for this session
+    const result = await list({ prefix, limit: 1000 });
 
     if (result.blobs.length === 0) {
       return null;
     }
 
-    const response = await fetch(result.blobs[0].url);
-    if (!response.ok) {
+    // Fetch all request blobs in parallel
+    const requests: UsageRequest[] = await Promise.all(
+      result.blobs.map(async (blob) => {
+        const response = await fetch(blob.url);
+        if (!response.ok) return null;
+        return (await response.json()) as UsageRequest;
+      })
+    ).then((results) => results.filter((r): r is UsageRequest => r !== null));
+
+    if (requests.length === 0) {
       return null;
     }
 
-    return (await response.json()) as UsageSession;
+    // Sort by timestamp
+    requests.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+    // Build session from aggregated requests
+    return {
+      sessionId,
+      createdAt: requests[0].timestamp,
+      lastUpdatedAt: requests[requests.length - 1].timestamp,
+      requests,
+      totals: calculateTotals(requests),
+    };
   } catch (error) {
     console.warn('[usage-logger] Failed to fetch session:', error);
     return null;
@@ -139,7 +168,7 @@ export async function getSession(sessionId: string): Promise<UsageSession | null
 
 /**
  * Log a usage request for a session.
- * Fetches existing session data, appends the new request, and overwrites.
+ * Uses append-only model: each request is stored as a separate blob to avoid race conditions.
  */
 export async function logUsage(
   sessionId: string,
@@ -155,28 +184,9 @@ export async function logUsage(
       costUsd,
     };
 
-    // Fetch existing session or create new one
-    let session = await getSession(sessionId);
-
-    if (session) {
-      // Append to existing session
-      session.requests.push(usageRequest);
-      session.lastUpdatedAt = timestamp;
-      session.totals = calculateTotals(session.requests);
-    } else {
-      // Create new session
-      session = {
-        sessionId,
-        createdAt: timestamp,
-        lastUpdatedAt: timestamp,
-        requests: [usageRequest],
-        totals: calculateTotals([usageRequest]),
-      };
-    }
-
-    // Write back to blob (overwrite existing)
-    const path = getSessionPath(sessionId);
-    await put(path, JSON.stringify(session, null, 2), {
+    // Write request as a new blob (append-only, no read-modify-write)
+    const path = getRequestPath(sessionId, timestamp);
+    await put(path, JSON.stringify(usageRequest, null, 2), {
       access: 'public',
       addRandomSuffix: false,
     });
@@ -228,35 +238,76 @@ export async function listSessions(options?: {
   const prefix = `damilola.tech/usage/${env}/sessions/`;
   const limit = options?.limit ?? 100;
 
-  const sessions: UsageSession[] = [];
-
   try {
+    // List all blobs under sessions prefix
+    const allBlobs: { pathname: string; url: string }[] = [];
     let cursor: string | undefined;
 
     do {
-      const result = await list({ prefix, cursor, limit: 100 });
+      const result = await list({ prefix, cursor, limit: 1000 });
+      allBlobs.push(...result.blobs);
+      cursor = result.cursor ?? undefined;
+    } while (cursor);
 
-      // Fetch sessions in parallel (batch of 20)
-      const batchSize = 20;
-      for (let i = 0; i < result.blobs.length && sessions.length < limit; i += batchSize) {
-        const batch = result.blobs.slice(i, Math.min(i + batchSize, result.blobs.length));
-        const fetchResults = await Promise.allSettled(
-          batch.map(async (blob) => {
-            const response = await fetch(blob.url);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return (await response.json()) as UsageSession;
-          })
-        );
+    if (allBlobs.length === 0) {
+      return [];
+    }
 
-        for (const result of fetchResults) {
-          if (result.status === 'fulfilled' && sessions.length < limit) {
-            sessions.push(result.value);
-          }
+    // Group blobs by session ID (extract from path)
+    // Path format: damilola.tech/usage/{env}/sessions/{sessionId}/{timestamp}.json
+    const sessionBlobs = new Map<string, typeof allBlobs>();
+    for (const blob of allBlobs) {
+      const parts = blob.pathname.split('/');
+      // Find the session ID (after "sessions/")
+      const sessionsIndex = parts.indexOf('sessions');
+      if (sessionsIndex !== -1 && parts.length > sessionsIndex + 1) {
+        const sessionId = parts[sessionsIndex + 1];
+        if (!sessionBlobs.has(sessionId)) {
+          sessionBlobs.set(sessionId, []);
+        }
+        sessionBlobs.get(sessionId)!.push(blob);
+      }
+    }
+
+    // Build sessions from grouped requests
+    const sessions: UsageSession[] = [];
+    const sessionIds = Array.from(sessionBlobs.keys()).slice(0, limit);
+
+    // Process sessions in parallel batches
+    const batchSize = 10;
+    for (let i = 0; i < sessionIds.length; i += batchSize) {
+      const batch = sessionIds.slice(i, i + batchSize);
+      const batchResults = await Promise.allSettled(
+        batch.map(async (sessionId) => {
+          const blobs = sessionBlobs.get(sessionId)!;
+          const requests: UsageRequest[] = await Promise.all(
+            blobs.map(async (blob) => {
+              const response = await fetch(blob.url);
+              if (!response.ok) return null;
+              return (await response.json()) as UsageRequest;
+            })
+          ).then((results) => results.filter((r): r is UsageRequest => r !== null));
+
+          if (requests.length === 0) return null;
+
+          requests.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+          return {
+            sessionId,
+            createdAt: requests[0].timestamp,
+            lastUpdatedAt: requests[requests.length - 1].timestamp,
+            requests,
+            totals: calculateTotals(requests),
+          } as UsageSession;
+        })
+      );
+
+      for (const result of batchResults) {
+        if (result.status === 'fulfilled' && result.value) {
+          sessions.push(result.value);
         }
       }
-
-      cursor = result.cursor ?? undefined;
-    } while (cursor && sessions.length < limit);
+    }
 
     // Sort by lastUpdatedAt (most recent first)
     sessions.sort(

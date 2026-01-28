@@ -78,6 +78,7 @@ function getPresetDates(preset: '7d' | '30d' | '90d'): { start: string; end: str
 function formatTimestamp(timestamp: string): string {
   const date = new Date(timestamp);
   return date.toLocaleString('en-US', {
+    year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
