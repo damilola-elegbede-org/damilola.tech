@@ -76,8 +76,27 @@ export async function PUT(
     const body = await request.json();
     const { data, dateRange } = body;
 
-    if (!data) {
-      return Response.json({ error: 'Missing data field' }, { status: 400 });
+    // Validate data field exists and is an object
+    if (!data || typeof data !== 'object') {
+      return Response.json({ error: 'Missing or invalid data field' }, { status: 400 });
+    }
+
+    // Validate dateRange structure if provided
+    if (dateRange !== undefined) {
+      if (
+        typeof dateRange !== 'object' ||
+        dateRange === null ||
+        typeof dateRange.start !== 'string' ||
+        typeof dateRange.end !== 'string'
+      ) {
+        return Response.json({ error: 'Invalid dateRange format' }, { status: 400 });
+      }
+    }
+
+    // Validate data size to prevent abuse (max 5MB)
+    const dataSize = JSON.stringify(data).length;
+    if (dataSize > 5 * 1024 * 1024) {
+      return Response.json({ error: 'Data too large (max 5MB)' }, { status: 400 });
     }
 
     await writeAdminCache(key, data, dateRange);

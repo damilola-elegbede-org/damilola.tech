@@ -134,10 +134,11 @@ describe('useAdminCacheWithFallback', () => {
       const putCall = mockFetch.mock.calls.find(
         (call) => call[0] === '/api/admin/cache/traffic-30d' && call[1]?.method === 'PUT'
       );
-      if (putCall) {
-        const body = JSON.parse(putCall[1].body);
-        expect(body.dateRange).toEqual(dateRange);
-      }
+      // Assert PUT call was made
+      expect(putCall).toBeDefined();
+      // Assert body contains correct dateRange
+      const body = JSON.parse(putCall![1].body);
+      expect(body.dateRange).toEqual(dateRange);
     });
   });
 

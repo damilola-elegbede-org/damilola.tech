@@ -33,7 +33,7 @@ export default function DashboardPage() {
 
   if (isLoading && !stats) {
     return (
-      <div className="flex h-64 items-center justify-center" role="status" aria-label="Loading statistics" aria-live="polite">
+      <div className="flex h-64 items-center justify-center" role="status" aria-label="Loading statistics" aria-live="polite" aria-busy="true">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
       </div>
     );

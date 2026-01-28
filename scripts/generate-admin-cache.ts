@@ -184,12 +184,19 @@ async function generateDashboardStats(env: string): Promise<DashboardStats> {
   });
 
   const resumeByStatus: Record<string, number> = {};
+  const FETCH_TIMEOUT = 5000; // 5 second timeout
   const statusResults = await Promise.allSettled(
     resumeGenResult.blobs.map(async (blob) => {
-      const response = await fetch(blob.url);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      return data.applicationStatus || 'draft';
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+      try {
+        const response = await fetch(blob.url, { signal: controller.signal });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        return data.applicationStatus || 'draft';
+      } finally {
+        clearTimeout(timeoutId);
+      }
     })
   );
 
@@ -227,9 +234,15 @@ async function generateDashboardStats(env: string): Promise<DashboardStats> {
 
   const pageViewFetchResults = await Promise.allSettled(
     pageViewBlobs.slice(0, 100).map(async (blob) => {
-      const response = await fetch(blob.url);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return (await response.json()) as AuditEvent;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+      try {
+        const response = await fetch(blob.url, { signal: controller.signal });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return (await response.json()) as AuditEvent;
+      } finally {
+        clearTimeout(timeoutId);
+      }
     })
   );
 
@@ -332,8 +345,12 @@ async function generateTrafficStats(
   }
 
   // Process each date prefix
+  let limitReached = false;
   for (const prefix of datePrefixes) {
-    if (totalBlobsProcessed >= MAX_BLOBS) break;
+    if (totalBlobsProcessed >= MAX_BLOBS) {
+      limitReached = true;
+      break;
+    }
 
     let cursor: string | undefined;
     do {
@@ -382,6 +399,13 @@ async function generateTrafficStats(
 
       cursor = result.cursor ?? undefined;
     } while (cursor && totalBlobsProcessed < MAX_BLOBS);
+  }
+
+  // Warn if limit was reached
+  if (limitReached) {
+    console.warn(
+      `[generate-admin-cache] Reached MAX_BLOBS limit (${MAX_BLOBS}), traffic data may be incomplete for ${startDate} to ${endDate}`
+    );
   }
 
   // Aggregate traffic data

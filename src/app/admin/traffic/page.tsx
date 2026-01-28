@@ -152,7 +152,7 @@ export default function TrafficPage() {
   })) || [];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8" aria-busy={isLoading}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="flex items-center gap-3">
@@ -256,9 +256,9 @@ export default function TrafficPage() {
             Traffic by Source
           </h2>
           {pieData.length > 0 ? (
-            <div className="h-80" role="img" aria-label={`Pie chart showing traffic by source: ${pieData.map(d => `${d.name}: ${d.value} sessions`).join(', ')}`}>
+            <div className="h-80" role="img" aria-label={`Pie chart showing traffic distribution across ${pieData.length} sources`}>
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart id="traffic-source-chart">
+                <PieChart>
                   <Pie
                     data={pieData}
                     cx="50%"

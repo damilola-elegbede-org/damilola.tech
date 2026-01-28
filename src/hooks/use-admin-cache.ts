@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useRef } from 'react';
 import useSWR from 'swr';
 import type { CacheKey } from '@/lib/admin-cache';
 
@@ -27,7 +27,7 @@ interface UseAdminCacheResult<T> {
   mutate: () => void;
 }
 
-// Counter to generate unique keys for non-cached requests
+// Counter to generate unique IDs for non-cached requests (incremented once per hook instance)
 let noCacheCounter = 0;
 
 /**
@@ -45,12 +45,16 @@ export function useAdminCacheWithFallback<T>({
   fetcher,
   dateRange,
 }: UseAdminCacheOptions<T>): UseAdminCacheResult<T> {
-  // Generate a stable key for non-cached requests
-  const swrKey = useMemo(() => {
-    if (cacheKey) return cacheKey;
-    // Use counter + dateRange for stable but unique keys
-    return `no-cache-${++noCacheCounter}-${dateRange?.start ?? ''}-${dateRange?.end ?? ''}`;
-  }, [cacheKey, dateRange?.start, dateRange?.end]);
+  // Generate a stable unique ID per hook instance (only increments once on mount)
+  const noCacheIdRef = useRef<number | null>(null);
+  if (noCacheIdRef.current === null) {
+    noCacheIdRef.current = ++noCacheCounter;
+  }
+
+  // Generate SWR key - stable for same cacheKey/dateRange combination
+  const swrKey = cacheKey
+    ? cacheKey
+    : `no-cache-${noCacheIdRef.current}-${dateRange?.start ?? ''}-${dateRange?.end ?? ''}`;
 
   // Fetcher that also updates cache
   const fetchAndCache = async (): Promise<T> => {
