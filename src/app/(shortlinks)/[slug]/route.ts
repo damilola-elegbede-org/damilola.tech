@@ -16,7 +16,13 @@ export async function GET(
     return NextResponse.json({ error: 'Shortlink not found' }, { status: 404 });
   }
 
-  const redirectUrl = `/?utm_source=${shortlink.utm_source}&utm_medium=${shortlink.utm_medium}`;
+  // Use URLSearchParams to safely construct query parameters (prevents URL injection)
+  const url = new URL('/', request.url);
+  url.searchParams.set('utm_source', shortlink.utm_source);
+  url.searchParams.set('utm_medium', shortlink.utm_medium);
 
-  return NextResponse.redirect(new URL(redirectUrl, request.url), 307);
+  const response = NextResponse.redirect(url, 307);
+  // Cache for 5 minutes on CDN, 5 minutes in browser
+  response.headers.set('Cache-Control', 'public, max-age=300, s-maxage=300');
+  return response;
 }

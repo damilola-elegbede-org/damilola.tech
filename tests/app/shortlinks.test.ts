@@ -90,6 +90,29 @@ describe('shortlinks route handler', () => {
     expect(location).toContain('utm_medium=verbal');
   });
 
+  it('constructs correct redirect URL with proper path and params', async () => {
+    const { GET } = await import('@/app/(shortlinks)/[slug]/route');
+
+    const request = new Request('http://localhost/recruiter');
+    const response = await GET(request, { params: Promise.resolve({ slug: 'recruiter' }) });
+
+    expect(response.status).toBe(307);
+    const location = response.headers.get('Location');
+    // Verify full URL structure: root path with UTM params
+    expect(location).toBe('http://localhost/?utm_source=recruiter&utm_medium=verbal');
+  });
+
+  it('includes cache control headers on redirect', async () => {
+    const { GET } = await import('@/app/(shortlinks)/[slug]/route');
+
+    const request = new Request('http://localhost/recruiter');
+    const response = await GET(request, { params: Promise.resolve({ slug: 'recruiter' }) });
+
+    expect(response.status).toBe(307);
+    const cacheControl = response.headers.get('Cache-Control');
+    expect(cacheControl).toContain('max-age=');
+  });
+
   it('returns 404 for unknown slug', async () => {
     const { GET } = await import('@/app/(shortlinks)/[slug]/route');
 

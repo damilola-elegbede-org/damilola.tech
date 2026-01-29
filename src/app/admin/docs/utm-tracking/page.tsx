@@ -86,9 +86,24 @@ function CopyButton({ text }: { text: string }) {
       setError(false);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Clipboard copy failed:', err);
-      setError(true);
-      setTimeout(() => setError(false), 2000);
+      // Fallback for non-secure contexts or permission denied
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        setCopied(true);
+        setError(false);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (fallbackErr) {
+        console.error('Clipboard copy failed:', err, fallbackErr);
+        setError(true);
+        setTimeout(() => setError(false), 2000);
+      }
     }
   };
 
@@ -96,7 +111,7 @@ function CopyButton({ text }: { text: string }) {
     <button
       onClick={handleCopy}
       aria-label={copied ? 'Copied to clipboard' : error ? 'Copy failed' : 'Copy to clipboard'}
-      className="shrink-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+      className="shrink-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2"
     >
       {copied ? 'Copied!' : error ? 'Failed' : 'Copy'}
     </button>
