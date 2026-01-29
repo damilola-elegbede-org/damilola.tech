@@ -118,11 +118,11 @@ async function main() {
     // Don't exit - we can still stage the pointer update
   }
 
-  // Step 5: Stage pointer update in main repo
+  // Step 4: Stage pointer update in main repo
   console.log('Staging submodule pointer update in main repo...');
   exec('git add career-data', { cwd: process.cwd() });
 
-  // Step 6: Commit main repo
+  // Step 5: Commit main repo
   console.log('Committing main repo...');
   const mainCommitResult = spawnSync(
     'git',

@@ -593,7 +593,9 @@ async function generateAdminCache(): Promise<void> {
     console.log('=== Generation Complete ===\n');
   } catch (error) {
     console.error('\nError generating admin cache:', error);
-    // Don't fail the build - cache is optional
+    if (FAIL_BUILD_ON_CACHE_ERROR) {
+      throw error;
+    }
     console.log('\n=== Cache generation failed (non-fatal) ===\n');
   }
 }
