@@ -22,6 +22,7 @@ import {
   type CacheKey,
 } from '../src/lib/admin-cache';
 import { getAggregatedStats, listSessions } from '../src/lib/usage-logger';
+import { isValidChatFilename } from '../src/lib/chat-filename';
 import type { AuditEvent, TrafficSource } from '../src/lib/types';
 
 // Configuration from environment
@@ -165,17 +166,13 @@ async function countBlobs(prefix: string): Promise<number> {
 async function countValidChats(prefix: string): Promise<number> {
   let count = 0;
   let cursor: string | undefined;
-  const newFormatRegex =
-    /^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z)-([a-f0-9]{8})(?:-.+)?\.json$/i;
-  const legacyFormatRegex =
-    /^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\.json$/;
 
   do {
     const result = await list({ prefix, cursor, limit: 1000 });
     for (const blob of result.blobs) {
       if (blob.size === 0) continue;
       const filename = blob.pathname.split('/').pop() || '';
-      if (newFormatRegex.test(filename) || legacyFormatRegex.test(filename)) {
+      if (isValidChatFilename(filename)) {
         count++;
       }
     }

@@ -120,10 +120,6 @@ export async function getSession(sessionId: string): Promise<UsageSession | null
     const path = getSessionPath(sessionId);
     const blob = await head(path);
 
-    if (!blob) {
-      return null;
-    }
-
     const response = await fetch(blob.url);
     if (!response.ok) {
       return null;
@@ -131,7 +127,11 @@ export async function getSession(sessionId: string): Promise<UsageSession | null
 
     return (await response.json()) as UsageSession;
   } catch (error) {
-    // Blob doesn't exist or fetch failed
+    // BlobNotFoundError is expected for new sessions - return null silently
+    if (error instanceof Error && error.message.includes('does not exist')) {
+      return null;
+    }
+    // Log unexpected errors at warn level
     console.warn('[usage-logger] Failed to fetch session:', error);
     return null;
   }

@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { list } from '@vercel/blob';
 import { verifyToken, ADMIN_COOKIE_NAME } from '@/lib/admin-auth';
+import { isValidChatFilename } from '@/lib/chat-filename';
 import type { AuditEvent, TrafficSource } from '@/lib/types';
 
 export const runtime = 'nodejs';
@@ -44,24 +45,17 @@ export async function GET(req: Request) {
       return count;
     }
 
-    // Count valid chats (filtering zero-byte and unparseable filenames like chats list API)
+    // Count valid chats (filtering zero-byte and unparseable filenames)
     async function countValidChats(prefix: string): Promise<number> {
       let count = 0;
       let cursor: string | undefined;
-      // Regex patterns matching those in /api/admin/chats/route.ts
-      const newFormatRegex =
-        /^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z)-([a-f0-9]{8})(?:-.+)?\.json$/i;
-      const chatPrefixRegex =
-        /^(chat-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\.json$/i;
-      const legacyFormatRegex =
-        /^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\.json$/;
 
       do {
         const result = await list({ prefix, cursor, limit: 1000 });
         for (const blob of result.blobs) {
           if (blob.size === 0) continue;
           const filename = blob.pathname.split('/').pop() || '';
-          if (newFormatRegex.test(filename) || chatPrefixRegex.test(filename) || legacyFormatRegex.test(filename)) {
+          if (isValidChatFilename(filename)) {
             count++;
           }
         }

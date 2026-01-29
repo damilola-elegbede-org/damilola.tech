@@ -1,5 +1,6 @@
 import { list, del } from '@vercel/blob';
 import { timingSafeEqual } from 'crypto';
+import { extractTimestampFromFilename } from '@/lib/chat-filename';
 
 export const runtime = 'nodejs';
 
@@ -10,37 +11,6 @@ const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000;
 const CHATS_PREFIX = 'damilola.tech/chats/';
 const FIT_ASSESSMENTS_PREFIX = 'damilola.tech/fit-assessments/';
 const AUDIT_PREFIX = 'damilola.tech/audit/';
-
-/**
- * Parse timestamp from blob pathname
- * Expected format: damilola.tech/chats/{env}/{timestamp}-{uuid}.json
- * Timestamp format: 2025-01-22T14-30-00Z
- */
-function parseTimestampFromPathname(pathname: string): Date | null {
-  try {
-    // Extract filename from pathname
-    const parts = pathname.split('/');
-    const filename = parts[parts.length - 1];
-
-    // Extract timestamp portion (before the uuid)
-    // Format: 2025-01-22T14-30-00Z-a1b2c3d4.json
-    const match = filename.match(/^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z)/);
-    if (!match) return null;
-
-    // Convert dashes back to colons for ISO format
-    const isoTimestamp = match[1].replace(
-      /T(\d{2})-(\d{2})-(\d{2})Z/,
-      'T$1:$2:$3Z'
-    );
-
-    const date = new Date(isoTimestamp);
-    if (isNaN(date.getTime())) return null;
-
-    return date;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Timing-safe token comparison to prevent timing attacks
@@ -77,10 +47,12 @@ async function cleanupPrefix(
     const result = await list({ prefix, cursor });
 
     for (const blob of result.blobs) {
-      const timestamp = parseTimestampFromPathname(blob.pathname);
+      // Try to get timestamp from filename, fall back to blob's uploadedAt
+      const filename = blob.pathname.split('/').pop() || '';
+      const timestamp = extractTimestampFromFilename(filename) || blob.uploadedAt;
 
       if (!timestamp) {
-        console.warn(`Could not parse timestamp from: ${blob.pathname}`);
+        console.warn(`Could not determine timestamp for: ${blob.pathname}`);
         skipped++;
         continue;
       }

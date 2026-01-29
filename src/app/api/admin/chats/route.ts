@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { list } from '@vercel/blob';
 import { verifyToken, ADMIN_COOKIE_NAME } from '@/lib/admin-auth';
+import { parseChatFilename } from '@/lib/chat-filename';
 
 export const runtime = 'nodejs';
 
@@ -37,50 +38,25 @@ export async function GET(req: Request) {
       // Filter out zero-byte files
       .filter((blob) => blob.size > 0)
       .map((blob) => {
-        // Extract info from pathname: damilola.tech/chats/{env}/{timestamp}-{uuid}.json
-        // Or legacy format: damilola.tech/chats/{env}/{uuid}.json
         const filename = blob.pathname.split('/').pop() || '';
+        const parsed = parseChatFilename(filename, blob.uploadedAt?.toISOString());
 
-        // Try new format: {timestamp}-{shortId}.json (8-char hex ID from archive route)
-        const newFormatMatch = filename.match(
-          /^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z)-([a-f0-9]{8})(?:-.+)?\.json$/i
-        );
-
-        // Try chat-prefixed format: chat-{uuid}.json (from live saves via /api/chat)
-        const chatPrefixMatch = filename.match(
-          /^(chat-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\.json$/i
-        );
-
-        // Try legacy format: just {uuid}.json
-        const legacyFormatMatch = filename.match(/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\.json$/);
-
-        let sessionId = '';
-        let timestamp = '';
-
-        if (newFormatMatch) {
-          sessionId = newFormatMatch[2];
-          timestamp = newFormatMatch[1].replace(/-/g, (m, i) => i > 9 ? ':' : m).replace('Z', '.000Z');
-        } else if (chatPrefixMatch) {
-          sessionId = chatPrefixMatch[1]; // Full chat-{uuid} as sessionId
-          timestamp = blob.uploadedAt?.toISOString() || '';
-        } else if (legacyFormatMatch) {
-          sessionId = legacyFormatMatch[1].slice(0, 8); // Use first 8 chars of UUID
-          // Use blob's uploadedAt as timestamp fallback
-          timestamp = blob.uploadedAt?.toISOString() || '';
+        if (!parsed) {
+          return null;
         }
 
         return {
           id: blob.pathname,
           pathname: blob.pathname,
-          sessionId,
+          sessionId: parsed.sessionId,
           environment,
-          timestamp,
+          timestamp: parsed.timestamp || '',
           size: blob.size,
           url: blob.url,
         };
       })
       // Filter out entries that couldn't be parsed
-      .filter((chat) => chat.sessionId !== '');
+      .filter((chat): chat is ChatSummary => chat !== null);
 
     return Response.json({
       chats,

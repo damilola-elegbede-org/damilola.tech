@@ -18,8 +18,9 @@ describe('chat-storage-server', () => {
   });
 
   describe('saveConversationToBlob', () => {
-    it('saves conversation with correct path structure', async () => {
-      const sessionId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+    it('saves conversation with unified path format', async () => {
+      // Session ID format: chat-{uuid}
+      const sessionId = 'chat-a1b2c3d4-e5f6-7890-abcd-ef1234567890';
       const sessionStartedAt = '2025-01-22T10:30:00.000Z';
       const messages = [
         { role: 'user' as const, content: 'Hello' },
@@ -29,8 +30,10 @@ describe('chat-storage-server', () => {
       await saveConversationToBlob(sessionId, sessionStartedAt, messages);
 
       expect(mockPut).toHaveBeenCalledTimes(1);
+      // Unified format: chat-{timestamp}-{shortId}.json
+      // shortId is first UUID segment after 'chat-': 'a1b2c3d4'
       expect(mockPut).toHaveBeenCalledWith(
-        `damilola.tech/chats/development/${sessionId}.json`,
+        'damilola.tech/chats/development/chat-2025-01-22T10-30-00Z-a1b2c3d4.json',
         expect.any(String),
         expect.objectContaining({
           access: 'public',
@@ -41,7 +44,7 @@ describe('chat-storage-server', () => {
     });
 
     it('saves conversation with correct payload structure', async () => {
-      const sessionId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+      const sessionId = 'chat-a1b2c3d4-e5f6-7890-abcd-ef1234567890';
       const sessionStartedAt = '2025-01-22T10:30:00.000Z';
       const messages = [
         { role: 'user' as const, content: 'Hello' },
@@ -67,14 +70,14 @@ describe('chat-storage-server', () => {
       process.env.VERCEL_ENV = 'production';
 
       try {
-        const sessionId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+        const sessionId = 'chat-a1b2c3d4-e5f6-7890-abcd-ef1234567890';
         const sessionStartedAt = '2025-01-22T10:30:00.000Z';
         const messages = [{ role: 'user' as const, content: 'Hello' }];
 
         await saveConversationToBlob(sessionId, sessionStartedAt, messages);
 
         expect(mockPut).toHaveBeenCalledWith(
-          `damilola.tech/chats/production/${sessionId}.json`,
+          'damilola.tech/chats/production/chat-2025-01-22T10-30-00Z-a1b2c3d4.json',
           expect.any(String),
           expect.any(Object)
         );
@@ -91,7 +94,7 @@ describe('chat-storage-server', () => {
     });
 
     it('handles single message conversation', async () => {
-      const sessionId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+      const sessionId = 'chat-a1b2c3d4-e5f6-7890-abcd-ef1234567890';
       const sessionStartedAt = '2025-01-22T10:30:00.000Z';
       const messages = [{ role: 'user' as const, content: 'Hello' }];
 
@@ -105,7 +108,7 @@ describe('chat-storage-server', () => {
     it('propagates errors from blob storage', async () => {
       mockPut.mockRejectedValue(new Error('Blob storage error'));
 
-      const sessionId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+      const sessionId = 'chat-a1b2c3d4-e5f6-7890-abcd-ef1234567890';
       const sessionStartedAt = '2025-01-22T10:30:00.000Z';
       const messages = [{ role: 'user' as const, content: 'Hello' }];
 
@@ -115,7 +118,7 @@ describe('chat-storage-server', () => {
     });
 
     it('uses addRandomSuffix false for consistent overwrites', async () => {
-      const sessionId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+      const sessionId = 'chat-a1b2c3d4-e5f6-7890-abcd-ef1234567890';
       const sessionStartedAt = '2025-01-22T10:30:00.000Z';
       const messages = [{ role: 'user' as const, content: 'Hello' }];
 
@@ -123,6 +126,19 @@ describe('chat-storage-server', () => {
 
       const options = mockPut.mock.calls[0][2];
       expect(options.addRandomSuffix).toBe(false);
+    });
+
+    it('extracts shortId correctly from chat-prefixed sessionId', async () => {
+      // Different UUID to verify shortId extraction
+      const sessionId = 'chat-ff112233-4455-6677-8899-aabbccddeeff';
+      const sessionStartedAt = '2025-03-15T14:45:30.000Z';
+      const messages = [{ role: 'user' as const, content: 'Test' }];
+
+      await saveConversationToBlob(sessionId, sessionStartedAt, messages);
+
+      const path = mockPut.mock.calls[0][0];
+      // shortId should be 'ff112233' (first UUID segment after 'chat-')
+      expect(path).toContain('-ff112233.json');
     });
   });
 });

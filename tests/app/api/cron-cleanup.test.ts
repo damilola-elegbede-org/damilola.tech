@@ -92,11 +92,11 @@ describe('cron cleanup-chats API route', () => {
     });
 
     it('deletes blobs older than 90 days', async () => {
-      // 91 days ago
+      // 91 days ago - using unified format
       const oldTimestamp = '2025-01-20T14-30-00Z';
       const oldBlob = {
-        pathname: `damilola.tech/chats/production/${oldTimestamp}-a1b2c3d4.json`,
-        url: `https://blob.vercel-storage.com/chats/production/${oldTimestamp}-a1b2c3d4.json`,
+        pathname: `damilola.tech/chats/production/chat-${oldTimestamp}-a1b2c3d4.json`,
+        url: `https://blob.vercel-storage.com/chats/production/chat-${oldTimestamp}-a1b2c3d4.json`,
       };
 
       // Mock returns oldBlob for chats, empty for others
@@ -121,11 +121,11 @@ describe('cron cleanup-chats API route', () => {
     });
 
     it('keeps blobs younger than 90 days', async () => {
-      // 30 days ago
+      // 30 days ago - using unified format
       const recentTimestamp = '2025-03-23T14-30-00Z';
       const recentBlob = {
-        pathname: `damilola.tech/chats/production/${recentTimestamp}-a1b2c3d4.json`,
-        url: `https://blob.vercel-storage.com/chats/production/${recentTimestamp}-a1b2c3d4.json`,
+        pathname: `damilola.tech/chats/production/chat-${recentTimestamp}-a1b2c3d4.json`,
+        url: `https://blob.vercel-storage.com/chats/production/chat-${recentTimestamp}-a1b2c3d4.json`,
       };
 
       mockList.mockImplementation(({ prefix }: { prefix: string }) => {
@@ -149,11 +149,11 @@ describe('cron cleanup-chats API route', () => {
 
     it('handles mix of old and recent blobs', async () => {
       const oldBlob = {
-        pathname: 'damilola.tech/chats/production/2025-01-01T14-30-00Z-old12345.json',
+        pathname: 'damilola.tech/chats/production/chat-2025-01-01T14-30-00Z-a1b2c3d4.json',
         url: 'https://blob.vercel-storage.com/old.json',
       };
       const recentBlob = {
-        pathname: 'damilola.tech/chats/production/2025-03-23T14-30-00Z-new12345.json',
+        pathname: 'damilola.tech/chats/production/chat-2025-03-23T14-30-00Z-b2c3d4e5.json',
         url: 'https://blob.vercel-storage.com/new.json',
       };
 
@@ -182,7 +182,7 @@ describe('cron cleanup-chats API route', () => {
       // Exactly 90 days ago - should be kept (not older than 90 days)
       const boundaryTimestamp = '2025-01-22T12-00-00Z';
       const boundaryBlob = {
-        pathname: `damilola.tech/chats/production/${boundaryTimestamp}-boundary.json`,
+        pathname: `damilola.tech/chats/production/chat-${boundaryTimestamp}-abcd1234.json`,
         url: 'https://blob.vercel-storage.com/boundary.json',
       };
 
@@ -206,11 +206,11 @@ describe('cron cleanup-chats API route', () => {
 
     it('handles pagination with cursor', async () => {
       const blob1 = {
-        pathname: 'damilola.tech/chats/production/2025-01-01T14-30-00Z-page1.json',
+        pathname: 'damilola.tech/chats/production/chat-2025-01-01T14-30-00Z-aa112233.json',
         url: 'https://blob.vercel-storage.com/page1.json',
       };
       const blob2 = {
-        pathname: 'damilola.tech/chats/production/2025-01-02T14-30-00Z-page2.json',
+        pathname: 'damilola.tech/chats/production/chat-2025-01-02T14-30-00Z-bb223344.json',
         url: 'https://blob.vercel-storage.com/page2.json',
       };
 
@@ -308,11 +308,11 @@ describe('cron cleanup-chats API route', () => {
 
     it('continues processing if individual delete fails', async () => {
       const blob1 = {
-        pathname: 'damilola.tech/chats/production/2025-01-01T14-30-00Z-fail.json',
+        pathname: 'damilola.tech/chats/production/chat-2025-01-01T14-30-00Z-cc334455.json',
         url: 'https://blob.vercel-storage.com/fail.json',
       };
       const blob2 = {
-        pathname: 'damilola.tech/chats/production/2025-01-02T14-30-00Z-success.json',
+        pathname: 'damilola.tech/chats/production/chat-2025-01-02T14-30-00Z-dd445566.json',
         url: 'https://blob.vercel-storage.com/success.json',
       };
 
@@ -353,11 +353,11 @@ describe('cron cleanup-chats API route', () => {
       vi.setSystemTime(new Date('2025-04-22T12:00:00.000Z'));
 
       const oldBlob = {
-        pathname: 'damilola.tech/chats/production/2025-01-01T14-30-00Z-old.json',
+        pathname: 'damilola.tech/chats/production/chat-2025-01-01T14-30-00Z-ee556677.json',
         url: 'https://blob.vercel-storage.com/old.json',
       };
       const recentBlob = {
-        pathname: 'damilola.tech/chats/production/2025-04-01T14-30-00Z-new.json',
+        pathname: 'damilola.tech/chats/production/chat-2025-04-01T14-30-00Z-ff667788.json',
         url: 'https://blob.vercel-storage.com/new.json',
       };
 

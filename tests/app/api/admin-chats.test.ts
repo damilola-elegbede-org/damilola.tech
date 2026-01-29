@@ -214,7 +214,7 @@ describe('admin chats API route', () => {
       expect(data.chats[0]).toEqual({
         id: 'damilola.tech/chats/production/chat-939d8245-20b8-49b3-9e1b-746232af362e.json',
         pathname: 'damilola.tech/chats/production/chat-939d8245-20b8-49b3-9e1b-746232af362e.json',
-        sessionId: 'chat-939d8245-20b8-49b3-9e1b-746232af362e', // Full chat-{uuid} as sessionId
+        sessionId: '939d8245', // Short ID (first 8 chars of UUID) for display consistency
         environment: 'production',
         timestamp: '2026-01-28T12:30:00.000Z', // From uploadedAt
         size: 4500,

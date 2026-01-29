@@ -6,12 +6,6 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// Mock @vercel/blob for archive tests
-const mockPut = vi.fn();
-vi.mock('@vercel/blob', () => ({
-  put: mockPut,
-}));
-
 describe('chat session ID contract', () => {
   const SESSION_ID_PATTERN = /^chat-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -84,62 +78,15 @@ describe('chat session ID contract', () => {
       });
     });
 
-    it('frontend-generated sessionId is accepted by /api/chat/archive', async () => {
-      mockPut.mockResolvedValue({
-        url: 'https://blob.vercel-storage.com/test',
-        pathname: 'test',
-      });
-
+    it('/api/chat/archive returns success as no-op (unified format handles persistence)', async () => {
+      // Archive is now a no-op - live saves use unified format directly
       const { POST } = await import('@/app/api/chat/archive/route');
 
-      // Use a chat-prefixed session ID like frontend generates
-      const request = new Request('http://localhost/api/chat/archive', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: 'chat-a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-          sessionStartedAt: '2025-01-22T10:30:00.000Z',
-          messages: [
-            { id: '1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] },
-          ],
-        }),
-      });
-
-      const response = await POST(request);
+      const response = await POST();
       const data = await response.json();
 
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
-      expect(mockPut).toHaveBeenCalled();
-    });
-
-    it('plain UUID is rejected by /api/chat/archive', async () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      vi.spyOn(console, 'log').mockImplementation(() => {});
-
-      const { POST } = await import('@/app/api/chat/archive/route');
-
-      // Use a plain UUID like the old format
-      const request = new Request('http://localhost/api/chat/archive', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', // Plain UUID
-          sessionStartedAt: '2025-01-22T10:30:00.000Z',
-          messages: [
-            { id: '1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] },
-          ],
-        }),
-      });
-
-      const response = await POST(request);
-      const data = await response.json();
-
-      expect(response.status).toBe(400);
-      expect(data.error).toContain('chat-prefixed');
-      expect(mockPut).not.toHaveBeenCalled();
-
-      consoleSpy.mockRestore();
     });
   });
 
