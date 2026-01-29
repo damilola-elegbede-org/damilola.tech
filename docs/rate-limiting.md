@@ -328,7 +328,11 @@ Password verification uses timing-safe comparison to prevent length-based timing
 ```typescript
 import { timingSafeEqual, createHash } from 'crypto';
 
-function verifyPassword(provided: string): boolean {
+type VerifyResult =
+  | { success: true }
+  | { success: false; reason: 'invalid_password' | 'config_error' };
+
+function verifyPassword(provided: string): VerifyResult {
   const expected = getAdminPassword().trim();
   const providedTrimmed = provided.trim();
 
@@ -336,7 +340,10 @@ function verifyPassword(provided: string): boolean {
   const expectedHash = createHash('sha256').update(expected).digest();
   const providedHash = createHash('sha256').update(providedTrimmed).digest();
 
-  return timingSafeEqual(expectedHash, providedHash);
+  if (timingSafeEqual(expectedHash, providedHash)) {
+    return { success: true };
+  }
+  return { success: false, reason: 'invalid_password' };
 }
 ```
 

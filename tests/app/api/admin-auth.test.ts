@@ -53,7 +53,7 @@ describe('admin auth API route', () => {
       vi.mocked(getClientIp).mockReturnValue('192.168.1.1');
       vi.mocked(validateCsrfToken).mockResolvedValue(true);
       vi.mocked(checkRateLimit).mockResolvedValue({ limited: false, remainingAttempts: 5 });
-      vi.mocked(verifyPassword).mockReturnValue(true);
+      vi.mocked(verifyPassword).mockReturnValue({ success: true });
       vi.mocked(signToken).mockResolvedValue('test-jwt-token');
       vi.mocked(getAuthCookieOptions).mockReturnValue({
         httpOnly: true,
@@ -117,7 +117,7 @@ describe('admin auth API route', () => {
       vi.mocked(getClientIp).mockReturnValue('192.168.1.1');
       vi.mocked(validateCsrfToken).mockResolvedValue(true);
       vi.mocked(checkRateLimit).mockResolvedValue({ limited: false, remainingAttempts: 5 });
-      vi.mocked(verifyPassword).mockReturnValue(false);
+      vi.mocked(verifyPassword).mockReturnValue({ success: false, reason: 'invalid_password' });
       vi.mocked(recordFailedAttempt).mockResolvedValue();
       vi.mocked(logAdminEvent).mockResolvedValue();
 
@@ -199,7 +199,7 @@ describe('admin auth API route', () => {
         .mockResolvedValueOnce({ limited: false, remainingAttempts: 1 })
         // Second check (after recording failed attempt) shows lockout
         .mockResolvedValueOnce({ limited: true, retryAfter: 900 });
-      vi.mocked(verifyPassword).mockReturnValue(false);
+      vi.mocked(verifyPassword).mockReturnValue({ success: false, reason: 'invalid_password' });
       vi.mocked(recordFailedAttempt).mockResolvedValue();
       vi.mocked(logAdminEvent).mockResolvedValue();
 
@@ -490,7 +490,7 @@ describe('admin auth API route', () => {
       vi.mocked(getClientIp).mockReturnValue('192.168.1.1');
       vi.mocked(validateCsrfToken).mockResolvedValue(true);
       vi.mocked(checkRateLimit).mockResolvedValue({ limited: false, remainingAttempts: 5 });
-      vi.mocked(verifyPassword).mockReturnValue(true);
+      vi.mocked(verifyPassword).mockReturnValue({ success: true });
       vi.mocked(signToken).mockResolvedValue('test-jwt-token');
       vi.mocked(getAuthCookieOptions).mockReturnValue({
         httpOnly: true,
@@ -549,7 +549,7 @@ describe('admin auth API route', () => {
       });
       vi.mocked(validateCsrfToken).mockResolvedValue(true);
       vi.mocked(checkRateLimit).mockResolvedValue({ limited: false, remainingAttempts: 5 });
-      vi.mocked(verifyPassword).mockReturnValue(true);
+      vi.mocked(verifyPassword).mockReturnValue({ success: true });
       vi.mocked(signToken).mockResolvedValue('test-jwt-token');
       vi.mocked(getAuthCookieOptions).mockReturnValue({
         httpOnly: true,

@@ -92,10 +92,10 @@ export async function POST(req: Request) {
       return Response.json({ error: 'Password is required' }, { status: 400 });
     }
 
-    const isValid = verifyPassword(password);
-    if (!isValid) {
+    const result = verifyPassword(password);
+    if (!result.success) {
       // Record failed attempt and check for lockout
-      await logAdminEvent('admin_login_failure', { reason: 'invalid_password' }, ip);
+      await logAdminEvent('admin_login_failure', { reason: result.reason }, ip);
       const limitResponse = await recordAndCheckLimit();
       if (limitResponse) return limitResponse;
 

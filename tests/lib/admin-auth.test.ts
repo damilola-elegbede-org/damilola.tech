@@ -17,28 +17,28 @@ describe('admin-auth module', () => {
   });
 
   describe('verifyPassword', () => {
-    it('returns true for correct production password', async () => {
+    it('returns success for correct production password', async () => {
       process.env.VERCEL_ENV = 'production';
       process.env.ADMIN_PASSWORD_PRODUCTION = 'secret123';
 
       const { verifyPassword } = await import('@/lib/admin-auth');
-      expect(verifyPassword('secret123')).toBe(true);
+      expect(verifyPassword('secret123')).toEqual({ success: true });
     });
 
-    it('returns false for incorrect password', async () => {
+    it('returns invalid_password for incorrect password', async () => {
       process.env.VERCEL_ENV = 'production';
       process.env.ADMIN_PASSWORD_PRODUCTION = 'secret123';
 
       const { verifyPassword } = await import('@/lib/admin-auth');
-      expect(verifyPassword('wrong')).toBe(false);
+      expect(verifyPassword('wrong')).toEqual({ success: false, reason: 'invalid_password' });
     });
 
-    it('returns false when password length differs', async () => {
+    it('returns invalid_password when password length differs', async () => {
       process.env.VERCEL_ENV = 'production';
       process.env.ADMIN_PASSWORD_PRODUCTION = 'secret123';
 
       const { verifyPassword } = await import('@/lib/admin-auth');
-      expect(verifyPassword('short')).toBe(false);
+      expect(verifyPassword('short')).toEqual({ success: false, reason: 'invalid_password' });
     });
 
     it('uses preview password for preview environment', async () => {
@@ -46,15 +46,15 @@ describe('admin-auth module', () => {
       process.env.ADMIN_PASSWORD_PREVIEW = 'preview123';
 
       const { verifyPassword } = await import('@/lib/admin-auth');
-      expect(verifyPassword('preview123')).toBe(true);
+      expect(verifyPassword('preview123')).toEqual({ success: true });
     });
 
-    it('returns false when password not configured', async () => {
+    it('returns config_error when password not configured', async () => {
       process.env.VERCEL_ENV = 'production';
       delete process.env.ADMIN_PASSWORD_PRODUCTION;
 
       const { verifyPassword } = await import('@/lib/admin-auth');
-      expect(verifyPassword('anything')).toBe(false);
+      expect(verifyPassword('anything')).toEqual({ success: false, reason: 'config_error' });
     });
   });
 

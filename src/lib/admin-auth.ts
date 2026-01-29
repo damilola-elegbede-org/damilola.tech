@@ -35,18 +35,27 @@ function hashForComparison(value: string): Buffer {
   return createHash('sha256').update(value).digest();
 }
 
+// Result type for password verification with failure reason
+export type VerifyResult =
+  | { success: true }
+  | { success: false; reason: 'invalid_password' | 'config_error' };
+
 // Timing-safe password verification using hash comparison
 // This ensures constant-time comparison regardless of password length
-export function verifyPassword(provided: string): boolean {
+export function verifyPassword(provided: string): VerifyResult {
   try {
     const expected = getAdminPassword().trim();
     const providedTrimmed = provided.trim();
     // Compare hashes to ensure constant-time behavior regardless of length
     const expectedHash = hashForComparison(expected);
     const providedHash = hashForComparison(providedTrimmed);
-    return timingSafeEqual(expectedHash, providedHash);
+    if (timingSafeEqual(expectedHash, providedHash)) {
+      return { success: true };
+    }
+    return { success: false, reason: 'invalid_password' };
   } catch {
-    return false;
+    // Env var missing or other config error
+    return { success: false, reason: 'config_error' };
   }
 }
 
