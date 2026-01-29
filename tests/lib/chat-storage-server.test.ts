@@ -102,16 +102,28 @@ describe('chat-storage-server', () => {
       expect(savedPayload.messages).toHaveLength(1);
     });
 
-    it('propagates errors from blob storage', async () => {
+    it('logs errors from blob storage without throwing (fire-and-forget)', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       mockPut.mockRejectedValue(new Error('Blob storage error'));
 
       const sessionId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
       const sessionStartedAt = '2025-01-22T10:30:00.000Z';
       const messages = [{ role: 'user' as const, content: 'Hello' }];
 
+      // Should not throw - fire-and-forget pattern
       await expect(
         saveConversationToBlob(sessionId, sessionStartedAt, messages)
-      ).rejects.toThrow('Blob storage error');
+      ).resolves.toBeUndefined();
+
+      // Should log the error
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('blob.save_failed')
+      );
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Blob storage error')
+      );
+
+      consoleSpy.mockRestore();
     });
 
     it('uses addRandomSuffix false for consistent overwrites', async () => {

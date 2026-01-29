@@ -522,7 +522,32 @@ export async function POST(req: Request) {
               console.warn('[fit-assessment] Failed to log usage:', usageError);
             }
           } catch (streamError) {
-            console.error('[fit-assessment] Stream error:', streamError);
+            // Categorize Anthropic API errors for better observability
+            if (streamError instanceof Anthropic.APIError) {
+              if (streamError.status === 429) {
+                console.warn(JSON.stringify({
+                  event: 'anthropic.rate_limited',
+                  endpoint: '/api/fit-assessment',
+                  retryAfter: streamError.headers?.['retry-after'],
+                }));
+              } else if (streamError.status >= 500) {
+                console.error(JSON.stringify({
+                  event: 'anthropic.server_error',
+                  endpoint: '/api/fit-assessment',
+                  status: streamError.status,
+                  message: streamError.message,
+                }));
+              } else {
+                console.error(JSON.stringify({
+                  event: 'anthropic.api_error',
+                  endpoint: '/api/fit-assessment',
+                  status: streamError.status,
+                  message: streamError.message,
+                }));
+              }
+            } else {
+              console.error('[fit-assessment] Stream error:', streamError);
+            }
             // Log error for anomaly detection (uses same sessionId for correlation)
             console.log(JSON.stringify({
               type: 'api_usage_error',

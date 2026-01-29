@@ -50,9 +50,19 @@ export async function saveConversationToBlob(
     messages,
   };
 
-  await put(path, JSON.stringify(payload), {
-    access: 'public',
-    addRandomSuffix: false,
-    contentType: 'application/json',
-  });
+  try {
+    await put(path, JSON.stringify(payload), {
+      access: 'public',
+      addRandomSuffix: false,
+      contentType: 'application/json',
+    });
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: 'blob.save_failed',
+      path,
+      sessionId: sessionId.slice(0, 8),
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    // Don't re-throw - fire-and-forget pattern
+  }
 }

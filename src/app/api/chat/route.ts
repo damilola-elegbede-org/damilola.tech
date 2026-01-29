@@ -224,7 +224,32 @@ export async function POST(req: Request) {
             console.warn('[chat] Failed to log usage:', usageError);
           }
         } catch (error) {
-          console.error('[chat] Stream error:', error);
+          // Categorize Anthropic API errors for better observability
+          if (error instanceof Anthropic.APIError) {
+            if (error.status === 429) {
+              console.warn(JSON.stringify({
+                event: 'anthropic.rate_limited',
+                endpoint: '/api/chat',
+                retryAfter: error.headers?.['retry-after'],
+              }));
+            } else if (error.status >= 500) {
+              console.error(JSON.stringify({
+                event: 'anthropic.server_error',
+                endpoint: '/api/chat',
+                status: error.status,
+                message: error.message,
+              }));
+            } else {
+              console.error(JSON.stringify({
+                event: 'anthropic.api_error',
+                endpoint: '/api/chat',
+                status: error.status,
+                message: error.message,
+              }));
+            }
+          } else {
+            console.error('[chat] Stream error:', error);
+          }
           // Log error for anomaly detection
           console.log(JSON.stringify({
             type: 'api_usage_error',

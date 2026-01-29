@@ -677,7 +677,32 @@ export async function POST(req: Request) {
               console.warn('[resume-generator] Failed to log usage:', usageError);
             }
           } catch (streamError) {
-            console.error('[resume-generator] Stream error:', streamError);
+            // Categorize Anthropic API errors for better observability
+            if (streamError instanceof Anthropic.APIError) {
+              if (streamError.status === 429) {
+                console.warn(JSON.stringify({
+                  event: 'anthropic.rate_limited',
+                  endpoint: '/api/resume-generator',
+                  retryAfter: streamError.headers?.['retry-after'],
+                }));
+              } else if (streamError.status >= 500) {
+                console.error(JSON.stringify({
+                  event: 'anthropic.server_error',
+                  endpoint: '/api/resume-generator',
+                  status: streamError.status,
+                  message: streamError.message,
+                }));
+              } else {
+                console.error(JSON.stringify({
+                  event: 'anthropic.api_error',
+                  endpoint: '/api/resume-generator',
+                  status: streamError.status,
+                  message: streamError.message,
+                }));
+              }
+            } else {
+              console.error('[resume-generator] Stream error:', streamError);
+            }
             // Log error for anomaly detection
             console.log(JSON.stringify({
               type: 'api_usage_error',
