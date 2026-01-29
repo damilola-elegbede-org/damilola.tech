@@ -602,7 +602,7 @@ export async function POST(req: Request) {
         {
           type: 'text',
           text: systemPrompt,
-          cache_control: { type: 'ephemeral' },
+          cache_control: { type: 'ephemeral', ttl: '1h' },
         },
       ],
       messages: [
@@ -672,6 +672,7 @@ export async function POST(req: Request) {
                 cacheCreation: usage.cache_creation_input_tokens ?? 0,
                 cacheRead: usage.cache_read_input_tokens ?? 0,
                 durationMs: Date.now() - startTime,
+                cacheTtl: '1h',
               }).catch((err) => console.warn('[resume-generator] Failed to log usage to blob:', err));
             } catch (usageError) {
               console.warn('[resume-generator] Failed to log usage:', usageError);

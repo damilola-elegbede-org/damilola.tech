@@ -18,6 +18,7 @@ export interface UsageRequest {
   cacheRead: number;
   durationMs: number;
   costUsd: number;
+  cacheTtl?: '5m' | '1h';  // Track which TTL was used
 }
 
 export interface UsageSession {
@@ -45,7 +46,7 @@ const PRICING: Record<string, {
   'claude-sonnet-4-20250514': {
     inputPerMillion: 3.0,       // $3/M input tokens
     outputPerMillion: 15.0,     // $15/M output tokens
-    cacheWritePerMillion: 3.75, // $3.75/M cache write
+    cacheWritePerMillion: 6.0,  // $6/M cache write (1-hour TTL)
     cacheReadPerMillion: 0.3,   // $0.30/M cache read (90% discount)
   },
 };
@@ -395,11 +396,14 @@ export async function getAggregatedStats(options?: AggregateOptions): Promise<{
       ? Math.round((totalCacheReadTokens / totalInputContext) * 1000) / 10
       : 0;
 
-  // Calculate cost savings from caching
+  // Calculate net cost savings from caching
+  // Net savings = read savings - write overhead
   const pricing = PRICING['claude-sonnet-4-20250514'];
-  const fullCost = (totalCacheReadTokens / 1_000_000) * pricing.inputPerMillion;
-  const cachedCost = (totalCacheReadTokens / 1_000_000) * pricing.cacheReadPerMillion;
-  const costSavingsUsd = Math.round((fullCost - cachedCost) * 1_000_000) / 1_000_000;
+  const readSavings = (totalCacheReadTokens / 1_000_000) *
+    (pricing.inputPerMillion - pricing.cacheReadPerMillion);
+  const writeOverhead = (totalCacheCreationTokens / 1_000_000) *
+    (pricing.cacheWritePerMillion - pricing.inputPerMillion);
+  const costSavingsUsd = Math.max(0, Math.round((readSavings - writeOverhead) * 1_000_000) / 1_000_000);
 
   // Get recent sessions (top 10)
   const recentSessions = sessions.slice(0, 10).map((s) => ({
