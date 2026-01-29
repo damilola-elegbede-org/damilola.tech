@@ -335,6 +335,48 @@ describe('admin stats API route', () => {
       expect(data.chats.total).toBe(2); // Only valid formats counted
     });
 
+    it('counts chat-prefixed filenames from live saves', async () => {
+      mockList.mockImplementation(async ({ prefix }) => {
+        if (prefix.includes('chats/')) {
+          return {
+            blobs: [
+              // Valid new format
+              {
+                pathname: 'damilola.tech/chats/production/2026-01-28T10-30-00Z-abc12345.json',
+                size: 1234,
+                url: 'https://blob.url/chat1',
+              },
+              // Valid chat-prefixed format (from live saves)
+              {
+                pathname:
+                  'damilola.tech/chats/production/chat-939d8245-20b8-49b3-9e1b-746232af362e.json',
+                size: 4500,
+                url: 'https://blob.url/chat2',
+              },
+              // Valid legacy format
+              {
+                pathname:
+                  'damilola.tech/chats/production/12345678-1234-1234-1234-123456789abc.json',
+                size: 2345,
+                url: 'https://blob.url/chat3',
+              },
+            ],
+            cursor: undefined,
+          };
+        }
+        return { blobs: [], cursor: undefined };
+      });
+
+      const { GET } = await import('@/app/api/admin/stats/route');
+
+      const request = new Request('http://localhost/api/admin/stats');
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.chats.total).toBe(3); // All three formats counted
+    });
+
     it('handles missing resume status gracefully', async () => {
       mockList.mockImplementation(async ({ prefix }) => {
         if (prefix.includes('resume-generations/')) {

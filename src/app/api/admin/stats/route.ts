@@ -51,6 +51,8 @@ export async function GET(req: Request) {
       // Regex patterns matching those in /api/admin/chats/route.ts
       const newFormatRegex =
         /^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z)-([a-f0-9]{8})(?:-.+)?\.json$/i;
+      const chatPrefixRegex =
+        /^(chat-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\.json$/i;
       const legacyFormatRegex =
         /^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\.json$/;
 
@@ -59,7 +61,7 @@ export async function GET(req: Request) {
         for (const blob of result.blobs) {
           if (blob.size === 0) continue;
           const filename = blob.pathname.split('/').pop() || '';
-          if (newFormatRegex.test(filename) || legacyFormatRegex.test(filename)) {
+          if (newFormatRegex.test(filename) || chatPrefixRegex.test(filename) || legacyFormatRegex.test(filename)) {
             count++;
           }
         }
