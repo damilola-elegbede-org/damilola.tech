@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { SHORTLINKS } from '@/lib/shortlinks';
 
 interface UtmExample {
   name: string;
@@ -171,6 +172,45 @@ export default function UtmTrackingPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Shortlinks */}
+      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-6">
+        <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">Vanity Shortlinks</h2>
+        <p className="text-sm text-[var(--color-text-muted)]">
+          Memorable URLs that redirect to the homepage with UTM parameters. Perfect for verbal
+          sharing, business cards, or when you need a simple link to remember.
+        </p>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                <th className="pb-2 text-left font-medium text-[var(--color-text)]">Shortlink</th>
+                <th className="pb-2 text-left font-medium text-[var(--color-text)]">Source</th>
+                <th className="pb-2 text-left font-medium text-[var(--color-text)]">Medium</th>
+                <th className="pb-2 text-left font-medium text-[var(--color-text)]">Use Case</th>
+              </tr>
+            </thead>
+            <tbody>
+              {SHORTLINKS.map((link) => (
+                <tr key={link.slug} className="border-b border-[var(--color-border)]/50">
+                  <td className="py-2">
+                    <code className="rounded bg-[var(--color-bg)] px-2 py-0.5 font-mono text-[var(--color-accent)]">
+                      /{link.slug}
+                    </code>
+                  </td>
+                  <td className="py-2 font-mono text-[var(--color-text)]">{link.utm_source}</td>
+                  <td className="py-2 font-mono text-[var(--color-text)]">{link.utm_medium}</td>
+                  <td className="py-2 text-[var(--color-text-muted)]">{link.description}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-4 text-xs text-[var(--color-text-muted)]">
+          Example: Share <code className="rounded bg-[var(--color-bg)] px-1 py-0.5 font-mono">damilola.tech/recruiter</code> with
+          a recruiter, and their visit will be tracked with source=recruiter, medium=verbal.
+        </p>
       </div>
 
       {/* Automatic tracking */}
