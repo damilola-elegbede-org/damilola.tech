@@ -47,7 +47,7 @@ describe('audit-client module', () => {
 
   describe('trackEvent', () => {
     it('queues events without immediately sending', async () => {
-      const { trackEvent, auditClient } = await import('@/lib/audit-client');
+      const { trackEvent } = await import('@/lib/audit-client');
 
       trackEvent('page_view', { metadata: { page: 'home' } });
 

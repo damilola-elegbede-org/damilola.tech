@@ -1,10 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useCallback } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { RefreshIndicator } from '@/components/admin/RefreshIndicator';
 import { formatNumber } from '@/lib/format-number';
 import { truncateSessionId } from '@/lib/session';
 import { formatInMT } from '@/lib/timezone';
+import { useAdminCacheWithFallback } from '@/hooks/use-admin-cache';
+import { PRESET_TO_TRAFFIC_CACHE_KEY, type CacheKey } from '@/lib/admin-cache';
 
 interface TrafficBreakdown {
   source: string;
@@ -84,57 +87,51 @@ function getPresetDates(preset: '7d' | '30d' | '90d'): { start: string; end: str
 const ITEMS_PER_PAGE = 20;
 
 export default function TrafficPage() {
-  const [stats, setStats] = useState<TrafficStats | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [preset, setPreset] = useState<PresetType>('30d');
   const [startDate, setStartDate] = useState(() => getPresetDates('30d').start);
   const [endDate, setEndDate] = useState(() => getPresetDates('30d').end);
   const [currentPage, setCurrentPage] = useState(1);
 
-  useEffect(() => {
-    async function fetchStats() {
-      setError(null);
-      setIsLoading(true);
-      setCurrentPage(1); // Reset pagination when filters change
-      try {
-        const params = new URLSearchParams({
-          startDate,
-          endDate,
-        });
-        const res = await fetch(`/api/admin/traffic?${params}`);
-        if (!res.ok) throw new Error('Failed to fetch traffic stats');
-        const data = await res.json();
-        setStats(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred');
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    fetchStats();
+  // Determine cache key based on preset (null for custom ranges)
+  const cacheKey = PRESET_TO_TRAFFIC_CACHE_KEY[preset] as CacheKey | null;
+
+  // Fetcher function for traffic stats
+  const fetchTrafficStats = useCallback(async () => {
+    const params = new URLSearchParams({ startDate, endDate });
+    const res = await fetch(`/api/admin/traffic?${params}`);
+    if (!res.ok) throw new Error('Failed to fetch traffic stats');
+    return res.json();
   }, [startDate, endDate]);
+
+  const { data: stats, error, isLoading, isValidating } = useAdminCacheWithFallback<TrafficStats>({
+    cacheKey,
+    fetcher: fetchTrafficStats,
+    dateRange: { start: startDate, end: endDate },
+  });
 
   const handlePresetClick = (newPreset: '7d' | '30d' | '90d') => {
     const dates = getPresetDates(newPreset);
     setPreset(newPreset);
     setStartDate(dates.start);
     setEndDate(dates.end);
+    setCurrentPage(1); // Reset pagination when date range changes
   };
 
   const handleStartDateChange = (value: string) => {
     setPreset('custom');
     setStartDate(value);
+    setCurrentPage(1); // Reset pagination when date range changes
   };
 
   const handleEndDateChange = (value: string) => {
     setPreset('custom');
     setEndDate(value);
+    setCurrentPage(1); // Reset pagination when date range changes
   };
 
   const isValidDateRange = startDate <= endDate;
 
-  if (isLoading) {
+  if (isLoading && !stats) {
     return (
       <div className="flex h-64 items-center justify-center" role="status" aria-label="Loading traffic data" aria-live="polite" aria-busy="true">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
@@ -142,10 +139,10 @@ export default function TrafficPage() {
     );
   }
 
-  if (error) {
+  if (error && !stats) {
     return (
       <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-red-400">
-        {error}
+        {error.message}
       </div>
     );
   }
@@ -156,7 +153,8 @@ export default function TrafficPage() {
   })) || [];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8" aria-busy={isLoading}>
+      <RefreshIndicator isRefreshing={isValidating && !isLoading} />
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[var(--color-text)]">Traffic Sources</h1>
@@ -252,37 +250,65 @@ export default function TrafficPage() {
             Traffic by Source
           </h2>
           {pieData.length > 0 ? (
-            <div className="h-80" role="img" aria-label={`Pie chart showing traffic by source: ${pieData.map(d => `${d.name}: ${d.value} sessions`).join(', ')}`}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart id="traffic-source-chart">
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
-                    {pieData.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            <>
+              <div className="h-80" role="img" aria-label={`Pie chart showing traffic distribution across ${pieData.length} sources`}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={2}
+                      dataKey="value"
+                    >
+                      {pieData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'var(--color-card)',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: '8px',
+                      }}
+                      labelStyle={{ color: 'var(--color-text)' }}
+                      itemStyle={{ color: 'var(--color-text)' }}
+                    />
+                    <Legend
+                      wrapperStyle={{ color: 'var(--color-text-muted)' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              {/* Accessible table alternative for screen readers */}
+              <details className="mt-4">
+                <summary className="cursor-pointer text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+                  View chart data as table
+                </summary>
+                <table className="mt-2 w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--color-border)]">
+                      <th className="py-2 text-left text-[var(--color-text-muted)]">Source</th>
+                      <th className="py-2 text-right text-[var(--color-text-muted)]">Sessions</th>
+                      <th className="py-2 text-right text-[var(--color-text-muted)]">%</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pieData.map((item) => (
+                      <tr key={item.name} className="border-b border-[var(--color-border)]">
+                        <td className="py-2 text-[var(--color-text)]">{item.name}</td>
+                        <td className="py-2 text-right text-[var(--color-text)]">{item.value}</td>
+                        <td className="py-2 text-right text-[var(--color-text-muted)]">
+                          {((item.value / pieData.reduce((sum, d) => sum + d.value, 0)) * 100).toFixed(1)}%
+                        </td>
+                      </tr>
                     ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'var(--color-card)',
-                      border: '1px solid var(--color-border)',
-                      borderRadius: '8px',
-                    }}
-                    labelStyle={{ color: 'var(--color-text)' }}
-                    itemStyle={{ color: 'var(--color-text)' }}
-                  />
-                  <Legend
-                    wrapperStyle={{ color: 'var(--color-text-muted)' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+                  </tbody>
+                </table>
+              </details>
+            </>
           ) : (
             <div className="flex h-80 items-center justify-center text-[var(--color-text-muted)]">
               No traffic data available

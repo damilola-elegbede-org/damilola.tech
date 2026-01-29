@@ -27,7 +27,7 @@ export function FitAssessment() {
   const [examplesError, setExamplesError] = useState(false);
   const { ref, isVisible } = useScrollReveal();
   const resultRef = useRef<HTMLDivElement>(null);
-  const [assessmentId, setAssessmentId] = useState<string | null>(null);
+  const [, setAssessmentId] = useState<string | null>(null);  // assessmentId not used
   const streamStartRef = useRef<number>(0);
 
   // Check if input is URL

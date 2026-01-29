@@ -210,7 +210,7 @@ describe('fit-assessment log API route', () => {
     it('rejects missing jobDescriptionSnippet', async () => {
       const { POST } = await import('@/app/api/fit-assessment/log/route');
 
-      const { jobDescriptionSnippet, ...dataWithoutSnippet } = validLogData;
+      const { jobDescriptionSnippet, ...dataWithoutSnippet } = validLogData;  // eslint-disable-line @typescript-eslint/no-unused-vars
       const request = new Request('http://localhost/api/fit-assessment/log', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

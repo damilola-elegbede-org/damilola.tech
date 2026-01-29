@@ -26,12 +26,30 @@ const OUTPUT_FILE = path.join(GENERATED_DIR, 'system-prompt.ts');
 async function generatePrompt(): Promise<void> {
   console.log('=== System Prompt Generation ===\n');
 
-  // Step 1: Fetch shared context template (REQUIRED in production)
-  console.log('1. Fetching shared context template...');
+  // Step 1: Fetch all templates in parallel (REQUIRED in production)
+  console.log('1. Fetching all templates in parallel...');
   let sharedContextTemplate: string;
+  let chatbotInstructionsTemplate: string;
+  let fitAssessmentInstructionsTemplate: string;
+  let resumeGeneratorInstructionsTemplate: string;
+
   try {
-    sharedContextTemplate = await fetchSharedContext();
-    console.log('   ✓ shared-context.md fetched successfully\n');
+    const results = await Promise.all([
+      fetchSharedContext(),
+      fetchChatbotInstructions(),
+      fetchFitAssessmentInstructionsRequired(),
+      fetchResumeGeneratorInstructionsRequired(),
+    ]);
+
+    sharedContextTemplate = results[0];
+    chatbotInstructionsTemplate = results[1];
+    fitAssessmentInstructionsTemplate = results[2];
+    resumeGeneratorInstructionsTemplate = results[3];
+
+    console.log('   ✓ shared-context.md fetched');
+    console.log('   ✓ chatbot-instructions.md fetched');
+    console.log('   ✓ fit-assessment-instructions.md fetched');
+    console.log('   ✓ resume-generator-instructions.md fetched\n');
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -44,45 +62,12 @@ async function generatePrompt(): Promise<void> {
       return;
     }
 
-    console.error('   ✗ Failed to fetch shared context template');
+    console.error('   ✗ Failed to fetch templates');
     throw error;
   }
 
-  // Step 2: Fetch chatbot instructions template (REQUIRED in production)
-  console.log('2. Fetching chatbot instructions template...');
-  let chatbotInstructionsTemplate: string;
-  try {
-    chatbotInstructionsTemplate = await fetchChatbotInstructions();
-    console.log('   ✓ chatbot-instructions.md fetched successfully\n');
-  } catch (error) {
-    console.error('   ✗ Failed to fetch chatbot instructions template');
-    throw error;
-  }
-
-  // Step 3: Fetch fit assessment instructions template (REQUIRED in production)
-  console.log('3. Fetching fit assessment instructions template...');
-  let fitAssessmentInstructionsTemplate: string;
-  try {
-    fitAssessmentInstructionsTemplate = await fetchFitAssessmentInstructionsRequired();
-    console.log('   ✓ fit-assessment-instructions.md fetched successfully\n');
-  } catch (error) {
-    console.error('   ✗ Failed to fetch fit assessment instructions template');
-    throw error;
-  }
-
-  // Step 3b: Fetch resume generator instructions template (REQUIRED in production)
-  console.log('3b. Fetching resume generator instructions template...');
-  let resumeGeneratorInstructionsTemplate: string;
-  try {
-    resumeGeneratorInstructionsTemplate = await fetchResumeGeneratorInstructionsRequired();
-    console.log('   ✓ resume-generator-instructions.md fetched successfully\n');
-  } catch (error) {
-    console.error('   ✗ Failed to fetch resume generator instructions template');
-    throw error;
-  }
-
-  // Step 4: Fetch content files (optional)
-  console.log('4. Fetching content files...');
+  // Step 2: Fetch content files (optional)
+  console.log('2. Fetching content files...');
   const content = await fetchAllContent();
 
   const contentStatus = {
@@ -106,7 +91,7 @@ async function generatePrompt(): Promise<void> {
   console.log(`   ${contentStatus.chatbotArchitecture} chatbot-architecture.md`);
   console.log('');
 
-  // Step 5: Define placeholder replacements
+  // Step 3: Define placeholder replacements
   // Shared replacements (used by all prompts)
   const sharedReplacements: Record<string, string> = {
     '{{STAR_STORIES}}': content.starStories || '*STAR stories not available in current build.*',
@@ -123,8 +108,8 @@ async function generatePrompt(): Promise<void> {
     '{{CHATBOT_ARCHITECTURE}}': content.chatbotArchitecture || '*Chatbot architecture details not available.*',
   };
 
-  // Step 6: Generate SHARED_CONTEXT (profile data only, no chatbot instructions)
-  console.log('5. Generating SHARED_CONTEXT...');
+  // Step 4: Generate SHARED_CONTEXT (profile data only, no chatbot instructions)
+  console.log('3. Generating SHARED_CONTEXT...');
   let sharedContext = sharedContextTemplate;
   for (const [placeholder, value] of Object.entries(sharedReplacements)) {
     sharedContext = sharedContext.replace(
@@ -134,8 +119,8 @@ async function generatePrompt(): Promise<void> {
   }
   console.log('   ✓ SHARED_CONTEXT generated\n');
 
-  // Step 7: Generate CHATBOT_SYSTEM_PROMPT (shared context + chatbot instructions)
-  console.log('6. Generating CHATBOT_SYSTEM_PROMPT...');
+  // Step 5: Generate CHATBOT_SYSTEM_PROMPT (shared context + chatbot instructions)
+  console.log('4. Generating CHATBOT_SYSTEM_PROMPT...');
   const combinedTemplate = sharedContextTemplate + '\n\n---\n\n' + chatbotInstructionsTemplate;
   let chatbotPrompt = combinedTemplate;
 
@@ -156,8 +141,8 @@ async function generatePrompt(): Promise<void> {
   }
   console.log('   ✓ CHATBOT_SYSTEM_PROMPT generated\n');
 
-  // Step 8: Generate FIT_ASSESSMENT_PROMPT (shared context + fit assessment instructions)
-  console.log('7. Generating FIT_ASSESSMENT_PROMPT...');
+  // Step 6: Generate FIT_ASSESSMENT_PROMPT (shared context + fit assessment instructions)
+  console.log('5. Generating FIT_ASSESSMENT_PROMPT...');
   const fitAssessmentTemplate = sharedContextTemplate + '\n\n---\n\n' + fitAssessmentInstructionsTemplate;
   let fitAssessmentPrompt = fitAssessmentTemplate;
 
@@ -170,9 +155,9 @@ async function generatePrompt(): Promise<void> {
   }
   console.log('   ✓ FIT_ASSESSMENT_PROMPT generated\n');
 
-  // Step 8b: Generate RESUME_GENERATOR_PROMPT (resume generator instructions only, no shared context prefix)
+  // Step 7: Generate RESUME_GENERATOR_PROMPT (resume generator instructions only, no shared context prefix)
   // The resume generator uses different placeholders that map to content sources
-  console.log('7b. Generating RESUME_GENERATOR_PROMPT...');
+  console.log('6. Generating RESUME_GENERATOR_PROMPT...');
   let resumeGeneratorPrompt = resumeGeneratorInstructionsTemplate;
 
   // Resume generator uses different placeholder names
@@ -194,8 +179,8 @@ async function generatePrompt(): Promise<void> {
   }
   console.log('   ✓ RESUME_GENERATOR_PROMPT generated\n');
 
-  // Step 9: Generate output file with all exports
-  console.log('8. Generating output file...');
+  // Step 8: Generate output file with all exports
+  console.log('7. Generating output file...');
   const output = `// AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
 // Generated at: ${new Date().toISOString()}
 // Template sources: shared-context.md, chatbot-instructions.md, fit-assessment-instructions.md, resume-generator-instructions.md (Vercel Blob)

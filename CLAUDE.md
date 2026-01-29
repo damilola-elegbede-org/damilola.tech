@@ -85,7 +85,7 @@ career-data/
 ### Claude Commands
 - `/content-pull` - Download content from Blob to `career-data/` directories
 - `/content-push` - Upload `career-data/` content to Blob
-- `/content-commit` - Commit submodule changes and stage pointer in main repo
+- `/content-ship` - Commit and push career-data changes, stage pointer in main repo
 - `/resume-pull` - Download base resume PDF from Blob
 - `/resume-push` - Upload base resume PDF to Blob
 
@@ -102,9 +102,8 @@ blob token, files are read from `career-data/` subdirectories.
 
 ### Editing Content
 1. Edit files in `career-data/` subdirectories
-2. Run `/content-commit` to commit submodule + stage pointer in main repo
-3. Run `/commit` to commit main repo
-4. Run `/content-push` to sync to Vercel Blob
+2. Run `/content-ship` to commit and push both repos
+3. Run `/content-push` to sync to Vercel Blob
 
 ## Section Background Pattern
 Sections alternate backgrounds for visual rhythm:

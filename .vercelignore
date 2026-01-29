@@ -1,0 +1,3 @@
+# Exclude private git submodule that Vercel can't access
+# Content is fetched from Vercel Blob instead
+career-data/
