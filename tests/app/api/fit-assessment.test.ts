@@ -37,6 +37,12 @@ vi.mock('@anthropic-ai/sdk', () => {
   };
 });
 
+// Mock node:dns/promises to return a valid public IP for test domains
+// This allows tests to proceed past DNS validation to test fetch/error handling
+vi.mock('node:dns/promises', () => ({
+  lookup: vi.fn().mockResolvedValue([{ address: '203.0.113.1', family: 4 }]),
+}));
+
 // Store original fetch
 const originalFetch = global.fetch;
 

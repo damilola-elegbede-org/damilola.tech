@@ -35,7 +35,11 @@ async function getDnsLookup() {
 // Use Node.js runtime (not edge) to allow local file fallback in development
 export const runtime = 'nodejs';
 
-const client = new Anthropic();
+const client = new Anthropic({
+  defaultHeaders: {
+    'anthropic-beta': 'extended-cache-ttl-2025-04-11',
+  },
+});
 
 // Use generated prompt in production, fall back to runtime fetch in development
 const isGeneratedPromptAvailable = RESUME_GENERATOR_PROMPT !== '__DEVELOPMENT_PLACEHOLDER__';
@@ -602,7 +606,7 @@ export async function POST(req: Request) {
         {
           type: 'text',
           text: systemPrompt,
-          cache_control: { type: 'ephemeral' },
+          cache_control: { type: 'ephemeral', ttl: '1h' },
         },
       ],
       messages: [
@@ -672,6 +676,7 @@ export async function POST(req: Request) {
                 cacheCreation: usage.cache_creation_input_tokens ?? 0,
                 cacheRead: usage.cache_read_input_tokens ?? 0,
                 durationMs: Date.now() - startTime,
+                cacheTtl: '1h',
               }).catch((err) => console.warn('[resume-generator] Failed to log usage to blob:', err));
             } catch (usageError) {
               console.warn('[resume-generator] Failed to log usage:', usageError);

@@ -46,10 +46,10 @@ describe('calculateCost', () => {
       });
 
       // Input: 1000 tokens * $3/M = $0.003
-      // Cache creation: 500 tokens * $3.75/M = $0.001875
+      // Cache creation: 500 tokens * $6/M = $0.003 (1-hour TTL)
       // Output: 500 tokens * $15/M = $0.0075
-      // Total: $0.012375
-      expect(cost).toBe(0.012375);
+      // Total: $0.0135
+      expect(cost).toBe(0.0135);
     });
 
     it('calculates cost with both cache read and creation', () => {
@@ -63,10 +63,10 @@ describe('calculateCost', () => {
 
       // Uncached input: 1000 - 600 = 400 tokens * $3/M = $0.0012
       // Cache read: 600 tokens * $0.30/M = $0.00018
-      // Cache creation: 200 tokens * $3.75/M = $0.00075
+      // Cache creation: 200 tokens * $6/M = $0.0012 (1-hour TTL)
       // Output: 500 tokens * $15/M = $0.0075
-      // Total: $0.00963
-      expect(cost).toBe(0.00963);
+      // Total: $0.01008
+      expect(cost).toBe(0.01008);
     });
   });
 
@@ -110,10 +110,10 @@ describe('calculateCost', () => {
 
       // Uncached input: 100000 - 80000 = 20000 tokens * $3/M = $0.06
       // Cache read: 80000 tokens * $0.30/M = $0.024
-      // Cache creation: 10000 tokens * $3.75/M = $0.0375
+      // Cache creation: 10000 tokens * $6/M = $0.06 (1-hour TTL)
       // Output: 50000 tokens * $15/M = $0.75
-      // Total: $0.8715
-      expect(cost).toBe(0.8715);
+      // Total: $0.894
+      expect(cost).toBe(0.894);
     });
   });
 
@@ -164,10 +164,10 @@ describe('calculateCost', () => {
       });
 
       // Input: 1 token * $3/M = $0.000003
-      // Cache creation: 1 token * $3.75/M = $0.00000375
+      // Cache creation: 1 token * $6/M = $0.000006 (1-hour TTL)
       // Output: 1 token * $15/M = $0.000015
-      // Total: $0.00002175, rounded to $0.000022
-      expect(cost).toBe(0.000022);
+      // Total: $0.000024, rounded to $0.000024
+      expect(cost).toBe(0.000024);
       expect(cost.toString().split('.')[1]?.length ?? 0).toBeLessThanOrEqual(6);
     });
   });
