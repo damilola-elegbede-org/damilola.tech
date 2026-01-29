@@ -47,15 +47,20 @@ function isValidRequest(body: unknown): body is ArchiveRequest {
   return true;
 }
 
-function getValidationError(body: unknown): string | null {
+interface ValidationResult {
+  error: string | null;
+  normalizedSessionId: string | null;
+}
+
+function validateRequest(body: unknown): ValidationResult {
   if (typeof body !== 'object' || body === null) {
-    return 'Invalid request body';
+    return { error: 'Invalid request body', normalizedSessionId: null };
   }
 
   const req = body as Record<string, unknown>;
 
   if (typeof req.sessionId !== 'string' || !req.sessionId) {
-    return 'sessionId is required';
+    return { error: 'sessionId is required', normalizedSessionId: null };
   }
 
   // Normalize to lowercase for consistent storage
@@ -69,30 +74,28 @@ function getValidationError(body: unknown): string | null {
       receivedFormat: normalizedId?.slice(0, 25),
       expectedPattern: 'chat-{uuid}',
     }));
-    return 'sessionId must be a valid chat-prefixed UUID';
+    return { error: 'sessionId must be a valid chat-prefixed UUID', normalizedSessionId: null };
   }
-  // Update the sessionId in place for consistent downstream use
-  req.sessionId = normalizedId;
 
   if (typeof req.sessionStartedAt !== 'string' || !req.sessionStartedAt) {
-    return 'sessionStartedAt is required';
+    return { error: 'sessionStartedAt is required', normalizedSessionId: null };
   }
 
   // Validate ISO date format
   const date = new Date(req.sessionStartedAt);
   if (isNaN(date.getTime())) {
-    return 'sessionStartedAt must be a valid ISO date';
+    return { error: 'sessionStartedAt must be a valid ISO date', normalizedSessionId: null };
   }
 
   if (!Array.isArray(req.messages)) {
-    return 'messages array is required';
+    return { error: 'messages array is required', normalizedSessionId: null };
   }
 
   if (req.messages.length === 0) {
-    return 'messages cannot be empty';
+    return { error: 'messages cannot be empty', normalizedSessionId: null };
   }
 
-  return null;
+  return { error: null, normalizedSessionId: normalizedId };
 }
 
 function formatTimestamp(date: Date): string {
@@ -126,7 +129,7 @@ export async function POST(req: Request) {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    const validationError = getValidationError(body);
+    const { error: validationError, normalizedSessionId } = validateRequest(body);
     if (validationError) {
       return Response.json({ error: validationError }, { status: 400 });
     }
@@ -135,7 +138,9 @@ export async function POST(req: Request) {
       return Response.json({ error: 'Invalid request structure' }, { status: 400 });
     }
 
-    const { sessionId, sessionStartedAt, messages } = body;
+    const { sessionStartedAt, messages } = body;
+    // Use normalized sessionId from validation (lowercase for consistent storage)
+    const sessionId = normalizedSessionId!;
     const environment = process.env.VERCEL_ENV || 'development';
     const now = new Date();
 
