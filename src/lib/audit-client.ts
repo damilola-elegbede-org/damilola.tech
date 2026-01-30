@@ -92,8 +92,13 @@ class AuditClient {
 
     // Build metadata with optional traffic source
     const metadata: Record<string, unknown> = { ...options.metadata };
-    if (options.includeTrafficSource && this.trafficSource) {
-      metadata.trafficSource = this.trafficSource;
+    if (options.includeTrafficSource) {
+      // Always call captureTrafficSource() fresh to get current UTM params
+      // (supports shortlink redirects that add UTM params after initial visit)
+      const freshTrafficSource = captureTrafficSource();
+      if (freshTrafficSource) {
+        metadata.trafficSource = freshTrafficSource;
+      }
     }
 
     const event: QueuedEvent = {
