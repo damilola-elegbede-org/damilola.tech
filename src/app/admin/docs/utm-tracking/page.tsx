@@ -107,14 +107,21 @@ function CopyButton({ text }: { text: string }) {
     }
   };
 
+  const statusMessage = copied ? 'Copied to clipboard' : error ? 'Copy failed, please try again' : '';
+
   return (
-    <button
-      onClick={handleCopy}
-      aria-label={copied ? 'Copied to clipboard' : error ? 'Copy failed' : 'Copy to clipboard'}
-      className="shrink-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2"
-    >
-      {copied ? 'Copied!' : error ? 'Failed' : 'Copy'}
-    </button>
+    <>
+      <button
+        onClick={handleCopy}
+        aria-label="Copy to clipboard"
+        className="shrink-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2"
+      >
+        {copied ? 'Copied!' : error ? 'Failed' : 'Copy'}
+      </button>
+      <span role="status" aria-live="polite" className="sr-only">
+        {statusMessage}
+      </span>
+    </>
   );
 }
 
@@ -128,7 +135,7 @@ export default function UtmTrackingPage() {
           href="/admin/docs"
           className="mb-4 inline-flex items-center gap-1 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-accent)]"
         >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
           Back to Docs
@@ -151,11 +158,12 @@ export default function UtmTrackingPage() {
         </p>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-sm">
+            <caption className="sr-only">UTM Parameters Reference</caption>
             <thead>
               <tr className="border-b border-[var(--color-border)]">
-                <th className="pb-2 text-left font-medium text-[var(--color-text)]">Parameter</th>
-                <th className="pb-2 text-left font-medium text-[var(--color-text)]">Purpose</th>
-                <th className="pb-2 text-left font-medium text-[var(--color-text)]">Example</th>
+                <th scope="col" className="pb-2 text-left font-medium text-[var(--color-text)]">Parameter</th>
+                <th scope="col" className="pb-2 text-left font-medium text-[var(--color-text)]">Purpose</th>
+                <th scope="col" className="pb-2 text-left font-medium text-[var(--color-text)]">Example</th>
               </tr>
             </thead>
             <tbody>
@@ -198,13 +206,14 @@ export default function UtmTrackingPage() {
         </p>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-sm">
+            <caption className="sr-only">Vanity Shortlinks Reference</caption>
             <thead>
               <tr className="border-b border-[var(--color-border)]">
-                <th className="pb-2 text-left font-medium text-[var(--color-text)]">Shortlink</th>
-                <th className="pb-2 text-left font-medium text-[var(--color-text)]">Source</th>
-                <th className="pb-2 text-left font-medium text-[var(--color-text)]">Medium</th>
-                <th className="pb-2 text-left font-medium text-[var(--color-text)]">Use Case</th>
-                <th className="pb-2 text-left font-medium text-[var(--color-text)]">Copy</th>
+                <th scope="col" className="pb-2 text-left font-medium text-[var(--color-text)]">Shortlink</th>
+                <th scope="col" className="pb-2 text-left font-medium text-[var(--color-text)]">Source</th>
+                <th scope="col" className="pb-2 text-left font-medium text-[var(--color-text)]">Medium</th>
+                <th scope="col" className="pb-2 text-left font-medium text-[var(--color-text)]">Use Case</th>
+                <th scope="col" className="pb-2 text-left font-medium text-[var(--color-text)]">Copy</th>
               </tr>
             </thead>
             <tbody>
