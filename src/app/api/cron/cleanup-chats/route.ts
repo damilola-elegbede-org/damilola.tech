@@ -71,7 +71,31 @@ function isProtected(pathname: string): boolean {
 }
 
 /**
- * Clean up blobs with a given prefix older than the cutoff date
+ * Delete a batch of blobs and track results
+ */
+async function deleteBatch(
+  urls: string[]
+): Promise<{ deleted: number; errors: number }> {
+  let deleted = 0;
+  let errors = 0;
+
+  const results = await Promise.allSettled(urls.map((url) => del(url)));
+  for (let i = 0; i < results.length; i++) {
+    if (results[i].status === 'fulfilled') {
+      deleted++;
+    } else {
+      const reason = (results[i] as PromiseRejectedResult).reason;
+      console.error(`Failed to delete blob ${urls[i]}:`, reason);
+      errors++;
+    }
+  }
+
+  return { deleted, errors };
+}
+
+/**
+ * Clean up blobs with a given prefix older than the cutoff date.
+ * Uses streaming deletion to maintain constant memory usage.
  */
 async function cleanupPrefix(
   prefix: string,
@@ -83,10 +107,14 @@ async function cleanupPrefix(
   let skipped = 0;
   let errors = 0;
   let cursor: string | undefined;
-  const toDelete: string[] = [];
+  const BATCH_SIZE = 10;
+
+  // For dry-run, we still need to count what would be deleted
+  let wouldDelete = 0;
 
   do {
     const result = await list({ prefix, cursor });
+    const toDeleteThisPage: string[] = [];
 
     for (const blob of result.blobs) {
       // Skip protected paths
@@ -101,15 +129,31 @@ async function cleanupPrefix(
         extractTimestampFromFilename(filename) || blob.uploadedAt;
 
       if (!timestamp) {
-        console.warn(`Could not determine timestamp for: ${blob.pathname}`);
+        console.warn(
+          `Could not determine timestamp for: ${blob.pathname} (uploadedAt: ${blob.uploadedAt ? blob.uploadedAt.toISOString() : 'missing'})`
+        );
         skipped++;
         continue;
       }
 
       if (timestamp.getTime() < cutoffDate) {
-        toDelete.push(blob.url);
+        if (dryRun) {
+          wouldDelete++;
+        } else {
+          toDeleteThisPage.push(blob.url);
+        }
       } else {
         kept++;
+      }
+    }
+
+    // Stream deletions per page to maintain constant memory
+    if (!dryRun && toDeleteThisPage.length > 0) {
+      for (let i = 0; i < toDeleteThisPage.length; i += BATCH_SIZE) {
+        const batch = toDeleteThisPage.slice(i, i + BATCH_SIZE);
+        const batchResult = await deleteBatch(batch);
+        deleted += batchResult.deleted;
+        errors += batchResult.errors;
       }
     }
 
@@ -117,30 +161,15 @@ async function cleanupPrefix(
   } while (cursor);
 
   if (dryRun) {
-    return { deleted: toDelete.length, kept, skipped, errors: 0 };
-  }
-
-  // Batch delete
-  const BATCH_SIZE = 10;
-  for (let i = 0; i < toDelete.length; i += BATCH_SIZE) {
-    const batch = toDelete.slice(i, i + BATCH_SIZE);
-    const results = await Promise.allSettled(batch.map((url) => del(url)));
-
-    for (const result of results) {
-      if (result.status === 'fulfilled') {
-        deleted++;
-      } else {
-        console.error('Failed to delete blob:', result.reason);
-        errors++;
-      }
-    }
+    return { deleted: wouldDelete, kept, skipped, errors: 0 };
   }
 
   return { deleted, kept, skipped, errors };
 }
 
 /**
- * Delete all blobs under a prefix (for development cleanup)
+ * Delete all blobs under a prefix (for development cleanup).
+ * Uses streaming deletion to maintain constant memory usage.
  */
 async function deleteAllUnderPrefix(
   prefix: string,
@@ -149,43 +178,47 @@ async function deleteAllUnderPrefix(
   let deleted = 0;
   let errors = 0;
   let cursor: string | undefined;
-  const toDelete: string[] = [];
+  let wouldDelete = 0;
+  const BATCH_SIZE = 10;
 
   do {
     const result = await list({ prefix, cursor });
+    const toDeleteThisPage: string[] = [];
+
     for (const blob of result.blobs) {
       // Extra safety: never delete protected paths even if called incorrectly
       if (!isProtected(blob.pathname)) {
-        toDelete.push(blob.url);
+        if (dryRun) {
+          wouldDelete++;
+        } else {
+          toDeleteThisPage.push(blob.url);
+        }
       }
     }
+
+    // Stream deletions per page to maintain constant memory
+    if (!dryRun && toDeleteThisPage.length > 0) {
+      for (let i = 0; i < toDeleteThisPage.length; i += BATCH_SIZE) {
+        const batch = toDeleteThisPage.slice(i, i + BATCH_SIZE);
+        const batchResult = await deleteBatch(batch);
+        deleted += batchResult.deleted;
+        errors += batchResult.errors;
+      }
+    }
+
     cursor = result.cursor ?? undefined;
   } while (cursor);
 
   if (dryRun) {
-    return { deleted: toDelete.length, errors: 0 };
-  }
-
-  const BATCH_SIZE = 10;
-  for (let i = 0; i < toDelete.length; i += BATCH_SIZE) {
-    const batch = toDelete.slice(i, i + BATCH_SIZE);
-    const results = await Promise.allSettled(batch.map((url) => del(url)));
-
-    for (const result of results) {
-      if (result.status === 'fulfilled') {
-        deleted++;
-      } else {
-        console.error('Failed to delete blob:', result.reason);
-        errors++;
-      }
-    }
+    return { deleted: wouldDelete, errors: 0 };
   }
 
   return { deleted, errors };
 }
 
 /**
- * Clean up empty placeholder files (0-byte marker files)
+ * Clean up empty placeholder files (0-byte marker files).
+ * Uses streaming deletion to maintain constant memory usage.
  */
 async function cleanupEmptyPlaceholders(
   dryRun = false
@@ -193,50 +226,55 @@ async function cleanupEmptyPlaceholders(
   let deleted = 0;
   let errors = 0;
   let cursor: string | undefined;
-  const toDelete: string[] = [];
+  let wouldDelete = 0;
+  const BATCH_SIZE = 10;
 
   do {
     const result = await list({ prefix: BASE_PREFIX, cursor });
+    const toDeleteThisPage: string[] = [];
+
     for (const blob of result.blobs) {
       // Only delete if size is 0 AND not protected
       if (blob.size === 0 && !isProtected(blob.pathname)) {
-        toDelete.push(blob.url);
+        if (dryRun) {
+          wouldDelete++;
+        } else {
+          toDeleteThisPage.push(blob.url);
+        }
       }
     }
+
+    // Stream deletions per page to maintain constant memory
+    if (!dryRun && toDeleteThisPage.length > 0) {
+      for (let i = 0; i < toDeleteThisPage.length; i += BATCH_SIZE) {
+        const batch = toDeleteThisPage.slice(i, i + BATCH_SIZE);
+        const batchResult = await deleteBatch(batch);
+        deleted += batchResult.deleted;
+        errors += batchResult.errors;
+      }
+    }
+
     cursor = result.cursor ?? undefined;
   } while (cursor);
 
   if (dryRun) {
-    return { deleted: toDelete.length, errors: 0 };
-  }
-
-  const BATCH_SIZE = 10;
-  for (let i = 0; i < toDelete.length; i += BATCH_SIZE) {
-    const batch = toDelete.slice(i, i + BATCH_SIZE);
-    const results = await Promise.allSettled(batch.map((url) => del(url)));
-
-    for (const result of results) {
-      if (result.status === 'fulfilled') {
-        deleted++;
-      } else {
-        console.error('Failed to delete empty placeholder:', result.reason);
-        errors++;
-      }
-    }
+    return { deleted: wouldDelete, errors: 0 };
   }
 
   return { deleted, errors };
 }
 
 /**
- * Clean up orphan sessions (usage sessions without valid prefix)
+ * Clean up orphan sessions (usage sessions without valid prefix).
+ * Uses streaming deletion to maintain constant memory usage.
  */
 async function cleanupOrphanSessions(
   dryRun = false
 ): Promise<SimpleCleanupResult> {
   let deleted = 0;
   let errors = 0;
-  const toDelete: string[] = [];
+  let wouldDelete = 0;
+  const BATCH_SIZE = 10;
 
   // Check all environment session folders
   const environments = ['production', 'preview', 'development'];
@@ -247,6 +285,8 @@ async function cleanupOrphanSessions(
 
     do {
       const result = await list({ prefix, cursor });
+      const toDeleteThisPage: string[] = [];
+
       for (const blob of result.blobs) {
         const filename = blob.pathname.split('/').pop() || '';
         // Check if filename starts with any valid prefix
@@ -254,30 +294,30 @@ async function cleanupOrphanSessions(
           filename.startsWith(validPrefix)
         );
         if (!isValid) {
-          toDelete.push(blob.url);
+          if (dryRun) {
+            wouldDelete++;
+          } else {
+            toDeleteThisPage.push(blob.url);
+          }
         }
       }
+
+      // Stream deletions per page to maintain constant memory
+      if (!dryRun && toDeleteThisPage.length > 0) {
+        for (let i = 0; i < toDeleteThisPage.length; i += BATCH_SIZE) {
+          const batch = toDeleteThisPage.slice(i, i + BATCH_SIZE);
+          const batchResult = await deleteBatch(batch);
+          deleted += batchResult.deleted;
+          errors += batchResult.errors;
+        }
+      }
+
       cursor = result.cursor ?? undefined;
     } while (cursor);
   }
 
   if (dryRun) {
-    return { deleted: toDelete.length, errors: 0 };
-  }
-
-  const BATCH_SIZE = 10;
-  for (let i = 0; i < toDelete.length; i += BATCH_SIZE) {
-    const batch = toDelete.slice(i, i + BATCH_SIZE);
-    const results = await Promise.allSettled(batch.map((url) => del(url)));
-
-    for (const result of results) {
-      if (result.status === 'fulfilled') {
-        deleted++;
-      } else {
-        console.error('Failed to delete orphan session:', result.reason);
-        errors++;
-      }
-    }
+    return { deleted: wouldDelete, errors: 0 };
   }
 
   return { deleted, errors };
@@ -294,6 +334,7 @@ async function cleanupDevelopmentArtifacts(
     `${USAGE_PREFIX}development/`,
     `${CHATS_PREFIX}development/`,
     `${FIT_ASSESSMENTS_PREFIX}development/`,
+    `${RESUME_GENERATIONS_PREFIX}development/`,
   ];
 
   let totalDeleted = 0;
@@ -309,25 +350,20 @@ async function cleanupDevelopmentArtifacts(
 }
 
 export async function GET(req: Request) {
-  // Verify CRON_SECRET
+  // Verify CRON_SECRET - use consistent 401 response to prevent config state disclosure
   const authHeader = req.headers.get('Authorization');
   const expectedToken = process.env.CRON_SECRET;
 
-  // Fail fast if CRON_SECRET not configured
-  if (!expectedToken) {
-    console.error('[cron/cleanup-chats] CRON_SECRET not configured');
-    return Response.json(
-      { error: 'Server configuration error' },
-      { status: 500 }
-    );
-  }
-
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const token = authHeader.slice(7); // Remove 'Bearer ' prefix
-  if (!verifyToken(token, expectedToken)) {
+  // Return 401 for all auth failures to avoid leaking configuration state
+  if (
+    !expectedToken ||
+    !authHeader ||
+    !authHeader.startsWith('Bearer ') ||
+    !verifyToken(authHeader.slice(7), expectedToken)
+  ) {
+    if (!expectedToken) {
+      console.error('[cron/cleanup-chats] CRON_SECRET not configured');
+    }
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -439,7 +475,18 @@ export async function GET(req: Request) {
       totals,
     });
   } catch (error) {
-    console.error('[cron/cleanup] Error during cleanup:', error);
-    return Response.json({ error: 'Failed to run cleanup' }, { status: 500 });
+    // Categorize error for monitoring while returning safe generic message
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    const errorName = error instanceof Error ? error.name : 'Error';
+    console.error('[cron/cleanup] Error during cleanup:', {
+      name: errorName,
+      message: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    return Response.json(
+      { error: 'Failed to run cleanup', code: 'CLEANUP_ERROR' },
+      { status: 500 }
+    );
   }
 }

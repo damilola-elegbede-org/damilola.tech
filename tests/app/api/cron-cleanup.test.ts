@@ -217,28 +217,44 @@ describe('cron cleanup-chats API route', () => {
       expect(data.audit.development.deleted).toBe(2);
     });
 
-    it('never deletes protected paths', async () => {
+    it('never deletes protected paths even when old enough for deletion', async () => {
+      // Protected blob placed under a category prefix used by cleanupPrefix
+      // with an old enough timestamp to trigger deletion
       const protectedBlob = {
         pathname: 'damilola.tech/content/system-prompt.md',
         url: 'https://blob.vercel-storage.com/content/system-prompt.md',
         size: 5000,
-        uploadedAt: new Date('2024-01-01'), // Very old
+        uploadedAt: new Date('2024-01-01'), // Very old - would trigger deletion
+      };
+      // Non-protected blob that should be deleted
+      const deletableBlob = {
+        pathname: 'damilola.tech/chats/production/chat-2024-01-01T14-30-00Z-abc12345.json',
+        url: 'https://blob.vercel-storage.com/chats/production/old-chat.json',
+        size: 1024,
       };
 
       mockList.mockImplementation(({ prefix }: { prefix: string }) => {
-        if (prefix === 'damilola.tech/') {
-          return Promise.resolve({ blobs: [protectedBlob], cursor: null });
+        if (prefix === 'damilola.tech/chats/production/') {
+          // Return both protected and deletable blobs to exercise isProtected check
+          return Promise.resolve({ blobs: [protectedBlob, deletableBlob], cursor: null });
         }
         return Promise.resolve({ blobs: [], cursor: null });
       });
+      mockDel.mockResolvedValue(undefined);
 
       const { GET } = await import('@/app/api/cron/cleanup-chats/route');
 
       const request = createRequest(`Bearer ${VALID_CRON_SECRET}`);
       const response = await GET(request);
+      const data = await response.json();
 
       expect(response.status).toBe(200);
+      // Protected blob should NOT be deleted
       expect(mockDel).not.toHaveBeenCalledWith(protectedBlob.url);
+      // Non-protected old blob SHOULD be deleted
+      expect(mockDel).toHaveBeenCalledWith(deletableBlob.url);
+      // Verify the protected blob was skipped
+      expect(data.chats.production.skipped).toBe(1);
     });
 
     it('deletes empty placeholder files', async () => {
