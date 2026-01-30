@@ -75,11 +75,11 @@ function buildUrl(example: UtmExample, baseUrl: string): string {
   return `${baseUrl}?${params.toString()}`;
 }
 
-function CopyButton({ text }: { text: string }) {
+function useCopyToClipboard() {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState(false);
 
-  const handleCopy = async () => {
+  const copy = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -107,16 +107,54 @@ function CopyButton({ text }: { text: string }) {
     }
   };
 
+  return { copied, error, copy };
+}
+
+function CopyButton({ text }: { text: string }) {
+  const { copied, error, copy } = useCopyToClipboard();
   const statusMessage = copied ? 'Copied to clipboard' : error ? 'Copy failed, please try again' : '';
 
   return (
     <>
       <button
-        onClick={handleCopy}
+        onClick={() => copy(text)}
         aria-label="Copy to clipboard"
         className="shrink-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2"
       >
         {copied ? 'Copied!' : error ? 'Failed' : 'Copy'}
+      </button>
+      <span role="status" aria-live="polite" className="sr-only">
+        {statusMessage}
+      </span>
+    </>
+  );
+}
+
+function CopyIconButton({ text }: { text: string }) {
+  const { copied, error, copy } = useCopyToClipboard();
+  const statusMessage = copied ? 'Copied to clipboard' : error ? 'Copy failed, please try again' : '';
+
+  return (
+    <>
+      <button
+        onClick={() => copy(text)}
+        aria-label="Copy shortlink URL to clipboard"
+        className="shrink-0 rounded p-1 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-card)] hover:text-[var(--color-accent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+      >
+        {copied ? (
+          <svg aria-hidden="true" className="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        ) : error ? (
+          <svg aria-hidden="true" className="h-4 w-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        ) : (
+          <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" strokeWidth={2} />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+          </svg>
+        )}
       </button>
       <span role="status" aria-live="polite" className="sr-only">
         {statusMessage}
@@ -213,23 +251,22 @@ export default function UtmTrackingPage() {
                 <th scope="col" className="pb-2 text-left font-medium text-[var(--color-text)]">Source</th>
                 <th scope="col" className="pb-2 text-left font-medium text-[var(--color-text)]">Medium</th>
                 <th scope="col" className="pb-2 text-left font-medium text-[var(--color-text)]">Use Case</th>
-                <th scope="col" className="pb-2 text-left font-medium text-[var(--color-text)]">Copy</th>
               </tr>
             </thead>
             <tbody>
               {SHORTLINKS.map((link) => (
                 <tr key={link.slug} className="border-b border-[var(--color-border)]/50">
                   <td className="py-2">
-                    <code className="rounded bg-[var(--color-bg)] px-2 py-0.5 font-mono text-[var(--color-accent)]">
-                      /{link.slug}
-                    </code>
+                    <div className="flex items-center gap-2">
+                      <code className="rounded bg-[var(--color-bg)] px-2 py-0.5 font-mono text-[var(--color-accent)]">
+                        /{link.slug}
+                      </code>
+                      <CopyIconButton text={`${baseUrl}/${link.slug}`} />
+                    </div>
                   </td>
                   <td className="py-2 font-mono text-[var(--color-text)]">{link.utm_source}</td>
                   <td className="py-2 font-mono text-[var(--color-text)]">{link.utm_medium}</td>
                   <td className="py-2 text-[var(--color-text-muted)]">{link.description}</td>
-                  <td className="py-2">
-                    <CopyButton text={`${baseUrl}/${link.slug}`} />
-                  </td>
                 </tr>
               ))}
             </tbody>
