@@ -14,7 +14,6 @@ describe('cron cleanup-chats API route', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.resetModules();
     process.env = { ...originalEnv, CRON_SECRET: VALID_CRON_SECRET };
   });
 
@@ -22,12 +21,18 @@ describe('cron cleanup-chats API route', () => {
     process.env = originalEnv;
   });
 
-  function createRequest(authHeader?: string): Request {
+  function createRequest(
+    authHeader?: string,
+    dryRun = false
+  ): Request {
     const headers: HeadersInit = {};
     if (authHeader) {
       headers['Authorization'] = authHeader;
     }
-    return new Request('http://localhost/api/cron/cleanup-chats', {
+    const url = dryRun
+      ? 'http://localhost/api/cron/cleanup-chats?dryRun=true'
+      : 'http://localhost/api/cron/cleanup-chats';
+    return new Request(url, {
       method: 'GET',
       headers,
     });
@@ -85,23 +90,24 @@ describe('cron cleanup-chats API route', () => {
     beforeEach(() => {
       vi.useFakeTimers();
       vi.setSystemTime(now);
+      vi.resetModules();
     });
 
     afterEach(() => {
       vi.useRealTimers();
     });
 
-    it('deletes blobs older than 90 days', async () => {
-      // 91 days ago - using unified format
-      const oldTimestamp = '2025-01-20T14-30-00Z';
+    it('deletes production chats older than 180 days', async () => {
+      // ~200 days ago (older than 180 days)
+      const oldTimestamp = '2024-10-05T14-30-00Z';
       const oldBlob = {
         pathname: `damilola.tech/chats/production/chat-${oldTimestamp}-a1b2c3d4.json`,
         url: `https://blob.vercel-storage.com/chats/production/chat-${oldTimestamp}-a1b2c3d4.json`,
+        size: 1024,
       };
 
-      // Mock returns oldBlob for chats, empty for others
       mockList.mockImplementation(({ prefix }: { prefix: string }) => {
-        if (prefix.includes('/chats/')) {
+        if (prefix === 'damilola.tech/chats/production/') {
           return Promise.resolve({ blobs: [oldBlob], cursor: null });
         }
         return Promise.resolve({ blobs: [], cursor: null });
@@ -116,20 +122,20 @@ describe('cron cleanup-chats API route', () => {
 
       expect(response.status).toBe(200);
       expect(mockDel).toHaveBeenCalledWith(oldBlob.url);
-      expect(data.totals.deleted).toBe(1);
-      expect(data.totals.kept).toBe(0);
+      expect(data.chats.production.deleted).toBe(1);
     });
 
-    it('keeps blobs younger than 90 days', async () => {
-      // 30 days ago - using unified format
+    it('keeps production chats younger than 180 days', async () => {
+      // 30 days ago - within 180 day retention
       const recentTimestamp = '2025-03-23T14-30-00Z';
       const recentBlob = {
         pathname: `damilola.tech/chats/production/chat-${recentTimestamp}-a1b2c3d4.json`,
         url: `https://blob.vercel-storage.com/chats/production/chat-${recentTimestamp}-a1b2c3d4.json`,
+        size: 1024,
       };
 
       mockList.mockImplementation(({ prefix }: { prefix: string }) => {
-        if (prefix.includes('/chats/')) {
+        if (prefix === 'damilola.tech/chats/production/') {
           return Promise.resolve({ blobs: [recentBlob], cursor: null });
         }
         return Promise.resolve({ blobs: [], cursor: null });
@@ -143,23 +149,21 @@ describe('cron cleanup-chats API route', () => {
 
       expect(response.status).toBe(200);
       expect(mockDel).not.toHaveBeenCalled();
-      expect(data.totals.deleted).toBe(0);
-      expect(data.totals.kept).toBe(1);
+      expect(data.chats.production.kept).toBe(1);
     });
 
-    it('handles mix of old and recent blobs', async () => {
+    it('deletes preview chats older than 14 days', async () => {
+      // 20 days ago - older than 14 day preview retention
+      const oldTimestamp = '2025-04-02T14-30-00Z';
       const oldBlob = {
-        pathname: 'damilola.tech/chats/production/chat-2025-01-01T14-30-00Z-a1b2c3d4.json',
-        url: 'https://blob.vercel-storage.com/old.json',
-      };
-      const recentBlob = {
-        pathname: 'damilola.tech/chats/production/chat-2025-03-23T14-30-00Z-b2c3d4e5.json',
-        url: 'https://blob.vercel-storage.com/new.json',
+        pathname: `damilola.tech/chats/preview/chat-${oldTimestamp}-a1b2c3d4.json`,
+        url: `https://blob.vercel-storage.com/chats/preview/chat-${oldTimestamp}-a1b2c3d4.json`,
+        size: 1024,
       };
 
       mockList.mockImplementation(({ prefix }: { prefix: string }) => {
-        if (prefix.includes('/chats/')) {
-          return Promise.resolve({ blobs: [oldBlob, recentBlob], cursor: null });
+        if (prefix === 'damilola.tech/chats/preview/') {
+          return Promise.resolve({ blobs: [oldBlob], cursor: null });
         }
         return Promise.resolve({ blobs: [], cursor: null });
       });
@@ -172,26 +176,34 @@ describe('cron cleanup-chats API route', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(mockDel).toHaveBeenCalledTimes(1);
       expect(mockDel).toHaveBeenCalledWith(oldBlob.url);
-      expect(data.totals.deleted).toBe(1);
-      expect(data.totals.kept).toBe(1);
+      expect(data.chats.preview.deleted).toBe(1);
     });
 
-    it('handles blobs exactly at 90-day boundary', async () => {
-      // Exactly 90 days ago - should be kept (not older than 90 days)
-      const boundaryTimestamp = '2025-01-22T12-00-00Z';
-      const boundaryBlob = {
-        pathname: `damilola.tech/chats/production/chat-${boundaryTimestamp}-abcd1234.json`,
-        url: 'https://blob.vercel-storage.com/boundary.json',
-      };
+    it('deletes all development artifacts immediately', async () => {
+      const devBlobs = [
+        {
+          pathname: 'damilola.tech/audit/development/2025-04-21.json',
+          url: 'https://blob.vercel-storage.com/audit/development/2025-04-21.json',
+          size: 512,
+        },
+        {
+          pathname: 'damilola.tech/chats/development/chat-2025-04-21T14-30-00Z-abc123.json',
+          url: 'https://blob.vercel-storage.com/chats/development/chat-abc123.json',
+          size: 1024,
+        },
+      ];
 
       mockList.mockImplementation(({ prefix }: { prefix: string }) => {
-        if (prefix.includes('/chats/')) {
-          return Promise.resolve({ blobs: [boundaryBlob], cursor: null });
+        if (prefix === 'damilola.tech/audit/development/') {
+          return Promise.resolve({ blobs: [devBlobs[0]], cursor: null });
+        }
+        if (prefix === 'damilola.tech/chats/development/') {
+          return Promise.resolve({ blobs: [devBlobs[1]], cursor: null });
         }
         return Promise.resolve({ blobs: [], cursor: null });
       });
+      mockDel.mockResolvedValue(undefined);
 
       const { GET } = await import('@/app/api/cron/cleanup-chats/route');
 
@@ -200,23 +212,129 @@ describe('cron cleanup-chats API route', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(mockDel).not.toHaveBeenCalled();
-      expect(data.totals.kept).toBe(1);
+      expect(mockDel).toHaveBeenCalledWith(devBlobs[0].url);
+      expect(mockDel).toHaveBeenCalledWith(devBlobs[1].url);
+      expect(data.audit.development.deleted).toBe(2);
+    });
+
+    it('never deletes protected paths even when old enough for deletion', async () => {
+      // Protected blob placed under a category prefix used by cleanupPrefix
+      // with an old enough timestamp to trigger deletion
+      const protectedBlob = {
+        pathname: 'damilola.tech/content/system-prompt.md',
+        url: 'https://blob.vercel-storage.com/content/system-prompt.md',
+        size: 5000,
+        uploadedAt: new Date('2024-01-01'), // Very old - would trigger deletion
+      };
+      // Non-protected blob that should be deleted
+      const deletableBlob = {
+        pathname: 'damilola.tech/chats/production/chat-2024-01-01T14-30-00Z-abc12345.json',
+        url: 'https://blob.vercel-storage.com/chats/production/old-chat.json',
+        size: 1024,
+      };
+
+      mockList.mockImplementation(({ prefix }: { prefix: string }) => {
+        if (prefix === 'damilola.tech/chats/production/') {
+          // Return both protected and deletable blobs to exercise isProtected check
+          return Promise.resolve({ blobs: [protectedBlob, deletableBlob], cursor: null });
+        }
+        return Promise.resolve({ blobs: [], cursor: null });
+      });
+      mockDel.mockResolvedValue(undefined);
+
+      const { GET } = await import('@/app/api/cron/cleanup-chats/route');
+
+      const request = createRequest(`Bearer ${VALID_CRON_SECRET}`);
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      // Protected blob should NOT be deleted
+      expect(mockDel).not.toHaveBeenCalledWith(protectedBlob.url);
+      // Non-protected old blob SHOULD be deleted
+      expect(mockDel).toHaveBeenCalledWith(deletableBlob.url);
+      // Verify the protected blob was skipped
+      expect(data.chats.production.skipped).toBe(1);
+    });
+
+    it('deletes empty placeholder files', async () => {
+      const emptyBlob = {
+        pathname: 'damilola.tech/',
+        url: 'https://blob.vercel-storage.com/damilola.tech/',
+        size: 0,
+      };
+      const normalBlob = {
+        pathname: 'damilola.tech/audit/production/2025-04-21.json',
+        url: 'https://blob.vercel-storage.com/audit/production/2025-04-21.json',
+        size: 512,
+      };
+
+      mockList.mockImplementation(({ prefix }: { prefix: string }) => {
+        if (prefix === 'damilola.tech/') {
+          return Promise.resolve({ blobs: [emptyBlob, normalBlob], cursor: null });
+        }
+        return Promise.resolve({ blobs: [], cursor: null });
+      });
+      mockDel.mockResolvedValue(undefined);
+
+      const { GET } = await import('@/app/api/cron/cleanup-chats/route');
+
+      const request = createRequest(`Bearer ${VALID_CRON_SECRET}`);
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(mockDel).toHaveBeenCalledWith(emptyBlob.url);
+      expect(data.artifacts.emptyPlaceholders.deleted).toBe(1);
+    });
+
+    it('deletes orphan sessions without valid prefix', async () => {
+      const orphanSession = {
+        pathname: 'damilola.tech/usage/production/sessions/abc-123-456.json',
+        url: 'https://blob.vercel-storage.com/usage/production/sessions/abc-123-456.json',
+        size: 256,
+      };
+      const validSession = {
+        pathname: 'damilola.tech/usage/production/sessions/chat-abc-123-456.json',
+        url: 'https://blob.vercel-storage.com/usage/production/sessions/chat-abc-123-456.json',
+        size: 256,
+      };
+
+      mockList.mockImplementation(({ prefix }: { prefix: string }) => {
+        if (prefix === 'damilola.tech/usage/production/sessions/') {
+          return Promise.resolve({ blobs: [orphanSession, validSession], cursor: null });
+        }
+        return Promise.resolve({ blobs: [], cursor: null });
+      });
+      mockDel.mockResolvedValue(undefined);
+
+      const { GET } = await import('@/app/api/cron/cleanup-chats/route');
+
+      const request = createRequest(`Bearer ${VALID_CRON_SECRET}`);
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(mockDel).toHaveBeenCalledWith(orphanSession.url);
+      expect(mockDel).not.toHaveBeenCalledWith(validSession.url);
+      expect(data.artifacts.orphanSessions.deleted).toBe(1);
     });
 
     it('handles pagination with cursor', async () => {
       const blob1 = {
-        pathname: 'damilola.tech/chats/production/chat-2025-01-01T14-30-00Z-aa112233.json',
+        pathname: 'damilola.tech/chats/production/chat-2024-10-01T14-30-00Z-aa112233.json',
         url: 'https://blob.vercel-storage.com/page1.json',
+        size: 1024,
       };
       const blob2 = {
-        pathname: 'damilola.tech/chats/production/chat-2025-01-02T14-30-00Z-bb223344.json',
+        pathname: 'damilola.tech/chats/production/chat-2024-10-02T14-30-00Z-bb223344.json',
         url: 'https://blob.vercel-storage.com/page2.json',
+        size: 1024,
       };
 
       let chatCallCount = 0;
       mockList.mockImplementation(({ prefix }: { prefix: string }) => {
-        if (prefix.includes('/chats/')) {
+        if (prefix === 'damilola.tech/chats/production/') {
           chatCallCount++;
           if (chatCallCount === 1) {
             return Promise.resolve({ blobs: [blob1], cursor: 'next-page-cursor' });
@@ -234,20 +352,20 @@ describe('cron cleanup-chats API route', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      // Called once for each prefix (3), plus one pagination call for chats
-      expect(mockList).toHaveBeenCalledTimes(4);
-      expect(mockDel).toHaveBeenCalledTimes(2);
-      expect(data.totals.deleted).toBe(2);
+      expect(mockDel).toHaveBeenCalledWith(blob1.url);
+      expect(mockDel).toHaveBeenCalledWith(blob2.url);
+      expect(data.chats.production.deleted).toBe(2);
     });
 
     it('skips blobs with unparseable timestamps', async () => {
       const invalidBlob = {
         pathname: 'damilola.tech/chats/production/invalid-timestamp.json',
         url: 'https://blob.vercel-storage.com/invalid.json',
+        size: 1024,
       };
 
       mockList.mockImplementation(({ prefix }: { prefix: string }) => {
-        if (prefix.includes('/chats/')) {
+        if (prefix === 'damilola.tech/chats/production/') {
           return Promise.resolve({ blobs: [invalidBlob], cursor: null });
         }
         return Promise.resolve({ blobs: [], cursor: null });
@@ -262,30 +380,49 @@ describe('cron cleanup-chats API route', () => {
 
       expect(response.status).toBe(200);
       expect(mockDel).not.toHaveBeenCalled();
-      expect(data.totals.skipped).toBe(1);
+      expect(data.chats.production.skipped).toBe(1);
 
       consoleSpy.mockRestore();
     });
+  });
 
-    it('processes all log type folders', async () => {
-      mockList.mockResolvedValue({ blobs: [], cursor: null });
+  describe('dry-run mode', () => {
+    const now = new Date('2025-04-22T12:00:00.000Z');
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(now);
+      vi.resetModules();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('reports what would be deleted without actually deleting', async () => {
+      const oldBlob = {
+        pathname: 'damilola.tech/chats/production/chat-2024-10-01T14-30-00Z-abc12345.json',
+        url: 'https://blob.vercel-storage.com/old.json',
+        size: 1024,
+      };
+
+      mockList.mockImplementation(({ prefix }: { prefix: string }) => {
+        if (prefix === 'damilola.tech/chats/production/') {
+          return Promise.resolve({ blobs: [oldBlob], cursor: null });
+        }
+        return Promise.resolve({ blobs: [], cursor: null });
+      });
 
       const { GET } = await import('@/app/api/cron/cleanup-chats/route');
 
-      const request = createRequest(`Bearer ${VALID_CRON_SECRET}`);
-      await GET(request);
+      const request = createRequest(`Bearer ${VALID_CRON_SECRET}`, true);
+      const response = await GET(request);
+      const data = await response.json();
 
-      // Should be called for all three prefixes (in parallel)
-      expect(mockList).toHaveBeenCalledTimes(3);
-      expect(mockList).toHaveBeenCalledWith(expect.objectContaining({
-        prefix: 'damilola.tech/chats/',
-      }));
-      expect(mockList).toHaveBeenCalledWith(expect.objectContaining({
-        prefix: 'damilola.tech/fit-assessments/',
-      }));
-      expect(mockList).toHaveBeenCalledWith(expect.objectContaining({
-        prefix: 'damilola.tech/audit/',
-      }));
+      expect(response.status).toBe(200);
+      expect(data.dryRun).toBe(true);
+      expect(data.chats.production.deleted).toBe(1);
+      expect(mockDel).not.toHaveBeenCalled();
     });
   });
 
@@ -308,19 +445,21 @@ describe('cron cleanup-chats API route', () => {
 
     it('continues processing if individual delete fails', async () => {
       const blob1 = {
-        pathname: 'damilola.tech/chats/production/chat-2025-01-01T14-30-00Z-cc334455.json',
+        pathname: 'damilola.tech/chats/production/chat-2024-10-01T14-30-00Z-cc334455.json',
         url: 'https://blob.vercel-storage.com/fail.json',
+        size: 1024,
       };
       const blob2 = {
-        pathname: 'damilola.tech/chats/production/chat-2025-01-02T14-30-00Z-dd445566.json',
+        pathname: 'damilola.tech/chats/production/chat-2024-10-02T14-30-00Z-dd445566.json',
         url: 'https://blob.vercel-storage.com/success.json',
+        size: 1024,
       };
 
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2025-04-22T12:00:00.000Z'));
 
       mockList.mockImplementation(({ prefix }: { prefix: string }) => {
-        if (prefix.includes('/chats/')) {
+        if (prefix === 'damilola.tech/chats/production/') {
           return Promise.resolve({ blobs: [blob1, blob2], cursor: null });
         }
         return Promise.resolve({ blobs: [], cursor: null });
@@ -339,8 +478,8 @@ describe('cron cleanup-chats API route', () => {
 
       expect(response.status).toBe(200);
       expect(mockDel).toHaveBeenCalledTimes(2);
-      expect(data.totals.deleted).toBe(1);
-      expect(data.totals.errors).toBe(1);
+      expect(data.chats.production.deleted).toBe(1);
+      expect(data.chats.production.errors).toBe(1);
 
       consoleSpy.mockRestore();
       vi.useRealTimers();
@@ -348,21 +487,23 @@ describe('cron cleanup-chats API route', () => {
   });
 
   describe('summary response', () => {
-    it('returns comprehensive summary', async () => {
+    it('returns comprehensive summary with new structure', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2025-04-22T12:00:00.000Z'));
 
       const oldBlob = {
-        pathname: 'damilola.tech/chats/production/chat-2025-01-01T14-30-00Z-ee556677.json',
+        pathname: 'damilola.tech/chats/production/chat-2024-10-01T14-30-00Z-ee556677.json',
         url: 'https://blob.vercel-storage.com/old.json',
+        size: 1024,
       };
       const recentBlob = {
         pathname: 'damilola.tech/chats/production/chat-2025-04-01T14-30-00Z-ff667788.json',
         url: 'https://blob.vercel-storage.com/new.json',
+        size: 1024,
       };
 
       mockList.mockImplementation(({ prefix }: { prefix: string }) => {
-        if (prefix.includes('/chats/')) {
+        if (prefix === 'damilola.tech/chats/production/') {
           return Promise.resolve({ blobs: [oldBlob, recentBlob], cursor: null });
         }
         return Promise.resolve({ blobs: [], cursor: null });
@@ -378,9 +519,22 @@ describe('cron cleanup-chats API route', () => {
       expect(response.status).toBe(200);
       expect(data).toMatchObject({
         success: true,
-        chats: { deleted: 1, kept: 1, skipped: 0, errors: 0 },
+        dryRun: false,
+        chats: {
+          production: { deleted: 1, kept: 1, skipped: 0, errors: 0 },
+          preview: { deleted: 0, kept: 0, skipped: 0, errors: 0 },
+        },
         fitAssessments: { deleted: 0, kept: 0, skipped: 0, errors: 0 },
-        audit: { deleted: 0, kept: 0, skipped: 0, errors: 0 },
+        resumeGenerations: { deleted: 0, kept: 0, skipped: 0, errors: 0 },
+        audit: {
+          production: { deleted: 0, kept: 0, skipped: 0, errors: 0 },
+          preview: { deleted: 0, kept: 0, skipped: 0, errors: 0 },
+          development: { deleted: 0 },
+        },
+        artifacts: {
+          emptyPlaceholders: { deleted: 0 },
+          orphanSessions: { deleted: 0 },
+        },
         totals: { deleted: 1, kept: 1, skipped: 0, errors: 0 },
       });
 
