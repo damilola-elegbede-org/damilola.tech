@@ -17,7 +17,12 @@ test.describe('Traffic Source Tracking', () => {
     // Check localStorage for traffic source
     const trafficSource = await page.evaluate(() => {
       const stored = localStorage.getItem('audit_traffic_source');
-      return stored ? JSON.parse(stored) : null;
+      if (!stored) return null;
+      try {
+        return JSON.parse(stored);
+      } catch {
+        return null;
+      }
     });
 
     expect(trafficSource).not.toBeNull();
@@ -41,7 +46,12 @@ test.describe('Traffic Source Tracking', () => {
 
     let trafficSource = await page.evaluate(() => {
       const stored = localStorage.getItem('audit_traffic_source');
-      return stored ? JSON.parse(stored) : null;
+      if (!stored) return null;
+      try {
+        return JSON.parse(stored);
+      } catch {
+        return null;
+      }
     });
     expect(trafficSource.source).toBe('direct');
 
@@ -52,7 +62,12 @@ test.describe('Traffic Source Tracking', () => {
 
     trafficSource = await page.evaluate(() => {
       const stored = localStorage.getItem('audit_traffic_source');
-      return stored ? JSON.parse(stored) : null;
+      if (!stored) return null;
+      try {
+        return JSON.parse(stored);
+      } catch {
+        return null;
+      }
     });
     expect(trafficSource.source).toBe('newsletter');
     expect(trafficSource.medium).toBe('email');
@@ -71,7 +86,12 @@ test.describe('Traffic Source Tracking', () => {
 
     const firstSource = await page.evaluate(() => {
       const stored = localStorage.getItem('audit_traffic_source');
-      return stored ? JSON.parse(stored) : null;
+      if (!stored) return null;
+      try {
+        return JSON.parse(stored);
+      } catch {
+        return null;
+      }
     });
     expect(firstSource.source).toBe('first');
 
@@ -82,7 +102,12 @@ test.describe('Traffic Source Tracking', () => {
 
     const afterSecondVisit = await page.evaluate(() => {
       const stored = localStorage.getItem('audit_traffic_source');
-      return stored ? JSON.parse(stored) : null;
+      if (!stored) return null;
+      try {
+        return JSON.parse(stored);
+      } catch {
+        return null;
+      }
     });
 
     expect(afterSecondVisit.source).toBe('first');
@@ -102,7 +127,12 @@ test.describe('Traffic Source Tracking', () => {
 
     const trafficSource = await page.evaluate(() => {
       const stored = localStorage.getItem('audit_traffic_source');
-      return stored ? JSON.parse(stored) : null;
+      if (!stored) return null;
+      try {
+        return JSON.parse(stored);
+      } catch {
+        return null;
+      }
     });
 
     expect(trafficSource).not.toBeNull();
@@ -124,7 +154,12 @@ test.describe('Traffic Source Tracking', () => {
 
     const trafficSource = await page.evaluate(() => {
       const stored = localStorage.getItem('audit_traffic_source');
-      return stored ? JSON.parse(stored) : null;
+      if (!stored) return null;
+      try {
+        return JSON.parse(stored);
+      } catch {
+        return null;
+      }
     });
 
     expect(trafficSource).not.toBeNull();
@@ -148,7 +183,12 @@ test.describe('Traffic Source Tracking', () => {
 
     const trafficSource = await page.evaluate(() => {
       const stored = localStorage.getItem('audit_traffic_source');
-      return stored ? JSON.parse(stored) : null;
+      if (!stored) return null;
+      try {
+        return JSON.parse(stored);
+      } catch {
+        return null;
+      }
     });
 
     expect(trafficSource).not.toBeNull();
@@ -174,7 +214,12 @@ test.describe('Traffic Source Tracking', () => {
     // Verify localStorage has correct traffic source
     const trafficSource = await page.evaluate(() => {
       const stored = localStorage.getItem('audit_traffic_source');
-      return stored ? JSON.parse(stored) : null;
+      if (!stored) return null;
+      try {
+        return JSON.parse(stored);
+      } catch {
+        return null;
+      }
     });
 
     expect(trafficSource).not.toBeNull();

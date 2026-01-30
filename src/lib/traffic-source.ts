@@ -12,6 +12,35 @@ export interface TrafficSource {
 }
 
 /**
+ * Validate parsed data conforms to TrafficSource interface
+ */
+function isValidTrafficSource(data: unknown): data is TrafficSource {
+  if (typeof data !== 'object' || data === null) return false;
+  const obj = data as Record<string, unknown>;
+  return (
+    typeof obj.source === 'string' &&
+    typeof obj.medium === 'string' &&
+    typeof obj.landingPage === 'string' &&
+    typeof obj.capturedAt === 'string'
+  );
+}
+
+/**
+ * Safely parse and validate TrafficSource from JSON string
+ */
+function parseTrafficSource(json: string): TrafficSource | null {
+  try {
+    const parsed: unknown = JSON.parse(json);
+    if (isValidTrafficSource(parsed)) {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Known source classifications by referrer domain
  */
 const REFERRER_SOURCES: Record<string, string> = {
@@ -112,10 +141,11 @@ export function captureTrafficSource(): TrafficSource | null {
   try {
     const existing = localStorage.getItem(STORAGE_KEY);
     if (existing) {
-      return JSON.parse(existing) as TrafficSource;
+      const parsed = parseTrafficSource(existing);
+      if (parsed) return parsed;
     }
   } catch {
-    // localStorage not available or invalid JSON
+    // localStorage not available
   }
 
   // No cached value: Capture from referrer/direct
@@ -166,10 +196,10 @@ export function getTrafficSource(): TrafficSource | null {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
-      return JSON.parse(stored) as TrafficSource;
+      return parseTrafficSource(stored);
     }
   } catch {
-    // localStorage not available or invalid JSON
+    // localStorage not available
   }
 
   return null;
