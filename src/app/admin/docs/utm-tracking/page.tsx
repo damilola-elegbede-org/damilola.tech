@@ -204,6 +204,7 @@ export default function UtmTrackingPage() {
                 <th className="pb-2 text-left font-medium text-[var(--color-text)]">Source</th>
                 <th className="pb-2 text-left font-medium text-[var(--color-text)]">Medium</th>
                 <th className="pb-2 text-left font-medium text-[var(--color-text)]">Use Case</th>
+                <th className="pb-2 text-left font-medium text-[var(--color-text)]">Copy</th>
               </tr>
             </thead>
             <tbody>
@@ -217,6 +218,9 @@ export default function UtmTrackingPage() {
                   <td className="py-2 font-mono text-[var(--color-text)]">{link.utm_source}</td>
                   <td className="py-2 font-mono text-[var(--color-text)]">{link.utm_medium}</td>
                   <td className="py-2 text-[var(--color-text-muted)]">{link.description}</td>
+                  <td className="py-2">
+                    <CopyButton text={`${baseUrl}/${link.slug}`} />
+                  </td>
                 </tr>
               ))}
             </tbody>
