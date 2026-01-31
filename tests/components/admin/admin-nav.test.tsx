@@ -110,8 +110,8 @@ describe('AdminNav', () => {
 
     // Each nav item has an SVG icon
     const svgElements = container.querySelectorAll('svg');
-    // 8 nav items + 1 logout button = 9 SVG icons
-    expect(svgElements.length).toBe(9);
+    // 9 nav items + 1 logout button = 10 SVG icons
+    expect(svgElements.length).toBe(10);
   });
 
   it('applies hover styles to inactive links', () => {

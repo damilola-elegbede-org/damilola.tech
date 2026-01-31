@@ -16,7 +16,11 @@ export type AuditEventType =
   | 'resume_generation_started'
   | 'resume_generation_completed'
   | 'resume_generation_download'
-  | 'admin_resume_generation_viewed';
+  | 'admin_resume_generation_viewed'
+  | 'api_key_created'
+  | 'api_key_disabled'
+  | 'api_key_enabled'
+  | 'api_key_revoked';
 
 export interface TrafficSource {
   source: string;
@@ -29,8 +33,16 @@ export interface TrafficSource {
   capturedAt: string;
 }
 
+export type AccessType = 'browser' | 'api';
+
 export interface AuditEventMetadata extends Record<string, unknown> {
   trafficSource?: TrafficSource;
+  /** Whether the action was from browser or API access */
+  accessType?: AccessType;
+  /** API key ID if accessed via API */
+  apiKeyId?: string;
+  /** API key name if accessed via API */
+  apiKeyName?: string;
 }
 
 export interface AuditEvent {

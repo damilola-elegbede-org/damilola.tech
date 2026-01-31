@@ -6,9 +6,15 @@
  */
 
 import { put } from '@vercel/blob';
-import type { AuditEventType } from '@/lib/types/audit-event';
+import type { AuditEventType, AccessType } from '@/lib/types/audit-event';
 
 const AUDIT_PREFIX = 'damilola.tech/audit';
+
+export interface LogAdminEventOptions {
+  accessType?: AccessType;
+  apiKeyId?: string;
+  apiKeyName?: string;
+}
 
 /**
  * Log an admin event directly to Vercel Blob storage.
@@ -17,7 +23,8 @@ const AUDIT_PREFIX = 'damilola.tech/audit';
 export async function logAdminEvent(
   eventType: AuditEventType,
   metadata: Record<string, unknown>,
-  ip: string
+  ip: string,
+  options?: LogAdminEventOptions
 ): Promise<void> {
   try {
     const environment = process.env.VERCEL_ENV || 'development';
@@ -52,6 +59,9 @@ export async function logAdminEvent(
       metadata: {
         ...metadata,
         ip: anonymizeIp(ip),
+        ...(options?.accessType && { accessType: options.accessType }),
+        ...(options?.apiKeyId && { apiKeyId: options.apiKeyId }),
+        ...(options?.apiKeyName && { apiKeyName: options.apiKeyName }),
       },
     };
 
