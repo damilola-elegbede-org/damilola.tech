@@ -97,6 +97,10 @@ const eventTypeColors: Record<string, string> = {
   resume_generation_completed: 'bg-lime-500/10 text-lime-400',
   resume_generation_download: 'bg-teal-500/10 text-teal-400',
   admin_resume_generation_viewed: 'bg-sky-500/10 text-sky-400',
+  api_key_created: 'bg-green-500/10 text-green-400',
+  api_key_disabled: 'bg-yellow-500/10 text-yellow-400',
+  api_key_enabled: 'bg-green-500/10 text-green-400',
+  api_key_revoked: 'bg-red-500/10 text-red-400',
 };
 
 // Human-readable failure reason messages
@@ -346,6 +350,26 @@ function ExpandedEventDetails({ eventType, details }: { eventType: string; detai
             <span className="text-[var(--color-text-muted)]">Session:</span>
             <code className="rounded bg-[var(--color-bg)] px-1 text-xs text-[var(--color-text)]">
               {details.sessionId.substring(0, 8)}...
+            </code>
+          </div>
+        )}
+        {typeof details.metadata?.accessType === 'string' && (
+          <div className="flex items-center gap-2">
+            <span className="text-[var(--color-text-muted)]">Access:</span>
+            <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${
+              details.metadata.accessType === 'api'
+                ? 'bg-purple-500/10 text-purple-400'
+                : 'bg-blue-500/10 text-blue-400'
+            }`}>
+              {details.metadata.accessType === 'api' ? 'API' : 'Browser'}
+            </span>
+          </div>
+        )}
+        {typeof details.metadata?.apiKeyName === 'string' && (
+          <div className="flex items-center gap-2">
+            <span className="text-[var(--color-text-muted)]">API Key:</span>
+            <code className="rounded bg-[var(--color-bg)] px-1 text-xs text-[var(--color-text)]">
+              {details.metadata.apiKeyName}
             </code>
           </div>
         )}

@@ -31,9 +31,20 @@ Secure administrative interface for monitoring and content generation:
 - **Chat Archive** - Review all visitor conversations
 - **Fit Assessments** - Review role fit analyses
 - **Resume Generator** - ATS-optimized resume creation
+- **API Keys** - Manage API keys for external integrations
 - **Audit Log** - Complete event trail
 
 See [Admin Portal Documentation](./docs/admin-portal.md) for details.
+
+### External API Access
+
+REST API with API key authentication for programmatic access:
+
+- **API Key Management** - Generate and manage API keys in admin portal
+- **Full Access** - All admin functionality available via `/api/v1/*` endpoints
+- **Audit Tracking** - API access logged separately from browser access
+
+See [External API Documentation](./docs/external-api.md) for details.
 
 ## Getting Started
 

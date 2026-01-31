@@ -14,6 +14,7 @@ const DOC_FILES: Record<string, string> = {
   'api-documentation': 'docs/api-documentation.md',
   'rate-limiting': 'docs/rate-limiting.md',
   'deployment': 'docs/deployment.md',
+  'external-api': 'docs/external-api.md',
 };
 
 export async function GET(

@@ -22,6 +22,7 @@ const DOC_TITLES: Record<string, string> = {
   'rate-limiting': 'Rate Limiting',
   'deployment': 'Deployment Guide',
   'utm-tracking': 'UTM Tracking Guide',
+  'external-api': 'External API Documentation',
 };
 
 export default function DocPage() {
