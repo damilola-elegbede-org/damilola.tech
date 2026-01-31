@@ -135,7 +135,7 @@ describe('v1/resume-generator API route', () => {
       await POST(request);
 
       expect(mockLogApiAccess).toHaveBeenCalledWith(
-        'api_resume_generations_list',
+        'api_resume_generator_attempted',
         mockValidApiKey.apiKey,
         {
           attempted: true,

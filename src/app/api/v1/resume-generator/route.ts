@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   const ip = getClientIp(req);
 
   // Log the attempted access (even though it's not implemented)
-  logApiAccess('api_resume_generations_list', authResult.apiKey, {
+  logApiAccess('api_resume_generator_attempted', authResult.apiKey, {
     attempted: true,
     result: 'not_implemented',
   }, ip).catch((err) => console.warn('[api/v1/resume-generator] Failed to log audit:', err));

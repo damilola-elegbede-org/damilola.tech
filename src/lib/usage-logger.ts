@@ -206,6 +206,7 @@ export async function logUsage(
       cost: `$${costUsd.toFixed(6)}`,
     });
   } catch (error) {
+    // TODO: Add monitoring/alerting for failed usage logging to detect systematic issues
     // Fire-and-forget: log errors but don't fail the request
     console.warn('[usage-logger] Failed to log usage:', error);
   }
@@ -275,6 +276,7 @@ export async function listSessions(options?: ListSessionsOptions): Promise<Usage
     // Filter to only JSON files
     const sessionBlobs = allBlobs.filter((blob) => blob.pathname.endsWith('.json'));
 
+    // Performance note: Unbounded parallel fetching acceptable for admin usage, but may scale poorly with thousands of sessions
     // Fetch all sessions in parallel batches (we need all to filter by date)
     const allSessions: UsageSession[] = [];
     const batchSize = 10;

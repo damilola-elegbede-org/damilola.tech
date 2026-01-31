@@ -167,6 +167,10 @@ async function fetchWithSizeLimit(
     const location = response.headers.get('location');
     if (location) {
       const redirectUrl = new URL(location, url).href;
+      // SECURITY NOTE: TOCTOU limitation - DNS resolution can change between validation and fetch.
+      // This validation provides defense-in-depth but is not perfect protection against SSRF.
+      // The server validates at redirect time, which mitigates some attacks but doesn't prevent
+      // time-of-check/time-of-use race conditions where DNS changes between validation and request.
       const redirectError = await validateUrlForSsrf(redirectUrl);
       if (redirectError) throw new Error(`Redirect blocked: ${redirectError}`);
       return fetchWithSizeLimit(redirectUrl, maxSize, timeout, redirectCount + 1);

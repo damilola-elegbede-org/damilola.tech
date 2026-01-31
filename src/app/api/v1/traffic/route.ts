@@ -220,6 +220,7 @@ export async function GET(req: Request) {
     }, ip).catch((err) => console.warn('[api/v1/traffic] Failed to log audit:', err));
 
     return apiSuccess({
+      truncated: totalBlobsProcessed >= MAX_BLOBS,
       totalSessions: sessionsSeen.size,
       bySource,
       byMedium,

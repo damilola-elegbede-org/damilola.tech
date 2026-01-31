@@ -159,7 +159,7 @@ describe('v1/fit-assessments API route', () => {
       expect(data.data.assessments[0]).toHaveProperty('environment');
       expect(data.data.assessments[0]).toHaveProperty('timestamp');
       expect(data.data.assessments[0]).toHaveProperty('size');
-      expect(data.data.assessments[0]).toHaveProperty('url');
+      // Note: 'url' intentionally not exposed in list response for security - use detail endpoint
       expect(data.meta.pagination).toHaveProperty('cursor', 'next-page');
       expect(data.meta.pagination).toHaveProperty('hasMore', true);
     });

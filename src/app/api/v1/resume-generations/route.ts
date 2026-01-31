@@ -136,11 +136,11 @@ export async function GET(req: Request) {
               scoreBefore: data.estimatedCompatibility.before,
               scoreAfter: data.estimatedCompatibility.after,
               applicationStatus: data.applicationStatus,
-              url: blob.url,
               size: blob.size,
               generationCount,
             };
           } catch (error) {
+            // Return placeholder record with parseError flag instead of filtering out failed parses
             console.error('[api/v1/resume-generations] Error parsing blob:', blob.pathname, error);
             return {
               id: blob.pathname,
@@ -154,9 +154,9 @@ export async function GET(req: Request) {
               scoreBefore: 0,
               scoreAfter: 0,
               applicationStatus: 'draft' as const,
-              url: blob.url,
               size: blob.size,
               generationCount: 1,
+              parseError: true,
             };
           }
         })

@@ -75,6 +75,7 @@ export async function GET(req: Request) {
     ]);
 
     // For resume generations, also count by status (fetch in parallel for performance)
+    // Performance note: Limited to 100 most recent records for dashboard stats to prevent timeouts on large datasets
     const resumeGenResult = await list({
       prefix: `damilola.tech/resume-generations/${environment}/`,
       limit: 100,

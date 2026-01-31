@@ -27,6 +27,7 @@ export type AuditEventType =
   | 'api_chats_list'
   | 'api_fit_assessments_list'
   | 'api_resume_generations_list'
+  | 'api_resume_generator_attempted'
   | 'api_stats_accessed'
   | 'api_usage_accessed'
   | 'api_traffic_accessed';

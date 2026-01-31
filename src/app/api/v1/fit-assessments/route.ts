@@ -15,7 +15,6 @@ interface AssessmentSummary {
   environment: string;
   timestamp: string;
   size: number;
-  url: string;
 }
 
 export async function GET(req: Request) {
@@ -48,7 +47,6 @@ export async function GET(req: Request) {
         environment,
         timestamp: match?.[1]?.replace(/T(\d{2})-(\d{2})-(\d{2})Z/, 'T$1:$2:$3Z') || '',
         size: blob.size,
-        url: blob.url,
       };
     });
 

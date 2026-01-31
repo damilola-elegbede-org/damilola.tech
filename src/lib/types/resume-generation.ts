@@ -368,6 +368,8 @@ export interface ResumeGenerationSummary {
   size: number;
   /** Number of generations for this job (1 for v1, history.length + 1 for v2) */
   generationCount: number;
+  /** Indicates this record failed to parse from blob storage */
+  parseError?: boolean;
 }
 
 export interface ResumeGeneratorRequest {
