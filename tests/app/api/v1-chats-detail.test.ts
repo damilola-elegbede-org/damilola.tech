@@ -128,7 +128,6 @@ describe('v1/chats/[id] API route', () => {
       const httpUrl = encodeURIComponent('http://abc.blob.vercel-storage.com/data');
       const request = new Request(`http://localhost/api/v1/chats/${httpUrl}`);
       const response = await GET(request, createParams(httpUrl));
-      const data = await response.json();
 
       expect(response.status).toBe(400);
     });
@@ -141,7 +140,6 @@ describe('v1/chats/[id] API route', () => {
       );
       const request = new Request(`http://localhost/api/v1/chats/${wrongPathUrl}`);
       const response = await GET(request, createParams(wrongPathUrl));
-      const data = await response.json();
 
       expect(response.status).toBe(400);
     });

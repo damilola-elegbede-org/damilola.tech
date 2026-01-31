@@ -33,7 +33,12 @@ export async function GET(
 
   try {
     const { id } = await params;
-    const blobUrl = decodeURIComponent(id);
+    let blobUrl: string;
+    try {
+      blobUrl = decodeURIComponent(id);
+    } catch {
+      return Errors.badRequest('Invalid chat URL encoding');
+    }
 
     // Validate URL to prevent SSRF attacks
     if (!isValidBlobUrl(blobUrl)) {

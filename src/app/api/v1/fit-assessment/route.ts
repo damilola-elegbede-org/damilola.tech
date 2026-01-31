@@ -210,7 +210,12 @@ export async function POST(req: Request) {
       return Errors.badRequest('Request body too large.');
     }
 
-    const body = await req.json();
+    let body: { input?: unknown; prompt?: unknown };
+    try {
+      body = await req.json();
+    } catch {
+      return Errors.badRequest('Invalid JSON body.');
+    }
     const input = body.input || body.prompt;
 
     if (!input || typeof input !== 'string') {

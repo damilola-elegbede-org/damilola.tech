@@ -73,7 +73,12 @@ export async function PATCH(req: Request, context: RouteContext) {
 
   try {
     const { id } = await context.params;
-    const body = await req.json();
+    let body;
+    try {
+      body = await req.json();
+    } catch {
+      return Response.json({ error: 'Invalid JSON in request body' }, { status: 400 });
+    }
     const { name, description, enabled } = body;
 
     // Validate inputs

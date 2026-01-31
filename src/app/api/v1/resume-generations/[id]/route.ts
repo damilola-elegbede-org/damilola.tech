@@ -27,7 +27,12 @@ interface RouteParams {
 
 export async function GET(req: Request, { params }: RouteParams) {
   const { id } = await params;
-  const decodedUrl = decodeURIComponent(id);
+  let decodedUrl: string;
+  try {
+    decodedUrl = decodeURIComponent(id);
+  } catch {
+    return Errors.badRequest('Invalid blob URL encoding');
+  }
 
   // Authenticate with API key
   const authResult = await requireApiKey(req);

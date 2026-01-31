@@ -96,7 +96,6 @@ describe('v1/fit-assessment API route', () => {
         body: JSON.stringify({ input: '' }),
       });
       const response = await POST(request);
-      const data = await response.json();
 
       expect(response.status).toBe(400);
     });

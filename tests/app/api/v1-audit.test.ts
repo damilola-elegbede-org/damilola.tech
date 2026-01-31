@@ -308,7 +308,7 @@ describe('v1/audit API route', () => {
       const { GET } = await import('@/app/api/v1/audit/route');
       const request = new Request('http://localhost/api/v1/audit?limit=500');
       const response = await GET(request);
-      const data = await response.json();
+      await response.json();
 
       // Should cap at 100
       expect(response.status).toBe(200);

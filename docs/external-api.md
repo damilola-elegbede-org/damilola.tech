@@ -13,14 +13,14 @@ All API requests require authentication using an API key. The key can be provide
 ### Authorization Header (Recommended)
 
 ```bash
-curl -H "Authorization: Bearer dk_live_xxx" \
+curl -H "Authorization: Bearer YOUR_API_KEY" \
   https://damilola.tech/api/v1/stats
 ```
 
 ### X-API-Key Header
 
 ```bash
-curl -H "X-API-Key: dk_live_xxx" \
+curl -H "X-API-Key: YOUR_API_KEY" \
   https://damilola.tech/api/v1/stats
 ```
 
@@ -360,7 +360,7 @@ API key access is not rate limited. However, the underlying AI endpoints are sub
 ```python
 import requests
 
-API_KEY = "dk_live_xxx"
+API_KEY = "YOUR_API_KEY"
 BASE_URL = "https://damilola.tech/api/v1"
 
 headers = {"Authorization": f"Bearer {API_KEY}"}
@@ -383,7 +383,7 @@ print(assessment['data']['assessment'])
 ### JavaScript/Node.js
 
 ```javascript
-const API_KEY = "dk_live_xxx";
+const API_KEY = "YOUR_API_KEY";
 const BASE_URL = "https://damilola.tech/api/v1";
 
 const headers = {
@@ -412,23 +412,23 @@ console.log(chat.data.message.content);
 
 ```bash
 # Get stats
-curl -H "Authorization: Bearer dk_live_xxx" \
+curl -H "Authorization: Bearer YOUR_API_KEY" \
   https://damilola.tech/api/v1/stats
 
 # List chats
-curl -H "Authorization: Bearer dk_live_xxx" \
+curl -H "Authorization: Bearer YOUR_API_KEY" \
   "https://damilola.tech/api/v1/chats?limit=10"
 
 # Run fit assessment
 curl -X POST \
-  -H "Authorization: Bearer dk_live_xxx" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"input": "https://example.com/job-posting"}' \
   https://damilola.tech/api/v1/fit-assessment
 
 # Chat with AI
 curl -X POST \
-  -H "X-API-Key: dk_live_xxx" \
+  -H "X-API-Key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"messages": [{"role": "user", "content": "What is your experience with AWS?"}]}' \
   https://damilola.tech/api/v1/chat

@@ -66,7 +66,12 @@ export async function POST(req: Request) {
   }
 
   try {
-    const body = await req.json();
+    let body;
+    try {
+      body = await req.json();
+    } catch {
+      return Response.json({ error: 'Invalid JSON in request body' }, { status: 400 });
+    }
     const { name, description } = body;
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {

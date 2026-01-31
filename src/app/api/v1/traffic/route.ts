@@ -72,8 +72,8 @@ export async function GET(req: Request) {
       }
       const days = Math.min(365, Math.max(1, rawDays));
       endDate = new Date();
-      startDate = new Date();
-      startDate.setDate(startDate.getDate() - days);
+      startDate = new Date(endDate);
+      startDate.setDate(startDate.getDate() - (days - 1));
     }
 
     const pageViewEvents: AuditEvent[] = [];
