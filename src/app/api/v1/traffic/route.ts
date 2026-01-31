@@ -1,6 +1,8 @@
 import { list } from '@vercel/blob';
 import { requireApiKey } from '@/lib/api-key-auth';
+import { logApiAccess } from '@/lib/api-audit';
 import { apiSuccess, Errors } from '@/lib/api-response';
+import { getClientIp } from '@/lib/rate-limit';
 import { getMTDayBounds } from '@/lib/timezone';
 import type { AuditEvent, TrafficSource } from '@/lib/types';
 
@@ -40,6 +42,8 @@ export async function GET(req: Request) {
   if (authResult instanceof Response) {
     return authResult;
   }
+
+  const ip = getClientIp(req);
 
   try {
     const { searchParams } = new URL(req.url);
@@ -205,7 +209,18 @@ export async function GET(req: Request) {
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
 
+    // Log API access audit event
+    logApiAccess('api_traffic_accessed', authResult.apiKey, {
+      environment,
+      dateRange: {
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
+      },
+      totalSessions: sessionsSeen.size,
+    }, ip).catch((err) => console.warn('[api/v1/traffic] Failed to log audit:', err));
+
     return apiSuccess({
+      truncated: totalBlobsProcessed >= MAX_BLOBS,
       totalSessions: sessionsSeen.size,
       bySource,
       byMedium,

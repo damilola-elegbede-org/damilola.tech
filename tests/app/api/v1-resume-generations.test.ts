@@ -23,6 +23,17 @@ vi.mock('@/lib/job-id', () => ({
   }),
 }));
 
+// Mock api-audit
+const mockLogApiAccess = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/lib/api-audit', () => ({
+  logApiAccess: (...args: unknown[]) => mockLogApiAccess(...args),
+}));
+
+// Mock rate-limit
+vi.mock('@/lib/rate-limit', () => ({
+  getClientIp: vi.fn().mockReturnValue('127.0.0.1'),
+}));
+
 describe('v1/resume-generations API route', () => {
   const originalEnv = { ...process.env };
   const originalFetch = global.fetch;
@@ -395,6 +406,51 @@ describe('v1/resume-generations API route', () => {
 
       expect(data.data.generations).toHaveLength(1);
       expect(data.data.generations[0].generationCount).toBe(1); // Default for v1
+    });
+
+    it('logs api_resume_generations_list audit event with correct parameters', async () => {
+      mockList.mockResolvedValue({
+        blobs: [
+          { pathname: 'resume1.json', size: 1000, url: 'https://blob.url/resume1', uploadedAt: new Date() },
+          { pathname: 'resume2.json', size: 1000, url: 'https://blob.url/resume2', uploadedAt: new Date() },
+        ],
+        cursor: 'next-cursor',
+        hasMore: true,
+      });
+
+      vi.mocked(global.fetch).mockResolvedValue({
+        ok: true,
+        headers: new Headers({ 'content-length': '1000' }),
+        json: async () => ({
+          version: 2,
+          jobId: 'job-123',
+          generationId: 'gen-456',
+          environment: 'preview',
+          createdAt: '2026-01-28T10:00:00.000Z',
+          updatedAt: '2026-01-28T10:00:00.000Z',
+          companyName: 'Tech Corp',
+          roleTitle: 'Senior Engineer',
+          estimatedCompatibility: { before: 60, after: 85 },
+          applicationStatus: 'draft',
+          generationHistory: [],
+        }),
+      } as Response);
+
+      const { GET } = await import('@/app/api/v1/resume-generations/route');
+      const request = new Request('http://localhost/api/v1/resume-generations');
+      await GET(request);
+
+      expect(mockLogApiAccess).toHaveBeenCalledWith(
+        'api_resume_generations_list',
+        mockValidApiKey.apiKey,
+        expect.objectContaining({
+          environment: 'preview',
+          resultCount: 2,
+          hasFilters: false,
+          hasMore: true,
+        }),
+        '127.0.0.1'
+      );
     });
   });
 });

@@ -1,7 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { requireApiKey } from '@/lib/api-key-auth';
+import { logApiAccess } from '@/lib/api-audit';
 import { apiSuccess, Errors } from '@/lib/api-response';
 import { CHATBOT_SYSTEM_PROMPT } from '@/lib/generated/system-prompt';
+import { getClientIp } from '@/lib/rate-limit';
 import { getFullSystemPrompt } from '@/lib/system-prompt';
 import { logUsage } from '@/lib/usage-logger';
 
@@ -57,6 +59,8 @@ export async function POST(req: Request) {
   if (authResult instanceof Response) {
     return authResult;
   }
+
+  const ip = getClientIp(req);
 
   try {
     const contentLength = req.headers.get('content-length');
@@ -127,7 +131,19 @@ export async function POST(req: Request) {
       cacheRead: usage.cache_read_input_tokens ?? 0,
       durationMs: Date.now() - startTime,
       cacheTtl: '1h',
+    }, {
+      apiKeyId: authResult.apiKey.id,
+      apiKeyName: authResult.apiKey.name,
     }).catch((err) => console.warn('[api/v1/chat] Failed to log usage:', err));
+
+    // Log API access audit event
+    logApiAccess('api_chat', authResult.apiKey, {
+      sessionId: chatSessionId,
+      messageCount: messages.length,
+      inputTokens: usage.input_tokens,
+      outputTokens: usage.output_tokens,
+      durationMs: Date.now() - startTime,
+    }, ip).catch((err) => console.warn('[api/v1/chat] Failed to log audit:', err));
 
     // Extract text content from response
     const textContent = response.content.find((block) => block.type === 'text');

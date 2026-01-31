@@ -1,5 +1,7 @@
 import { requireApiKey } from '@/lib/api-key-auth';
+import { logApiAccess } from '@/lib/api-audit';
 import { apiSuccess, Errors } from '@/lib/api-response';
+import { getClientIp } from '@/lib/rate-limit';
 import { getAggregatedStats, listSessions } from '@/lib/usage-logger';
 
 export const runtime = 'nodejs';
@@ -11,6 +13,7 @@ export async function GET(req: Request) {
     return authResult;
   }
 
+  const ip = getClientIp(req);
   const { searchParams } = new URL(req.url);
   const startDate = searchParams.get('startDate') || undefined;
   const endDate = searchParams.get('endDate') || undefined;
@@ -40,6 +43,13 @@ export async function GET(req: Request) {
       costUsd: s.totals.estimatedCostUsd,
       lastUpdatedAt: s.lastUpdatedAt,
     }));
+
+    // Log API access audit event
+    logApiAccess('api_usage_accessed', authResult.apiKey, {
+      environment,
+      dateRange: { start: startDate || null, end: endDate || null },
+      sessionCount: sessions.length,
+    }, ip).catch((err) => console.warn('[api/v1/usage] Failed to log audit:', err));
 
     return apiSuccess({
       ...stats,

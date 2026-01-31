@@ -25,6 +25,17 @@ vi.mock('@/lib/chat-filename', () => ({
   }),
 }));
 
+// Mock api-audit
+const mockLogApiAccess = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/lib/api-audit', () => ({
+  logApiAccess: (...args: unknown[]) => mockLogApiAccess(...args),
+}));
+
+// Mock rate-limit
+vi.mock('@/lib/rate-limit', () => ({
+  getClientIp: vi.fn().mockReturnValue('127.0.0.1'),
+}));
+
 describe('v1/stats API route', () => {
   const originalEnv = { ...process.env };
   const originalFetch = global.fetch;
@@ -382,6 +393,23 @@ describe('v1/stats API route', () => {
       const data = await response.json();
 
       expect(data.data.chats.total).toBe(1); // Only non-zero file counted
+    });
+
+    it('logs api_stats_accessed audit event with correct parameters', async () => {
+      mockList.mockResolvedValue({ blobs: [], cursor: undefined });
+
+      const { GET } = await import('@/app/api/v1/stats/route');
+      const request = new Request('http://localhost/api/v1/stats?env=production');
+      await GET(request);
+
+      expect(mockLogApiAccess).toHaveBeenCalledWith(
+        'api_stats_accessed',
+        mockValidApiKey.apiKey,
+        expect.objectContaining({
+          environment: 'production',
+        }),
+        '127.0.0.1'
+      );
     });
   });
 });

@@ -362,12 +362,14 @@ export interface ResumeGenerationSummary {
   scoreAfter: number;
   /** Application status */
   applicationStatus: ApplicationStatus;
-  /** Blob URL */
-  url: string;
+  /** Blob URL (only in detail responses, not list) */
+  url?: string;
   /** Size in bytes */
   size: number;
   /** Number of generations for this job (1 for v1, history.length + 1 for v2) */
   generationCount: number;
+  /** Indicates this record failed to parse from blob storage */
+  parseError?: boolean;
 }
 
 export interface ResumeGeneratorRequest {

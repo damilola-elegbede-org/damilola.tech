@@ -87,9 +87,14 @@ export default function ApiKeysPage() {
 
   const handleCopyKey = async () => {
     if (newlyCreatedKey) {
-      await navigator.clipboard.writeText(newlyCreatedKey.rawKey);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      try {
+        await navigator.clipboard.writeText(newlyCreatedKey.rawKey);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (err) {
+        console.error('Failed to copy API key to clipboard:', err);
+        setError('Failed to copy to clipboard. Please copy the key manually.');
+      }
     }
   };
 

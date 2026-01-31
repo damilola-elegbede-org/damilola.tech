@@ -1,5 +1,36 @@
-import { describe, it, expect } from 'vitest';
-import { calculateCost, calculateCostSavings } from '@/lib/usage-logger';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { PutBlobResult, HeadBlobResult } from '@vercel/blob';
+
+// Mock Vercel Blob functions - use factory function
+vi.mock('@vercel/blob', () => ({
+  put: vi.fn(),
+  head: vi.fn(),
+  list: vi.fn(),
+}));
+
+import { calculateCost, calculateCostSavings, logUsage } from '@/lib/usage-logger';
+import * as blobModule from '@vercel/blob';
+
+// Helper to create mock PutBlobResult
+const mockPutResult = (url: string): PutBlobResult => ({
+  url,
+  downloadUrl: url,
+  pathname: url.split('/').pop() ?? '',
+  contentType: 'application/json',
+  contentDisposition: 'inline',
+});
+
+// Helper to create mock HeadBlobResult
+const mockHeadResult = (url: string): HeadBlobResult => ({
+  url,
+  downloadUrl: url,
+  pathname: url.split('/').pop() ?? '',
+  contentType: 'application/json',
+  contentDisposition: 'inline',
+  size: 1024,
+  uploadedAt: new Date(),
+  cacheControl: 'public, max-age=31536000',
+});
 
 describe('calculateCost', () => {
   describe('with known model (claude-sonnet-4-20250514)', () => {
@@ -236,6 +267,245 @@ describe('calculateCostSavings', () => {
       // Cached cost: 1 token * $0.30/M = $0.0000003
       // Savings: $0.0000027, rounded to $0.000003
       expect(savings).toBe(0.000003);
+    });
+  });
+});
+
+describe('logUsage', () => {
+  const mockPut = vi.mocked(blobModule.put);
+  const mockHead = vi.mocked(blobModule.head);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('API key attribution', () => {
+    it('creates session with apiKeyId when provided', async () => {
+      // Mock getSession to return null (new session)
+      mockHead.mockRejectedValue(new Error('Blob does not exist'));
+      mockPut.mockResolvedValue(mockPutResult('https://example.com/session.json'));
+
+      await logUsage(
+        'test-session-1',
+        {
+          endpoint: 'chat-api',
+          model: 'claude-sonnet-4-20250514',
+          inputTokens: 1000,
+          outputTokens: 500,
+          cacheCreation: 0,
+          cacheRead: 0,
+          durationMs: 1500,
+        },
+        {
+          apiKeyId: 'key-abc-123',
+        }
+      );
+
+      expect(mockPut).toHaveBeenCalledTimes(1);
+      const putCall = mockPut.mock.calls[0];
+      const sessionData = JSON.parse(putCall[1] as string);
+
+      expect(sessionData.apiKeyId).toBe('key-abc-123');
+      expect(sessionData.apiKeyName).toBeUndefined();
+      expect(sessionData.sessionId).toBe('test-session-1');
+    });
+
+    it('creates session with apiKeyName when provided', async () => {
+      mockHead.mockRejectedValue(new Error('Blob does not exist'));
+      mockPut.mockResolvedValue(mockPutResult('https://example.com/session.json'));
+
+      await logUsage(
+        'test-session-2',
+        {
+          endpoint: 'fit-assessment-api',
+          model: 'claude-sonnet-4-20250514',
+          inputTokens: 2000,
+          outputTokens: 1000,
+          cacheCreation: 500,
+          cacheRead: 0,
+          durationMs: 2500,
+        },
+        {
+          apiKeyName: 'Production API Key',
+        }
+      );
+
+      expect(mockPut).toHaveBeenCalledTimes(1);
+      const putCall = mockPut.mock.calls[0];
+      const sessionData = JSON.parse(putCall[1] as string);
+
+      expect(sessionData.apiKeyId).toBeUndefined();
+      expect(sessionData.apiKeyName).toBe('Production API Key');
+      expect(sessionData.sessionId).toBe('test-session-2');
+    });
+
+    it('creates session with both apiKeyId and apiKeyName when provided', async () => {
+      mockHead.mockRejectedValue(new Error('Blob does not exist'));
+      mockPut.mockResolvedValue(mockPutResult('https://example.com/session.json'));
+
+      await logUsage(
+        'test-session-3',
+        {
+          endpoint: 'resume-generator',
+          model: 'claude-sonnet-4-20250514',
+          inputTokens: 1500,
+          outputTokens: 800,
+          cacheCreation: 300,
+          cacheRead: 500,
+          durationMs: 3000,
+        },
+        {
+          apiKeyId: 'key-def-456',
+          apiKeyName: 'Development API Key',
+        }
+      );
+
+      expect(mockPut).toHaveBeenCalledTimes(1);
+      const putCall = mockPut.mock.calls[0];
+      const sessionData = JSON.parse(putCall[1] as string);
+
+      expect(sessionData.apiKeyId).toBe('key-def-456');
+      expect(sessionData.apiKeyName).toBe('Development API Key');
+      expect(sessionData.sessionId).toBe('test-session-3');
+    });
+
+    it('creates session without API key fields when not provided', async () => {
+      mockHead.mockRejectedValue(new Error('Blob does not exist'));
+      mockPut.mockResolvedValue(mockPutResult('https://example.com/session.json'));
+
+      await logUsage(
+        'test-session-4',
+        {
+          endpoint: 'chat',
+          model: 'claude-sonnet-4-20250514',
+          inputTokens: 500,
+          outputTokens: 250,
+          cacheCreation: 0,
+          cacheRead: 0,
+          durationMs: 1000,
+        }
+      );
+
+      expect(mockPut).toHaveBeenCalledTimes(1);
+      const putCall = mockPut.mock.calls[0];
+      const sessionData = JSON.parse(putCall[1] as string);
+
+      expect(sessionData.apiKeyId).toBeUndefined();
+      expect(sessionData.apiKeyName).toBeUndefined();
+      expect(sessionData.sessionId).toBe('test-session-4');
+    });
+
+    it('preserves API key fields on subsequent requests to same session', async () => {
+      // First request with API key
+      mockHead.mockRejectedValue(new Error('Blob does not exist'));
+      mockPut.mockResolvedValue(mockPutResult('https://example.com/session.json'));
+
+      await logUsage(
+        'test-session-5',
+        {
+          endpoint: 'chat-api',
+          model: 'claude-sonnet-4-20250514',
+          inputTokens: 1000,
+          outputTokens: 500,
+          cacheCreation: 0,
+          cacheRead: 0,
+          durationMs: 1500,
+        },
+        {
+          apiKeyId: 'key-ghi-789',
+          apiKeyName: 'Test Key',
+        }
+      );
+
+      const firstPutCall = mockPut.mock.calls[0];
+      const firstSessionData = JSON.parse(firstPutCall[1] as string);
+
+      // Second request to same session (without options)
+      mockHead.mockResolvedValue(mockHeadResult('https://example.com/session.json'));
+      global.fetch = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(firstSessionData), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+      mockPut.mockClear();
+
+      await logUsage('test-session-5', {
+        endpoint: 'chat-api',
+        model: 'claude-sonnet-4-20250514',
+        inputTokens: 800,
+        outputTokens: 400,
+        cacheCreation: 0,
+        cacheRead: 600,
+        durationMs: 1200,
+      });
+
+      expect(mockPut).toHaveBeenCalledTimes(1);
+      const secondPutCall = mockPut.mock.calls[0];
+      const secondSessionData = JSON.parse(secondPutCall[1] as string);
+
+      // API key fields should be preserved from first request
+      expect(secondSessionData.apiKeyId).toBe('key-ghi-789');
+      expect(secondSessionData.apiKeyName).toBe('Test Key');
+      expect(secondSessionData.requests).toHaveLength(2);
+    });
+  });
+
+  describe('session creation fields', () => {
+    it('includes all required session fields', async () => {
+      mockHead.mockRejectedValue(new Error('Blob does not exist'));
+      mockPut.mockResolvedValue(mockPutResult('https://example.com/session.json'));
+
+      await logUsage(
+        'test-session-6',
+        {
+          endpoint: 'chat-api',
+          model: 'claude-sonnet-4-20250514',
+          inputTokens: 1000,
+          outputTokens: 500,
+          cacheCreation: 200,
+          cacheRead: 300,
+          durationMs: 1500,
+        },
+        {
+          apiKeyId: 'key-test',
+          apiKeyName: 'Test',
+        }
+      );
+
+      expect(mockPut).toHaveBeenCalledTimes(1);
+      const putCall = mockPut.mock.calls[0];
+      const sessionData = JSON.parse(putCall[1] as string);
+
+      // Verify all required fields
+      expect(sessionData).toHaveProperty('sessionId', 'test-session-6');
+      expect(sessionData).toHaveProperty('createdAt');
+      expect(sessionData).toHaveProperty('lastUpdatedAt');
+      expect(sessionData).toHaveProperty('apiKeyId', 'key-test');
+      expect(sessionData).toHaveProperty('apiKeyName', 'Test');
+      expect(sessionData).toHaveProperty('requests');
+      expect(sessionData).toHaveProperty('totals');
+
+      // Verify requests array has one entry
+      expect(sessionData.requests).toHaveLength(1);
+      expect(sessionData.requests[0]).toMatchObject({
+        endpoint: 'chat-api',
+        model: 'claude-sonnet-4-20250514',
+        inputTokens: 1000,
+        outputTokens: 500,
+        cacheCreation: 200,
+        cacheRead: 300,
+        durationMs: 1500,
+      });
+
+      // Verify totals
+      expect(sessionData.totals).toMatchObject({
+        requestCount: 1,
+        inputTokens: 1000,
+        outputTokens: 500,
+        cacheCreationTokens: 200,
+        cacheReadTokens: 300,
+      });
     });
   });
 });

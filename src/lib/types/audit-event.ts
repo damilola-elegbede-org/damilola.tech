@@ -20,7 +20,17 @@ export type AuditEventType =
   | 'api_key_created'
   | 'api_key_disabled'
   | 'api_key_enabled'
-  | 'api_key_revoked';
+  | 'api_key_revoked'
+  // API access events (via external API keys)
+  | 'api_fit_assessment'
+  | 'api_chat'
+  | 'api_chats_list'
+  | 'api_fit_assessments_list'
+  | 'api_resume_generations_list'
+  | 'api_resume_generator_attempted'
+  | 'api_stats_accessed'
+  | 'api_usage_accessed'
+  | 'api_traffic_accessed';
 
 export interface TrafficSource {
   source: string;

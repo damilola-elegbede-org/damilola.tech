@@ -33,6 +33,17 @@ vi.mock('@/lib/chat-filename', () => ({
   }),
 }));
 
+// Mock api-audit
+const mockLogApiAccess = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/lib/api-audit', () => ({
+  logApiAccess: (...args: unknown[]) => mockLogApiAccess(...args),
+}));
+
+// Mock rate-limit
+vi.mock('@/lib/rate-limit', () => ({
+  getClientIp: vi.fn().mockReturnValue('127.0.0.1'),
+}));
+
 describe('v1/chats API route', () => {
   const originalEnv = { ...process.env };
 
@@ -281,6 +292,42 @@ describe('v1/chats API route', () => {
         })
       );
       expect(data.meta.environment).toBe('production');
+    });
+
+    it('logs api_chats_list audit event with correct parameters', async () => {
+      mockList.mockResolvedValue({
+        blobs: [
+          {
+            pathname: 'damilola.tech/chats/production/2026-01-28T10-30-00Z-abc12345.json',
+            size: 1234,
+            url: 'https://blob.url/chat1',
+            uploadedAt: new Date('2026-01-28T10:30:00Z'),
+          },
+          {
+            pathname: 'damilola.tech/chats/production/2026-01-29T10-30-00Z-def67890.json',
+            size: 2345,
+            url: 'https://blob.url/chat2',
+            uploadedAt: new Date('2026-01-29T10:30:00Z'),
+          },
+        ],
+        cursor: 'next-cursor',
+        hasMore: true,
+      });
+
+      const { GET } = await import('@/app/api/v1/chats/route');
+      const request = new Request('http://localhost/api/v1/chats');
+      await GET(request);
+
+      expect(mockLogApiAccess).toHaveBeenCalledWith(
+        'api_chats_list',
+        mockValidApiKey.apiKey,
+        expect.objectContaining({
+          environment: 'production',
+          resultCount: 2,
+          hasMore: true,
+        }),
+        '127.0.0.1'
+      );
     });
   });
 });

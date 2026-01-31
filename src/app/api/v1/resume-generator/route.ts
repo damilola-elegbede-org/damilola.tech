@@ -1,4 +1,6 @@
 import { requireApiKey } from '@/lib/api-key-auth';
+import { logApiAccess } from '@/lib/api-audit';
+import { getClientIp } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 
@@ -19,6 +21,14 @@ export async function POST(req: Request) {
   if (authResult instanceof Response) {
     return authResult;
   }
+
+  const ip = getClientIp(req);
+
+  // Log the attempted access (even though it's not implemented)
+  logApiAccess('api_resume_generator_attempted', authResult.apiKey, {
+    attempted: true,
+    result: 'not_implemented',
+  }, ip).catch((err) => console.warn('[api/v1/resume-generator] Failed to log audit:', err));
 
   // Resume generation requires the interactive admin workflow
   // This would require significant refactoring to support via API

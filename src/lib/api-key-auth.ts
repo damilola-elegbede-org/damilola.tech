@@ -31,8 +31,11 @@ function extractApiKey(req: Request): string | null {
 
   // Check X-API-Key header
   const apiKeyHeader = req.headers.get('X-API-Key');
-  if (apiKeyHeader?.startsWith(API_KEY_PREFIX)) {
-    return apiKeyHeader.trim();
+  if (apiKeyHeader) {
+    const trimmedKey = apiKeyHeader.trim();
+    if (trimmedKey.startsWith(API_KEY_PREFIX)) {
+      return trimmedKey;
+    }
   }
 
   return null;

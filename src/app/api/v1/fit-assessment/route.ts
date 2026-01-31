@@ -1,8 +1,10 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { isIP } from 'node:net';
 import { requireApiKey } from '@/lib/api-key-auth';
+import { logApiAccess } from '@/lib/api-audit';
 import { apiSuccess, Errors } from '@/lib/api-response';
 import { FIT_ASSESSMENT_PROMPT } from '@/lib/generated/system-prompt';
+import { getClientIp } from '@/lib/rate-limit';
 import { getFitAssessmentPrompt } from '@/lib/system-prompt';
 import { logUsage } from '@/lib/usage-logger';
 
@@ -165,6 +167,10 @@ async function fetchWithSizeLimit(
     const location = response.headers.get('location');
     if (location) {
       const redirectUrl = new URL(location, url).href;
+      // SECURITY NOTE: TOCTOU limitation - DNS resolution can change between validation and fetch.
+      // This validation provides defense-in-depth but is not perfect protection against SSRF.
+      // The server validates at redirect time, which mitigates some attacks but doesn't prevent
+      // time-of-check/time-of-use race conditions where DNS changes between validation and request.
       const redirectError = await validateUrlForSsrf(redirectUrl);
       if (redirectError) throw new Error(`Redirect blocked: ${redirectError}`);
       return fetchWithSizeLimit(redirectUrl, maxSize, timeout, redirectCount + 1);
@@ -203,6 +209,8 @@ export async function POST(req: Request) {
   if (authResult instanceof Response) {
     return authResult;
   }
+
+  const ip = getClientIp(req);
 
   try {
     const contentLength = req.headers.get('content-length');
@@ -307,7 +315,18 @@ export async function POST(req: Request) {
       cacheRead: usage.cache_read_input_tokens ?? 0,
       durationMs: Date.now() - startTime,
       cacheTtl: '1h',
+    }, {
+      apiKeyId: authResult.apiKey.id,
+      apiKeyName: authResult.apiKey.name,
     }).catch((err) => console.warn('[api/v1/fit-assessment] Failed to log usage:', err));
+
+    // Log API access audit event
+    logApiAccess('api_fit_assessment', authResult.apiKey, {
+      sessionId: fitSessionId,
+      inputTokens: usage.input_tokens,
+      outputTokens: usage.output_tokens,
+      durationMs: Date.now() - startTime,
+    }, ip).catch((err) => console.warn('[api/v1/fit-assessment] Failed to log audit:', err));
 
     // Extract text content from response
     const textContent = message.content.find((block) => block.type === 'text');

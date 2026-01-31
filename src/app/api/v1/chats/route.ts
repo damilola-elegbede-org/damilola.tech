@@ -1,7 +1,9 @@
 import { list } from '@vercel/blob';
 import { requireApiKey } from '@/lib/api-key-auth';
+import { logApiAccess } from '@/lib/api-audit';
 import { apiSuccess, Errors } from '@/lib/api-response';
 import { parseChatFilename } from '@/lib/chat-filename';
+import { getClientIp } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 
@@ -23,6 +25,8 @@ export async function GET(req: Request) {
   if (authResult instanceof Response) {
     return authResult;
   }
+
+  const ip = getClientIp(req);
 
   try {
     const { searchParams } = new URL(req.url);
@@ -55,6 +59,13 @@ export async function GET(req: Request) {
         };
       })
       .filter((chat): chat is ChatSummary => chat !== null);
+
+    // Log API access audit event
+    logApiAccess('api_chats_list', authResult.apiKey, {
+      environment,
+      resultCount: chats.length,
+      hasMore: result.hasMore,
+    }, ip).catch((err) => console.warn('[api/v1/chats] Failed to log audit:', err));
 
     return apiSuccess(
       { chats },

@@ -17,6 +17,7 @@ interface AuditEvent {
 const PAGE_SIZE = 20;
 
 const eventTypes = [
+  // User activity (browser)
   'page_view',
   'section_view',
   'chat_opened',
@@ -25,20 +26,32 @@ const eventTypes = [
   'fit_assessment_completed',
   'fit_assessment_download',
   'external_link_click',
+  'resume_generation_started',
+  'resume_generation_completed',
+  'resume_generation_download',
+  // Admin activity
   'admin_login_success',
   'admin_login_failure',
   'admin_logout',
   'admin_chat_viewed',
   'admin_assessment_viewed',
   'admin_audit_accessed',
-  'resume_generation_started',
-  'resume_generation_completed',
-  'resume_generation_download',
   'admin_resume_generation_viewed',
+  // API key management
   'api_key_created',
   'api_key_disabled',
   'api_key_enabled',
   'api_key_revoked',
+  // External API access (via API keys)
+  'api_fit_assessment',
+  'api_chat',
+  'api_chats_list',
+  'api_fit_assessments_list',
+  'api_resume_generations_list',
+  'api_resume_generator_attempted',
+  'api_stats_accessed',
+  'api_usage_accessed',
+  'api_traffic_accessed',
 ];
 
 const accessTypes = ['browser', 'api'] as const;

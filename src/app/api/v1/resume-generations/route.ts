@@ -1,7 +1,9 @@
 import { list } from '@vercel/blob';
 import { requireApiKey } from '@/lib/api-key-auth';
+import { logApiAccess } from '@/lib/api-audit';
 import { apiSuccess, Errors } from '@/lib/api-response';
 import { generateJobId } from '@/lib/job-id';
+import { getClientIp } from '@/lib/rate-limit';
 import type {
   ResumeGenerationSummary,
   ResumeGenerationLog,
@@ -73,6 +75,8 @@ export async function GET(req: Request) {
     return authResult;
   }
 
+  const ip = getClientIp(req);
+
   try {
     const url = new URL(req.url);
     const cursor = url.searchParams.get('cursor') || undefined;
@@ -132,11 +136,11 @@ export async function GET(req: Request) {
               scoreBefore: data.estimatedCompatibility.before,
               scoreAfter: data.estimatedCompatibility.after,
               applicationStatus: data.applicationStatus,
-              url: blob.url,
               size: blob.size,
               generationCount,
             };
           } catch (error) {
+            // Return placeholder record with parseError flag instead of filtering out failed parses
             console.error('[api/v1/resume-generations] Error parsing blob:', blob.pathname, error);
             return {
               id: blob.pathname,
@@ -150,9 +154,9 @@ export async function GET(req: Request) {
               scoreBefore: 0,
               scoreAfter: 0,
               applicationStatus: 'draft' as const,
-              url: blob.url,
               size: blob.size,
               generationCount: 1,
+              parseError: true,
             };
           }
         })
@@ -166,6 +170,14 @@ export async function GET(req: Request) {
       : allGenerations;
 
     generations.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    // Log API access audit event
+    logApiAccess('api_resume_generations_list', authResult.apiKey, {
+      environment,
+      resultCount: generations.length,
+      hasFilters,
+      hasMore: !!nextCursor,
+    }, ip).catch((err) => console.warn('[api/v1/resume-generations] Failed to log audit:', err));
 
     return apiSuccess(
       { generations },

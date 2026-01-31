@@ -288,7 +288,7 @@ export default function ResumeGeneratorHistoryPage() {
 
   const handleRowClick = async (generation: ResumeGenerationSummary) => {
     // Validate URL before fetching (security)
-    if (!isValidBlobUrl(generation.url)) {
+    if (!generation.url || !isValidBlobUrl(generation.url)) {
       setError('Invalid generation URL');
       return;
     }
@@ -316,6 +316,10 @@ export default function ResumeGeneratorHistoryPage() {
   };
 
   const handleStatusChange = async (generation: ResumeGenerationSummary, status: ApplicationStatus) => {
+    if (!generation.url) {
+      setError('Cannot update status: missing generation URL');
+      return;
+    }
     try {
       const res = await fetch(`/api/admin/resume-generations/${encodeURIComponent(generation.url)}`, {
         method: 'PATCH',

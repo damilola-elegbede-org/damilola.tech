@@ -1,7 +1,9 @@
 import { list } from '@vercel/blob';
 import { requireApiKey } from '@/lib/api-key-auth';
+import { logApiAccess } from '@/lib/api-audit';
 import { apiSuccess, Errors } from '@/lib/api-response';
 import { isValidChatFilename } from '@/lib/chat-filename';
+import { getClientIp } from '@/lib/rate-limit';
 import type { AuditEvent, TrafficSource } from '@/lib/types';
 
 export const runtime = 'nodejs';
@@ -27,6 +29,8 @@ export async function GET(req: Request) {
   if (authResult instanceof Response) {
     return authResult;
   }
+
+  const ip = getClientIp(req);
 
   try {
     const { searchParams } = new URL(req.url);
@@ -71,6 +75,7 @@ export async function GET(req: Request) {
     ]);
 
     // For resume generations, also count by status (fetch in parallel for performance)
+    // Performance note: Limited to 100 most recent records for dashboard stats to prevent timeouts on large datasets
     const resumeGenResult = await list({
       prefix: `damilola.tech/resume-generations/${environment}/`,
       limit: 100,
@@ -159,6 +164,11 @@ export async function GET(req: Request) {
       },
       environment,
     };
+
+    // Log API access audit event
+    logApiAccess('api_stats_accessed', authResult.apiKey, {
+      environment,
+    }, ip).catch((err) => console.warn('[api/v1/stats] Failed to log audit:', err));
 
     return apiSuccess(stats, { environment });
   } catch (error) {

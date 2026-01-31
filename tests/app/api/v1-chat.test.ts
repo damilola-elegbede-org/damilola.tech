@@ -46,6 +46,17 @@ vi.mock('@/lib/usage-logger', () => ({
   logUsage: vi.fn().mockResolvedValue(undefined),
 }));
 
+// Mock api-audit
+const mockLogApiAccess = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/lib/api-audit', () => ({
+  logApiAccess: (...args: unknown[]) => mockLogApiAccess(...args),
+}));
+
+// Mock rate-limit
+vi.mock('@/lib/rate-limit', () => ({
+  getClientIp: vi.fn().mockReturnValue('127.0.0.1'),
+}));
+
 describe('v1/chat API route', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -404,6 +415,40 @@ describe('v1/chat API route', () => {
             }),
           ]),
         })
+      );
+    });
+
+    it('logs api_chat audit event with correct parameters', async () => {
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Response' }],
+        model: 'claude-sonnet-4-20250514',
+        usage: {
+          input_tokens: 100,
+          output_tokens: 20,
+          cache_read_input_tokens: 50,
+        },
+      });
+
+      const { POST } = await import('@/app/api/v1/chat/route');
+      const request = new Request('http://localhost/api/v1/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: 'Hello' }],
+        }),
+      });
+      await POST(request);
+
+      expect(mockLogApiAccess).toHaveBeenCalledWith(
+        'api_chat',
+        mockValidApiKey.apiKey,
+        expect.objectContaining({
+          sessionId: expect.stringMatching(/^chat-api-/),
+          messageCount: 1,
+          inputTokens: 100,
+          outputTokens: 20,
+          durationMs: expect.any(Number),
+        }),
+        '127.0.0.1'
       );
     });
   });

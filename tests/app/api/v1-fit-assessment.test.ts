@@ -33,6 +33,17 @@ vi.mock('@/lib/usage-logger', () => ({
   logUsage: vi.fn().mockResolvedValue(undefined),
 }));
 
+// Mock api-audit
+const mockLogApiAccess = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/lib/api-audit', () => ({
+  logApiAccess: (...args: unknown[]) => mockLogApiAccess(...args),
+}));
+
+// Mock rate-limit
+vi.mock('@/lib/rate-limit', () => ({
+  getClientIp: vi.fn().mockReturnValue('127.0.0.1'),
+}));
+
 describe('v1/fit-assessment API route', () => {
   const originalFetch = global.fetch;
 
@@ -320,6 +331,37 @@ describe('v1/fit-assessment API route', () => {
 
       expect(response.status).toBe(400);
       expect(data.error.message).toContain('Content too short');
+    });
+
+    it('logs api_fit_assessment audit event with correct parameters', async () => {
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Assessment result' }],
+        model: 'claude-sonnet-4-20250514',
+        usage: {
+          input_tokens: 1000,
+          output_tokens: 500,
+          cache_read_input_tokens: 800,
+        },
+      });
+
+      const { POST } = await import('@/app/api/v1/fit-assessment/route');
+      const request = new Request('http://localhost/api/v1/fit-assessment', {
+        method: 'POST',
+        body: JSON.stringify({ input: 'Job description text...' }),
+      });
+      await POST(request);
+
+      expect(mockLogApiAccess).toHaveBeenCalledWith(
+        'api_fit_assessment',
+        mockValidApiKey.apiKey,
+        expect.objectContaining({
+          sessionId: expect.stringMatching(/^fit-assessment-api-/),
+          inputTokens: 1000,
+          outputTokens: 500,
+          durationMs: expect.any(Number),
+        }),
+        '127.0.0.1'
+      );
     });
   });
 });

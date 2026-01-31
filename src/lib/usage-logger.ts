@@ -25,6 +25,10 @@ export interface UsageSession {
   sessionId: string;
   createdAt: string;
   lastUpdatedAt: string;
+  /** API key ID if this session was created via external API */
+  apiKeyId?: string;
+  /** API key name if this session was created via external API */
+  apiKeyName?: string;
   requests: UsageRequest[];
   totals: {
     requestCount: number;
@@ -138,13 +142,21 @@ export async function getSession(sessionId: string): Promise<UsageSession | null
   }
 }
 
+export interface LogUsageOptions {
+  /** API key ID for attribution (optional) */
+  apiKeyId?: string;
+  /** API key name for attribution (optional) */
+  apiKeyName?: string;
+}
+
 /**
  * Log a usage request for a session.
  * Uses read-modify-write pattern with single session file.
  */
 export async function logUsage(
   sessionId: string,
-  request: Omit<UsageRequest, 'timestamp' | 'costUsd'>
+  request: Omit<UsageRequest, 'timestamp' | 'costUsd'>,
+  options?: LogUsageOptions
 ): Promise<void> {
   try {
     const timestamp = new Date().toISOString();
@@ -163,6 +175,8 @@ export async function logUsage(
       sessionId,
       createdAt: timestamp,
       lastUpdatedAt: timestamp,
+      ...(options?.apiKeyId && { apiKeyId: options.apiKeyId }),
+      ...(options?.apiKeyName && { apiKeyName: options.apiKeyName }),
       requests: [],
       totals: {
         requestCount: 0,
@@ -192,6 +206,7 @@ export async function logUsage(
       cost: `$${costUsd.toFixed(6)}`,
     });
   } catch (error) {
+    // TODO: Add monitoring/alerting for failed usage logging to detect systematic issues
     // Fire-and-forget: log errors but don't fail the request
     console.warn('[usage-logger] Failed to log usage:', error);
   }
@@ -261,6 +276,7 @@ export async function listSessions(options?: ListSessionsOptions): Promise<Usage
     // Filter to only JSON files
     const sessionBlobs = allBlobs.filter((blob) => blob.pathname.endsWith('.json'));
 
+    // Performance note: Unbounded parallel fetching acceptable for admin usage, but may scale poorly with thousands of sessions
     // Fetch all sessions in parallel batches (we need all to filter by date)
     const allSessions: UsageSession[] = [];
     const batchSize = 10;
