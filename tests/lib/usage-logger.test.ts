@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { PutBlobResult, HeadBlobResult } from '@vercel/blob';
 
 // Mock Vercel Blob functions - use factory function
 vi.mock('@vercel/blob', () => ({
@@ -7,8 +8,29 @@ vi.mock('@vercel/blob', () => ({
   list: vi.fn(),
 }));
 
-import { calculateCost, calculateCostSavings, logUsage, getSession } from '@/lib/usage-logger';
+import { calculateCost, calculateCostSavings, logUsage } from '@/lib/usage-logger';
 import * as blobModule from '@vercel/blob';
+
+// Helper to create mock PutBlobResult
+const mockPutResult = (url: string): PutBlobResult => ({
+  url,
+  downloadUrl: url,
+  pathname: url.split('/').pop() ?? '',
+  contentType: 'application/json',
+  contentDisposition: 'inline',
+});
+
+// Helper to create mock HeadBlobResult
+const mockHeadResult = (url: string): HeadBlobResult => ({
+  url,
+  downloadUrl: url,
+  pathname: url.split('/').pop() ?? '',
+  contentType: 'application/json',
+  contentDisposition: 'inline',
+  size: 1024,
+  uploadedAt: new Date(),
+  cacheControl: 'public, max-age=31536000',
+});
 
 describe('calculateCost', () => {
   describe('with known model (claude-sonnet-4-20250514)', () => {
@@ -261,7 +283,7 @@ describe('logUsage', () => {
     it('creates session with apiKeyId when provided', async () => {
       // Mock getSession to return null (new session)
       mockHead.mockRejectedValue(new Error('Blob does not exist'));
-      mockPut.mockResolvedValue({ url: 'https://example.com/session.json' } as any);
+      mockPut.mockResolvedValue(mockPutResult('https://example.com/session.json'));
 
       await logUsage(
         'test-session-1',
@@ -290,7 +312,7 @@ describe('logUsage', () => {
 
     it('creates session with apiKeyName when provided', async () => {
       mockHead.mockRejectedValue(new Error('Blob does not exist'));
-      mockPut.mockResolvedValue({ url: 'https://example.com/session.json' } as any);
+      mockPut.mockResolvedValue(mockPutResult('https://example.com/session.json'));
 
       await logUsage(
         'test-session-2',
@@ -319,7 +341,7 @@ describe('logUsage', () => {
 
     it('creates session with both apiKeyId and apiKeyName when provided', async () => {
       mockHead.mockRejectedValue(new Error('Blob does not exist'));
-      mockPut.mockResolvedValue({ url: 'https://example.com/session.json' } as any);
+      mockPut.mockResolvedValue(mockPutResult('https://example.com/session.json'));
 
       await logUsage(
         'test-session-3',
@@ -349,7 +371,7 @@ describe('logUsage', () => {
 
     it('creates session without API key fields when not provided', async () => {
       mockHead.mockRejectedValue(new Error('Blob does not exist'));
-      mockPut.mockResolvedValue({ url: 'https://example.com/session.json' } as any);
+      mockPut.mockResolvedValue(mockPutResult('https://example.com/session.json'));
 
       await logUsage(
         'test-session-4',
@@ -376,7 +398,7 @@ describe('logUsage', () => {
     it('preserves API key fields on subsequent requests to same session', async () => {
       // First request with API key
       mockHead.mockRejectedValue(new Error('Blob does not exist'));
-      mockPut.mockResolvedValue({ url: 'https://example.com/session.json' } as any);
+      mockPut.mockResolvedValue(mockPutResult('https://example.com/session.json'));
 
       await logUsage(
         'test-session-5',
@@ -399,11 +421,13 @@ describe('logUsage', () => {
       const firstSessionData = JSON.parse(firstPutCall[1] as string);
 
       // Second request to same session (without options)
-      mockHead.mockResolvedValue({ url: 'https://example.com/session.json' } as any);
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => firstSessionData,
-      }) as any;
+      mockHead.mockResolvedValue(mockHeadResult('https://example.com/session.json'));
+      global.fetch = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(firstSessionData), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
       mockPut.mockClear();
 
       await logUsage('test-session-5', {
@@ -430,7 +454,7 @@ describe('logUsage', () => {
   describe('session creation fields', () => {
     it('includes all required session fields', async () => {
       mockHead.mockRejectedValue(new Error('Blob does not exist'));
-      mockPut.mockResolvedValue({ url: 'https://example.com/session.json' } as any);
+      mockPut.mockResolvedValue(mockPutResult('https://example.com/session.json'));
 
       await logUsage(
         'test-session-6',
