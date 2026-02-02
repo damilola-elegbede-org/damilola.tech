@@ -11,6 +11,8 @@ interface ChangePreviewPanelProps {
   onRejectChange: (index: number, feedback?: string) => void;
   onRevertChange: (index: number) => void;
   onModifyChange?: (index: number, prompt: string) => Promise<void>;
+  /** Function to calculate adjusted impact for edited changes */
+  calculateEditedImpact?: (change: ProposedChange, editedText: string) => number;
 }
 
 type CardMode = 'view' | 'edit' | 'reject' | 'modify';
@@ -23,6 +25,7 @@ function ChangeCard({
   onReject,
   onRevert,
   onModify,
+  calculateEditedImpact,
 }: {
   change: ProposedChange;
   index: number;
@@ -31,6 +34,7 @@ function ChangeCard({
   onReject: (feedback?: string) => void;
   onRevert: () => void;
   onModify?: (prompt: string) => Promise<void>;
+  calculateEditedImpact?: (change: ProposedChange, editedText: string) => number;
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [mode, setMode] = useState<CardMode>('view');
@@ -45,6 +49,12 @@ function ChangeCard({
   const isRejected = status === 'rejected';
   const isPending = status === 'pending';
   const wasEdited = review?.editedText !== undefined;
+
+  // Calculate adjusted impact if change was edited
+  const adjustedImpact = wasEdited && calculateEditedImpact && review?.editedText
+    ? calculateEditedImpact(change, review.editedText)
+    : change.impactPoints;
+  const hasReducedImpact = wasEdited && adjustedImpact < change.impactPoints;
 
   const handleEditClick = () => {
     setEditText(change.modified);
@@ -127,7 +137,15 @@ function ChangeCard({
             {change.section}
           </span>
           <span className="text-sm text-[var(--color-text)]">
-            +{change.impactPoints} pts
+            {hasReducedImpact ? (
+              <>
+                <span className="text-[var(--color-text-muted)] line-through">+{change.impactPoints}</span>
+                {' '}
+                <span className="text-blue-400">+{adjustedImpact} pts</span>
+              </>
+            ) : (
+              `+${change.impactPoints} pts`
+            )}
           </span>
           {isAccepted && (
             <span className="rounded-full bg-green-500/20 px-2 py-0.5 text-xs text-green-400">
@@ -431,6 +449,7 @@ export function ChangePreviewPanel({
   onRejectChange,
   onRevertChange,
   onModifyChange,
+  calculateEditedImpact,
 }: ChangePreviewPanelProps) {
   const pendingCount = changes.filter(
     (_, i) => !reviewedChanges.has(i) || reviewedChanges.get(i)?.status === 'pending'
@@ -514,6 +533,7 @@ export function ChangePreviewPanel({
               onReject={(feedback) => onRejectChange(index, feedback)}
               onRevert={() => onRevertChange(index)}
               onModify={onModifyChange ? (prompt) => onModifyChange(index, prompt) : undefined}
+              calculateEditedImpact={calculateEditedImpact}
             />
           ))}
         </div>

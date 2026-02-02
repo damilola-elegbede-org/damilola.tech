@@ -44,6 +44,8 @@ export interface ProposedChange {
   keywordsAdded: string[];
   /** Estimated points gained from this change */
   impactPoints: number;
+  /** Points per keyword for edit-aware rescoring (impactPoints / keywordsAdded.length) */
+  impactPerKeyword?: number;
 }
 
 /**

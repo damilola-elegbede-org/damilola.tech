@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { ResumeGeneratorForm } from '@/components/admin/ResumeGeneratorForm';
-import { CompatibilityScoreCard } from '@/components/admin/CompatibilityScoreCard';
+import { ScoreProgressDisplay } from '@/components/admin/ScoreProgressDisplay';
 import { ChangePreviewPanel } from '@/components/admin/ChangePreviewPanel';
 import { trackEvent } from '@/lib/audit-client';
 import { generateJobId, extractDatePosted } from '@/lib/job-id';
@@ -41,11 +41,16 @@ const applyChangesToResumeDynamic = async (
 /**
  * Calculate a dynamic breakdown based on accepted changes.
  * Maps change sections to breakdown categories and estimates impact.
+ * @param currentBreakdown - The current score breakdown
+ * @param proposedChanges - All proposed changes
+ * @param acceptedIndices - Set of accepted change indices
+ * @param reviewedChanges - Map of reviewed changes with potential edits
  */
 function calculateDynamicBreakdown(
   currentBreakdown: ScoreBreakdown,
   proposedChanges: ProposedChange[],
-  acceptedIndices: Set<number>
+  acceptedIndices: Set<number>,
+  reviewedChanges?: Map<number, ReviewedChange>
 ): ScoreBreakdown {
   // Start with current breakdown
   const result = { ...currentBreakdown };
@@ -54,26 +59,57 @@ function calculateDynamicBreakdown(
   for (const [index, change] of proposedChanges.entries()) {
     if (!acceptedIndices.has(index)) continue;
 
+    // Calculate effective impact (accounting for user edits)
+    const review = reviewedChanges?.get(index);
+    const effectiveImpact = review?.editedText
+      ? calculateEditedImpact(change, review.editedText)
+      : change.impactPoints;
+
     // Map section to breakdown category and distribute impact
     if (change.section === 'summary') {
       // Summary changes primarily affect keyword relevance
-      result.keywordRelevance = Math.min(40, result.keywordRelevance + Math.ceil(change.impactPoints * 0.7));
-      result.experienceAlignment = Math.min(20, result.experienceAlignment + Math.floor(change.impactPoints * 0.3));
+      result.keywordRelevance = Math.min(40, result.keywordRelevance + Math.ceil(effectiveImpact * 0.7));
+      result.experienceAlignment = Math.min(20, result.experienceAlignment + Math.floor(effectiveImpact * 0.3));
     } else if (change.section.startsWith('experience.')) {
       // Experience bullets affect keyword relevance and alignment
-      result.keywordRelevance = Math.min(40, result.keywordRelevance + Math.ceil(change.impactPoints * 0.6));
-      result.experienceAlignment = Math.min(20, result.experienceAlignment + Math.floor(change.impactPoints * 0.4));
+      result.keywordRelevance = Math.min(40, result.keywordRelevance + Math.ceil(effectiveImpact * 0.6));
+      result.experienceAlignment = Math.min(20, result.experienceAlignment + Math.floor(effectiveImpact * 0.4));
     } else if (change.section.startsWith('skills.')) {
       // Skills changes primarily affect skills quality
-      result.skillsQuality = Math.min(25, result.skillsQuality + Math.ceil(change.impactPoints * 0.8));
-      result.keywordRelevance = Math.min(40, result.keywordRelevance + Math.floor(change.impactPoints * 0.2));
+      result.skillsQuality = Math.min(25, result.skillsQuality + Math.ceil(effectiveImpact * 0.8));
+      result.keywordRelevance = Math.min(40, result.keywordRelevance + Math.floor(effectiveImpact * 0.2));
     } else if (change.section.startsWith('education.')) {
       // Education changes affect alignment
-      result.experienceAlignment = Math.min(20, result.experienceAlignment + change.impactPoints);
+      result.experienceAlignment = Math.min(20, result.experienceAlignment + effectiveImpact);
     }
   }
 
   return result;
+}
+
+/**
+ * Calculate the adjusted impact when a user edits a proposed change.
+ * Uses impactPerKeyword if available, otherwise falls back to proportional calculation.
+ * @param change - The original proposed change
+ * @param editedText - The user's edited version of the text
+ * @returns The adjusted impact points based on retained keywords
+ */
+function calculateEditedImpact(change: ProposedChange, editedText: string): number {
+  if (change.keywordsAdded.length === 0) {
+    return change.impactPoints;
+  }
+
+  // Count how many keywords are retained in the edited text
+  const editedLower = editedText.toLowerCase();
+  const retainedKeywords = change.keywordsAdded.filter((keyword) =>
+    editedLower.includes(keyword.toLowerCase())
+  );
+
+  // Use impactPerKeyword if available, otherwise calculate from impactPoints
+  const impactPerKeyword = change.impactPerKeyword
+    ?? change.impactPoints / change.keywordsAdded.length;
+
+  return Math.round(retainedKeywords.length * impactPerKeyword);
 }
 
 type Phase = 'input' | 'analyzing' | 'preview' | 'generating' | 'complete';
@@ -428,23 +464,38 @@ export default function ResumeGeneratorPage() {
     setStreamingText('');
   };
 
-  // Calculate projected score
-  const projectedScore = analysisResult
-    ? analysisResult.currentScore.total +
-      analysisResult.proposedChanges
-        .filter((_, i) => acceptedIndices.has(i))
-        .reduce((sum, c) => sum + c.impactPoints, 0)
-    : 0;
+  // Calculate projected score with edit-aware rescoring
+  const projectedScore = useMemo(() => {
+    if (!analysisResult) return 0;
 
-  // Calculate dynamic breakdown based on accepted changes
+    let score = analysisResult.currentScore.total;
+
+    for (const [index, change] of analysisResult.proposedChanges.entries()) {
+      if (!acceptedIndices.has(index)) continue;
+
+      const review = reviewedChanges.get(index);
+      if (review?.editedText) {
+        // User edited: recalculate based on retained keywords
+        score += calculateEditedImpact(change, review.editedText);
+      } else {
+        // User accepted as-is: use full impact
+        score += change.impactPoints;
+      }
+    }
+
+    return Math.min(100, Math.round(score));
+  }, [analysisResult, acceptedIndices, reviewedChanges]);
+
+  // Calculate dynamic breakdown based on accepted changes (with edit-aware rescoring)
   const projectedBreakdown = useMemo(() => {
     if (!analysisResult) return null;
     return calculateDynamicBreakdown(
       analysisResult.currentScore.breakdown,
       analysisResult.proposedChanges,
-      acceptedIndices
+      acceptedIndices,
+      reviewedChanges
     );
-  }, [analysisResult, acceptedIndices]);
+  }, [analysisResult, acceptedIndices, reviewedChanges]);
 
   // Reusable action buttons component
   const ActionButtons = () => (
@@ -565,24 +616,18 @@ export default function ResumeGeneratorPage() {
             </div>
           </div>
 
+          {/* Fixed Score Progress Display */}
+          <ScoreProgressDisplay
+            currentScore={analysisResult.currentScore.total}
+            projectedScore={projectedScore}
+            currentBreakdown={analysisResult.currentScore.breakdown}
+            projectedBreakdown={projectedBreakdown ?? analysisResult.optimizedScore.breakdown}
+            acceptedCount={acceptedIndices.size}
+            totalChanges={analysisResult.proposedChanges.length}
+          />
+
           {/* Top Action Buttons */}
           <ActionButtons />
-
-          {/* Score Cards */}
-          <div className="grid gap-6 md:grid-cols-2">
-            <CompatibilityScoreCard
-              title="Current Score"
-              score={analysisResult.currentScore.total}
-              breakdown={analysisResult.currentScore.breakdown}
-              assessment={analysisResult.currentScore.assessment}
-            />
-            <CompatibilityScoreCard
-              title="Projected Score"
-              score={Math.min(100, projectedScore)}
-              breakdown={projectedBreakdown ?? analysisResult.optimizedScore.breakdown}
-              assessment={`After ${acceptedIndices.size} accepted changes`}
-            />
-          </div>
 
           {/* Changes Preview */}
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-6">
@@ -594,6 +639,7 @@ export default function ResumeGeneratorPage() {
               onRejectChange={handleRejectChange}
               onRevertChange={handleRevertChange}
               onModifyChange={handleModifyChange}
+              calculateEditedImpact={calculateEditedImpact}
             />
           </div>
 
