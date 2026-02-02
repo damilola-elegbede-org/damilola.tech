@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import type { ProposedChange, Gap, ReviewedChange } from '@/lib/types/resume-generation';
+import type { ProposedChange, Gap, ReviewedChange, ScoreCeiling } from '@/lib/types/resume-generation';
 
 interface ChangePreviewPanelProps {
   changes: ProposedChange[];
   gaps: Gap[];
+  scoreCeiling?: ScoreCeiling;
   reviewedChanges: Map<number, ReviewedChange>;
   onAcceptChange: (index: number, editedText?: string) => void;
   onRejectChange: (index: number, feedback?: string) => void;
@@ -444,6 +445,7 @@ function GapCard({ gap }: { gap: Gap }) {
 export function ChangePreviewPanel({
   changes,
   gaps,
+  scoreCeiling,
   reviewedChanges,
   onAcceptChange,
   onRejectChange,
@@ -540,11 +542,27 @@ export function ChangePreviewPanel({
       </div>
 
       {/* Gaps Section */}
-      {gaps.length > 0 && (
+      {(gaps.length > 0 || scoreCeiling) && (
         <div>
           <h3 className="mb-4 text-lg font-semibold text-[var(--color-text)]">
             Gaps Identified ({gaps.length})
           </h3>
+
+          {/* Score Ceiling (when 90+ not achievable) */}
+          {scoreCeiling && (
+            <div className="mb-4 rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-4">
+              <h4 className="text-sm font-medium text-yellow-400">
+                Score Ceiling: {scoreCeiling.maximum}
+              </h4>
+              <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+                <strong>Blockers:</strong> {scoreCeiling.blockers.join(', ')}
+              </p>
+              <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                <strong>To reach 90+:</strong> {scoreCeiling.toReach90}
+              </p>
+            </div>
+          )}
+
           <div className="space-y-3">
             {gaps.map((gap, index) => (
               <GapCard key={index} gap={gap} />

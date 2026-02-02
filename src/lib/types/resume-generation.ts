@@ -144,6 +144,17 @@ export interface ScoreCeiling {
   toReach90: string;
 }
 
+/**
+ * Strategic note documenting optimization decisions.
+ * Used to explain title-bridging language, keyword strategies, or other non-obvious choices.
+ */
+export interface OptimizationNote {
+  /** Brief category (e.g., "Title Positioning", "Keyword Strategy") */
+  topic: string;
+  /** Clear justification for the approach */
+  explanation: string;
+}
+
 export interface ResumeAnalysisResult {
   /** Analysis of the job description */
   analysis: JDAnalysis;
@@ -175,6 +186,8 @@ export interface ResumeAnalysisResult {
   interviewPrep: string[];
   /** Score ceiling when optimizedScore < 90 (explains why 90+ not achievable) */
   scoreCeiling?: ScoreCeiling;
+  /** Strategic notes documenting optimization decisions (title positioning, keyword strategy, etc.) */
+  notes?: OptimizationNote[];
 }
 
 export type ApplicationStatus = 'draft' | 'applied' | 'interview' | 'offer' | 'rejected';

@@ -503,7 +503,7 @@ export default function ResumeGeneratorPage() {
       }
     }
 
-    return Math.min(100, Math.round(score));
+    return Math.min(100, score);
   }, [analysisResult, acceptedIndices, reviewedChanges]);
 
   // Calculate dynamic breakdown based on accepted changes (with edit-aware rescoring)
@@ -526,6 +526,13 @@ export default function ResumeGeneratorPage() {
         analysisResult.proposedChanges.reduce((sum, c) => sum + c.impactPoints, 0)
     );
   }, [analysisResult]);
+
+  // Target score that respects ceiling (for display purposes)
+  const targetScore = useMemo(() => {
+    if (!analysisResult) return 0;
+    const ceiling = analysisResult.scoreCeiling?.maximum;
+    return ceiling ? Math.min(maximumScore, ceiling) : maximumScore;
+  }, [analysisResult, maximumScore]);
 
   // Ref for the score cards section and scroll detection
   const scoreCardsRef = useRef<HTMLDivElement>(null);
@@ -681,30 +688,15 @@ export default function ResumeGeneratorPage() {
               breakdown={projectedBreakdown ?? analysisResult.currentScore.breakdown}
               assessment={acceptedIndices.size > 0 ? `After ${acceptedIndices.size} accepted changes` : 'No changes accepted yet'}
               highlight={true}
-              targetScore={maximumScore}
+              targetScore={targetScore}
             />
           </div>
-
-          {/* Score Ceiling Summary (when 90+ not achievable) */}
-          {analysisResult.scoreCeiling && (
-            <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-4">
-              <h3 className="text-sm font-medium text-yellow-400">
-                Score Ceiling: {analysisResult.scoreCeiling.maximum}
-              </h3>
-              <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-                <strong>Blockers:</strong> {analysisResult.scoreCeiling.blockers.join(', ')}
-              </p>
-              <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-                <strong>To reach 90+:</strong> {analysisResult.scoreCeiling.toReach90}
-              </p>
-            </div>
-          )}
 
           {/* Floating Score Indicator (appears when score cards scroll out of view) */}
           <FloatingScoreIndicator
             initialScore={analysisResult.currentScore.total}
             currentScore={projectedScore}
-            maximumScore={maximumScore}
+            maximumScore={targetScore}
             isVisible={showFloatingScore}
             onScrollToScores={scrollToScoreCards}
           />
@@ -717,6 +709,7 @@ export default function ResumeGeneratorPage() {
             <ChangePreviewPanel
               changes={analysisResult.proposedChanges}
               gaps={analysisResult.gaps}
+              scoreCeiling={analysisResult.scoreCeiling}
               reviewedChanges={reviewedChanges}
               onAcceptChange={handleAcceptChange}
               onRejectChange={handleRejectChange}
