@@ -234,6 +234,25 @@ export default function ResumeGeneratorPage() {
 
       const result: ResumeAnalysisResult = JSON.parse(jsonText);
 
+      // Validation logging (fire-and-forget for monitoring compliance)
+      if (result.proposedChanges.length < 8) {
+        console.warn(JSON.stringify({
+          event: 'resume_generator.insufficient_changes',
+          changeCount: result.proposedChanges.length,
+          minimum: 8,
+          companyName: result.analysis?.companyName,
+          roleTitle: result.analysis?.roleTitle,
+        }));
+      }
+      if (result.optimizedScore.total < 90 && !result.scoreCeiling) {
+        console.warn(JSON.stringify({
+          event: 'resume_generator.missing_score_ceiling',
+          optimizedScore: result.optimizedScore.total,
+          companyName: result.analysis?.companyName,
+          roleTitle: result.analysis?.roleTitle,
+        }));
+      }
+
       setAnalysisResult(result);
       // Initialize all changes as pending (not auto-accepted)
       setReviewedChanges(new Map());
@@ -665,6 +684,21 @@ export default function ResumeGeneratorPage() {
               targetScore={maximumScore}
             />
           </div>
+
+          {/* Score Ceiling Summary (when 90+ not achievable) */}
+          {analysisResult.scoreCeiling && (
+            <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-4">
+              <h3 className="text-sm font-medium text-yellow-400">
+                Score Ceiling: {analysisResult.scoreCeiling.maximum}
+              </h3>
+              <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+                <strong>Blockers:</strong> {analysisResult.scoreCeiling.blockers.join(', ')}
+              </p>
+              <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                <strong>To reach 90+:</strong> {analysisResult.scoreCeiling.toReach90}
+              </p>
+            </div>
+          )}
 
           {/* Floating Score Indicator (appears when score cards scroll out of view) */}
           <FloatingScoreIndicator

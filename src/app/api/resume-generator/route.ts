@@ -681,6 +681,11 @@ export async function POST(req: Request) {
             } catch (usageError) {
               console.warn('[resume-generator] Failed to log usage:', usageError);
             }
+
+            // Note: Validation of minimum changes requirement and scoreCeiling
+            // happens client-side after JSON parsing. Server-side validation would
+            // require buffering the full stream which defeats the streaming purpose.
+            // The instructions enforce these requirements at the AI level.
           } catch (streamError) {
             // Categorize Anthropic API errors for better observability
             if (streamError instanceof Anthropic.APIError) {

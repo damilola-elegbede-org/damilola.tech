@@ -131,6 +131,19 @@ export interface SkillsReorder {
   reason: string;
 }
 
+/**
+ * Score ceiling information when 90+ is not achievable.
+ * Documents the maximum possible score and what would be needed to reach 90+.
+ */
+export interface ScoreCeiling {
+  /** Maximum achievable score given the content gaps */
+  maximum: number;
+  /** Specific gaps blocking 90+ achievement */
+  blockers: string[];
+  /** What additions would enable reaching 90+ */
+  toReach90: string;
+}
+
 export interface ResumeAnalysisResult {
   /** Analysis of the job description */
   analysis: JDAnalysis;
@@ -160,6 +173,8 @@ export interface ResumeAnalysisResult {
   skillsReorder: SkillsReorder;
   /** Interview preparation tips based on gaps */
   interviewPrep: string[];
+  /** Score ceiling when optimizedScore < 90 (explains why 90+ not achievable) */
+  scoreCeiling?: ScoreCeiling;
 }
 
 export type ApplicationStatus = 'draft' | 'applied' | 'interview' | 'offer' | 'rejected';
