@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { ResumeGeneratorForm } from '@/components/admin/ResumeGeneratorForm';
-import { ScoreProgressDisplay } from '@/components/admin/ScoreProgressDisplay';
+import { CompatibilityScoreCard } from '@/components/admin/CompatibilityScoreCard';
+import { FloatingScoreIndicator } from '@/components/admin/FloatingScoreIndicator';
 import { ChangePreviewPanel } from '@/components/admin/ChangePreviewPanel';
 import { trackEvent } from '@/lib/audit-client';
 import { generateJobId, extractDatePosted } from '@/lib/job-id';
@@ -497,6 +498,37 @@ export default function ResumeGeneratorPage() {
     );
   }, [analysisResult, acceptedIndices, reviewedChanges]);
 
+  // Maximum score if ALL changes accepted (constant for this analysis)
+  const maximumScore = useMemo(() => {
+    if (!analysisResult) return 0;
+    return Math.min(
+      100,
+      analysisResult.currentScore.total +
+        analysisResult.proposedChanges.reduce((sum, c) => sum + c.impactPoints, 0)
+    );
+  }, [analysisResult]);
+
+  // Ref for the score cards section and scroll detection
+  const scoreCardsRef = useRef<HTMLDivElement>(null);
+  const [showFloatingScore, setShowFloatingScore] = useState(false);
+
+  // Detect when score cards scroll out of view
+  useEffect(() => {
+    if (!scoreCardsRef.current || phase !== 'preview') return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowFloatingScore(!entry.isIntersecting),
+      { threshold: 0 }
+    );
+
+    observer.observe(scoreCardsRef.current);
+    return () => observer.disconnect();
+  }, [phase]);
+
+  const scrollToScoreCards = useCallback(() => {
+    scoreCardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
   // Reusable action buttons component
   const ActionButtons = () => (
     <div className="flex justify-center gap-4">
@@ -616,14 +648,36 @@ export default function ResumeGeneratorPage() {
             </div>
           </div>
 
-          {/* Fixed Score Progress Display */}
-          <ScoreProgressDisplay
-            currentScore={analysisResult.currentScore.total}
-            projectedScore={projectedScore}
-            currentBreakdown={analysisResult.currentScore.breakdown}
-            projectedBreakdown={projectedBreakdown ?? analysisResult.optimizedScore.breakdown}
-            acceptedCount={acceptedIndices.size}
-            totalChanges={analysisResult.proposedChanges.length}
+          {/* Score Cards - 3 cards showing Initial, Current, Maximum */}
+          <div ref={scoreCardsRef} className="grid gap-4 md:grid-cols-3">
+            <CompatibilityScoreCard
+              title="Initial Score"
+              score={analysisResult.currentScore.total}
+              breakdown={analysisResult.currentScore.breakdown}
+              assessment={analysisResult.currentScore.assessment}
+            />
+            <CompatibilityScoreCard
+              title="Current Score"
+              score={projectedScore}
+              breakdown={projectedBreakdown ?? analysisResult.currentScore.breakdown}
+              assessment={acceptedIndices.size > 0 ? `After ${acceptedIndices.size} accepted changes` : 'No changes accepted yet'}
+              highlight={true}
+            />
+            <CompatibilityScoreCard
+              title="Maximum Potential"
+              score={maximumScore}
+              breakdown={analysisResult.optimizedScore.breakdown}
+              assessment={`If all ${analysisResult.proposedChanges.length} changes accepted`}
+            />
+          </div>
+
+          {/* Floating Score Indicator (appears when score cards scroll out of view) */}
+          <FloatingScoreIndicator
+            initialScore={analysisResult.currentScore.total}
+            currentScore={projectedScore}
+            maximumScore={maximumScore}
+            isVisible={showFloatingScore}
+            onScrollToScores={scrollToScoreCards}
           />
 
           {/* Top Action Buttons */}
