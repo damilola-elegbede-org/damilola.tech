@@ -648,8 +648,8 @@ export default function ResumeGeneratorPage() {
             </div>
           </div>
 
-          {/* Score Cards - 3 cards showing Initial, Current, Maximum */}
-          <div ref={scoreCardsRef} className="grid gap-4 md:grid-cols-3">
+          {/* Score Cards - 2 cards showing Initial and Current (with target) */}
+          <div ref={scoreCardsRef} className="grid gap-4 md:grid-cols-2">
             <CompatibilityScoreCard
               title="Initial Score"
               score={analysisResult.currentScore.total}
@@ -662,12 +662,7 @@ export default function ResumeGeneratorPage() {
               breakdown={projectedBreakdown ?? analysisResult.currentScore.breakdown}
               assessment={acceptedIndices.size > 0 ? `After ${acceptedIndices.size} accepted changes` : 'No changes accepted yet'}
               highlight={true}
-            />
-            <CompatibilityScoreCard
-              title="Maximum Potential"
-              score={maximumScore}
-              breakdown={analysisResult.optimizedScore.breakdown}
-              assessment={`If all ${analysisResult.proposedChanges.length} changes accepted`}
+              targetScore={maximumScore}
             />
           </div>
 

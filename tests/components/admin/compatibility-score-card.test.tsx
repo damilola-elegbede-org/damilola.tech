@@ -23,7 +23,37 @@ describe('CompatibilityScoreCard', () => {
 
     expect(screen.getByText('Current Score')).toBeInTheDocument();
     expect(screen.getByText('72')).toBeInTheDocument();
-    expect(screen.getByText('/ 100')).toBeInTheDocument();
+  });
+
+  it('shows target score with arrow format when targetScore is provided', () => {
+    render(
+      <CompatibilityScoreCard
+        title="Current Score"
+        score={60}
+        breakdown={mockBreakdown}
+        assessment="After 3 changes"
+        targetScore={85}
+      />
+    );
+
+    expect(screen.getByText('60')).toBeInTheDocument();
+    expect(screen.getByText('→')).toBeInTheDocument();
+    expect(screen.getByText('85')).toBeInTheDocument();
+  });
+
+  it('does not show arrow when targetScore equals score', () => {
+    render(
+      <CompatibilityScoreCard
+        title="Current Score"
+        score={85}
+        breakdown={mockBreakdown}
+        assessment="Maximum achieved"
+        targetScore={85}
+      />
+    );
+
+    expect(screen.getByText('85')).toBeInTheDocument();
+    expect(screen.queryByText('→')).not.toBeInTheDocument();
   });
 
   it('shows correct score label for excellent score (85+)', () => {

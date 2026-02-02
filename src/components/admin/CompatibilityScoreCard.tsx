@@ -8,6 +8,7 @@ interface CompatibilityScoreCardProps {
   breakdown: ScoreBreakdown;
   assessment: string;
   highlight?: boolean;
+  targetScore?: number;
 }
 
 function getScoreColor(score: number): string {
@@ -65,14 +66,21 @@ export function CompatibilityScoreCard({
   breakdown,
   assessment,
   highlight,
+  targetScore,
 }: CompatibilityScoreCardProps) {
+  const showTarget = targetScore !== undefined && targetScore > score;
   return (
     <div className={`rounded-lg border bg-[var(--color-card)] p-6 ${highlight ? 'border-[var(--color-accent)] ring-1 ring-[var(--color-accent)]/30' : 'border-[var(--color-border)]'}`}>
       <h3 className="text-sm font-medium text-[var(--color-text-muted)]">{title}</h3>
 
       <div className="mt-4 flex items-baseline gap-2">
         <span className={`text-4xl font-bold ${getScoreColor(score)}`}>{score}</span>
-        <span className="text-lg text-[var(--color-text-muted)]">/ 100</span>
+        {showTarget && (
+          <>
+            <span className="text-2xl text-[var(--color-text-muted)]">→</span>
+            <span className={`text-2xl font-medium ${getScoreColor(targetScore)}`}>{targetScore}</span>
+          </>
+        )}
         <span
           className={`ml-2 rounded-full px-2 py-0.5 text-xs font-medium ${
             score >= 85
