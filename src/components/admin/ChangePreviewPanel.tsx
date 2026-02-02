@@ -52,8 +52,9 @@ function ChangeCard({
   const wasEdited = review?.editedText !== undefined;
 
   // Calculate adjusted impact if change was edited
-  const adjustedImpact = wasEdited && calculateEditedImpact && review?.editedText
-    ? calculateEditedImpact(change, review.editedText)
+  const editedText = review?.editedText;
+  const adjustedImpact = wasEdited && calculateEditedImpact && editedText !== undefined
+    ? calculateEditedImpact(change, editedText)
     : change.impactPoints;
   const hasReducedImpact = wasEdited && adjustedImpact < change.impactPoints;
 

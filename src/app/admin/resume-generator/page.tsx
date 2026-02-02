@@ -62,7 +62,7 @@ function calculateDynamicBreakdown(
 
     // Calculate effective impact (accounting for user edits)
     const review = reviewedChanges?.get(index);
-    const effectiveImpact = review?.editedText
+    const effectiveImpact = review?.editedText !== undefined
       ? calculateEditedImpact(change, review.editedText)
       : change.impactPoints;
 
@@ -494,7 +494,7 @@ export default function ResumeGeneratorPage() {
       if (!acceptedIndices.has(index)) continue;
 
       const review = reviewedChanges.get(index);
-      if (review?.editedText) {
+      if (review?.editedText !== undefined) {
         // User edited: recalculate based on retained keywords
         score += calculateEditedImpact(change, review.editedText);
       } else {
