@@ -164,7 +164,7 @@ export default function ResumeGeneratorPage() {
   const effectiveChanges = useMemo(() =>
     analysisResult?.proposedChanges.map((change, i) => {
       const review = reviewedChanges.get(i);
-      if (review?.editedText && review.status === 'accepted') {
+      if (review?.editedText !== undefined && review.status === 'accepted') {
         return { ...change, modified: review.editedText };
       }
       return change;
