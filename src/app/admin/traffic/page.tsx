@@ -599,10 +599,19 @@ export default function TrafficPage() {
                 {filteredStats.bySource.map((item, index) => (
                   <tr key={item.source} className="border-b border-[var(--color-border)]/50">
                     <td
+                      role="button"
+                      tabIndex={0}
                       onClick={() => toggleFilter('source', item.source)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          toggleFilter('source', item.source);
+                        }
+                      }}
                       className={`cursor-pointer py-2 transition-colors hover:text-[var(--color-accent)] hover:underline ${
                         filters.source === item.source ? 'bg-[var(--color-border)] font-bold' : ''
                       }`}
+                      aria-pressed={filters.source === item.source}
                     >
                       <div className="flex items-center gap-2">
                         <div
@@ -642,10 +651,19 @@ export default function TrafficPage() {
           {filteredStats.byMedium.map((item) => (
             <div
               key={item.medium}
+              role="button"
+              tabIndex={0}
               onClick={() => toggleFilter('medium', item.medium)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  toggleFilter('medium', item.medium);
+                }
+              }}
               className={`cursor-pointer rounded-lg bg-[var(--color-bg)] p-3 transition-all hover:ring-2 hover:ring-[var(--color-accent)] ${
                 filters.medium === item.medium ? 'ring-2 ring-[var(--color-accent)]' : ''
               }`}
+              aria-pressed={filters.medium === item.medium}
             >
               <p className="text-sm text-[var(--color-text-muted)]">{item.medium || 'none'}</p>
               <p className="text-xl font-semibold text-[var(--color-text)]">
@@ -685,10 +703,19 @@ export default function TrafficPage() {
                 {filteredStats.byCampaign.map((item) => (
                   <tr key={item.campaign} className="border-b border-[var(--color-border)]/50">
                     <td
+                      role="button"
+                      tabIndex={0}
                       onClick={() => toggleFilter('campaign', item.campaign)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          toggleFilter('campaign', item.campaign);
+                        }
+                      }}
                       className={`cursor-pointer py-2 text-sm text-[var(--color-text)] transition-colors hover:text-[var(--color-accent)] hover:underline ${
                         filters.campaign === item.campaign ? 'bg-[var(--color-border)] font-bold' : ''
                       }`}
+                      aria-pressed={filters.campaign === item.campaign}
                     >
                       {item.campaign}
                     </td>
@@ -730,10 +757,19 @@ export default function TrafficPage() {
               {filteredStats.topLandingPages.map((item) => (
                 <tr key={item.path} className="border-b border-[var(--color-border)]/50">
                   <td
+                    role="button"
+                    tabIndex={0}
                     onClick={() => toggleFilter('landingPage', item.path)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        toggleFilter('landingPage', item.path);
+                      }
+                    }}
                     className={`cursor-pointer py-2 font-mono text-sm text-[var(--color-text)] transition-colors hover:text-[var(--color-accent)] hover:underline ${
                       filters.landingPage === item.path ? 'bg-[var(--color-border)] font-bold' : ''
                     }`}
+                    aria-pressed={filters.landingPage === item.path}
                   >
                     {item.path}
                   </td>
