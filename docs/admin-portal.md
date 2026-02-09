@@ -24,11 +24,18 @@ Central hub displaying key metrics and quick links to all portal sections.
 
 ### Traffic Analytics
 
-Comprehensive analytics for visitor traffic sources with UTM parameter tracking.
+Comprehensive analytics for visitor traffic sources with UTM parameter tracking and interactive filtering.
 
 **Features:**
 
 - Time range filtering (7d, 30d, 90d, or custom date range)
+- Interactive filtering by source, medium, campaign, and landing page
+- Filter chips showing active filters with one-click removal
+- "Hide test traffic" toggle to exclude E2E test data
+- Real-time stats re-aggregation based on active filters
+- Clickable visualizations (pie chart slices, table rows, cards)
+- Visual feedback (opacity changes, highlighting) for active filters
+- Session count indicator showing filtered vs total sessions
 - Traffic breakdown by source (linkedin, google, email, etc.)
 - Medium analysis (bio, post, signature, etc.)
 - Campaign tracking for targeted outreach
@@ -37,6 +44,22 @@ Comprehensive analytics for visitor traffic sources with UTM parameter tracking.
 - WCAG-compliant accessibility features
 
 **Location:** `/admin/traffic`
+
+**How to Use Filters:**
+
+1. **Click on visualizations** - Click pie chart slices, table rows, or cards to filter by that dimension
+2. **View active filters** - Blue filter chips appear at the top showing what's currently filtered
+3. **Remove filters** - Click the X on any chip to remove that filter, or "Clear all filters" to reset
+4. **Hide test traffic** - Toggle the "Hide test traffic" checkbox to exclude E2E test data (source: "test" or medium: "e2e-*")
+5. **See filtered results** - Stats recalculate in real-time to show only matching sessions
+6. **Session counter** - Shows "Showing X of Y sessions" to indicate how many match your filters
+
+**Test Data Convention:**
+
+E2E tests use generic UTM parameters to prevent production analytics pollution:
+
+- `utm_source=test` - All E2E test traffic
+- `utm_medium=e2e-*` - Test scenarios (e.g., "e2e", "e2e-override", "e2e-cache")
 
 **Related Docs:** [UTM Tracking Guide](/admin/docs/utm-tracking)
 
@@ -387,6 +410,16 @@ GET /api/admin/traffic?startDate=2024-01-01&endDate=2024-01-31
   "topLandingPages": [
     { "path": "/", "count": 745, "percentage": 87.0 },
     { "path": "/admin/login", "count": 111, "percentage": 13.0 }
+  ],
+  "rawEvents": [
+    {
+      "timestamp": "2024-01-15T14:30:00Z",
+      "sessionId": "abc-123",
+      "source": "linkedin",
+      "medium": "bio",
+      "campaign": null,
+      "landingPage": "/"
+    }
   ],
   "environment": "production",
   "dateRange": {
