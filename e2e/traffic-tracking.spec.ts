@@ -56,7 +56,7 @@ test.describe('Traffic Source Tracking', () => {
     expect(trafficSource.source).toBe('direct');
 
     // Second visit: with UTM params (should override)
-    await page.goto('/?utm_source=newsletter&utm_medium=email');
+    await page.goto('/?utm_source=test&utm_medium=e2e-override');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(500);
 
@@ -69,8 +69,8 @@ test.describe('Traffic Source Tracking', () => {
         return null;
       }
     });
-    expect(trafficSource.source).toBe('newsletter');
-    expect(trafficSource.medium).toBe('email');
+    expect(trafficSource.source).toBe('test');
+    expect(trafficSource.medium).toBe('e2e-override');
 
     await context.close();
   });
@@ -80,7 +80,7 @@ test.describe('Traffic Source Tracking', () => {
     const page = await context.newPage();
 
     // First visit with UTM params
-    await page.goto('/?utm_source=first&utm_medium=test');
+    await page.goto('/?utm_source=test&utm_medium=e2e-cache');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(500);
 
@@ -93,7 +93,7 @@ test.describe('Traffic Source Tracking', () => {
         return null;
       }
     });
-    expect(firstSource.source).toBe('first');
+    expect(firstSource.source).toBe('test');
 
     // Second visit without UTM params (should keep cached)
     await page.goto('/');
@@ -110,7 +110,7 @@ test.describe('Traffic Source Tracking', () => {
       }
     });
 
-    expect(afterSecondVisit.source).toBe('first');
+    expect(afterSecondVisit.source).toBe('test');
     expect(afterSecondVisit.capturedAt).toBe(firstSource.capturedAt);
 
     await context.close();
@@ -147,7 +147,7 @@ test.describe('Traffic Source Tracking', () => {
     const page = await context.newPage();
 
     await page.goto(
-      '/?utm_source=google&utm_medium=cpc&utm_campaign=spring2024&utm_term=engineering+manager&utm_content=headline1'
+      '/?utm_source=test&utm_medium=e2e-full&utm_campaign=test-campaign&utm_term=test-term&utm_content=test-content'
     );
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(500);
@@ -163,11 +163,11 @@ test.describe('Traffic Source Tracking', () => {
     });
 
     expect(trafficSource).not.toBeNull();
-    expect(trafficSource.source).toBe('google');
-    expect(trafficSource.medium).toBe('cpc');
-    expect(trafficSource.campaign).toBe('spring2024');
-    expect(trafficSource.term).toBe('engineering manager');
-    expect(trafficSource.content).toBe('headline1');
+    expect(trafficSource.source).toBe('test');
+    expect(trafficSource.medium).toBe('e2e-full');
+    expect(trafficSource.campaign).toBe('test-campaign');
+    expect(trafficSource.term).toBe('test-term');
+    expect(trafficSource.content).toBe('test-content');
 
     await context.close();
   });

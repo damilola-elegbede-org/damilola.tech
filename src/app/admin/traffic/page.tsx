@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { RefreshIndicator } from '@/components/admin/RefreshIndicator';
 import { formatNumber } from '@/lib/format-number';
@@ -66,6 +66,91 @@ const COLORS = [
 
 type PresetType = '7d' | '30d' | '90d' | 'custom';
 
+interface FilterState {
+  source: string | null;
+  medium: string | null;
+  campaign: string | null;
+  landingPage: string | null;
+  hideTestTraffic: boolean;
+}
+
+interface AggregatedStats {
+  totalSessions: number;
+  bySource: TrafficBreakdown[];
+  byMedium: TrafficBreakdown[];
+  byCampaign: CampaignBreakdown[];
+  topLandingPages: LandingPageBreakdown[];
+}
+
+// Utility function to aggregate events into stats
+function aggregateEvents(events: RawEvent[]): AggregatedStats {
+  const sourceCount = new Map<string, number>();
+  const mediumCount = new Map<string, number>();
+  const campaignCount = new Map<string, number>();
+  const landingPageCount = new Map<string, number>();
+  const sessionsSeen = new Set<string>();
+
+  for (const event of events) {
+    const source = event.source || 'direct';
+    const medium = event.medium || 'none';
+    const campaign = event.campaign;
+    const landingPage = event.landingPage || '/';
+
+    sessionsSeen.add(event.sessionId || 'unknown');
+    sourceCount.set(source, (sourceCount.get(source) || 0) + 1);
+    mediumCount.set(medium, (mediumCount.get(medium) || 0) + 1);
+    if (campaign) {
+      campaignCount.set(campaign, (campaignCount.get(campaign) || 0) + 1);
+    }
+    landingPageCount.set(landingPage, (landingPageCount.get(landingPage) || 0) + 1);
+  }
+
+  const totalEvents = events.length;
+
+  const bySource = Array.from(sourceCount.entries())
+    .map(([source, count]) => ({
+      source,
+      medium: '', // Not used in aggregated view
+      count,
+      percentage: totalEvents > 0 ? Number(((count / totalEvents) * 100).toFixed(1)) : 0,
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  const byMedium = Array.from(mediumCount.entries())
+    .map(([medium, count]) => ({
+      source: '', // Not used in aggregated view
+      medium,
+      count,
+      percentage: totalEvents > 0 ? Number(((count / totalEvents) * 100).toFixed(1)) : 0,
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  const byCampaign = Array.from(campaignCount.entries())
+    .map(([campaign, count]) => ({
+      campaign,
+      count,
+      percentage: totalEvents > 0 ? Number(((count / totalEvents) * 100).toFixed(1)) : 0,
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  const topLandingPages = Array.from(landingPageCount.entries())
+    .map(([path, count]) => ({
+      path,
+      count,
+      percentage: totalEvents > 0 ? Number(((count / totalEvents) * 100).toFixed(1)) : 0,
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+
+  return {
+    totalSessions: sessionsSeen.size,
+    bySource,
+    byMedium,
+    byCampaign,
+    topLandingPages,
+  };
+}
+
 function formatDateForInput(date: Date): string {
   const yyyy = date.getFullYear();
   const mm = String(date.getMonth() + 1).padStart(2, '0');
@@ -91,6 +176,13 @@ export default function TrafficPage() {
   const [startDate, setStartDate] = useState(() => getPresetDates('30d').start);
   const [endDate, setEndDate] = useState(() => getPresetDates('30d').end);
   const [currentPage, setCurrentPage] = useState(1);
+  const [filters, setFilters] = useState<FilterState>({
+    source: null,
+    medium: null,
+    campaign: null,
+    landingPage: null,
+    hideTestTraffic: false,
+  });
 
   // Determine cache key based on preset (null for custom ranges)
   const cacheKey = PRESET_TO_TRAFFIC_CACHE_KEY[preset] as CacheKey | null;
@@ -108,6 +200,76 @@ export default function TrafficPage() {
     fetcher: fetchTrafficStats,
     dateRange: { start: startDate, end: endDate },
   });
+
+  // Apply filters to raw events
+  const filteredRawEvents = useMemo(() => {
+    let events = stats?.rawEvents || [];
+
+    // Test traffic filter
+    if (filters.hideTestTraffic) {
+      events = events.filter((e) => {
+        const source = e.source || 'direct';
+        const medium = e.medium || 'none';
+        return source !== 'test' && !medium.startsWith('e2e');
+      });
+    }
+
+    // Dimension filters (AND logic)
+    if (filters.source) {
+      events = events.filter((e) => (e.source || 'direct') === filters.source);
+    }
+    if (filters.medium) {
+      events = events.filter((e) => (e.medium || 'none') === filters.medium);
+    }
+    if (filters.campaign) {
+      events = events.filter((e) => e.campaign === filters.campaign);
+    }
+    if (filters.landingPage) {
+      events = events.filter((e) => (e.landingPage || '/') === filters.landingPage);
+    }
+
+    return events;
+  }, [stats?.rawEvents, filters]);
+
+  // Re-aggregate filtered events for updated stats
+  const filteredStats = useMemo(() => {
+    return aggregateEvents(filteredRawEvents);
+  }, [filteredRawEvents]);
+
+  // Filter event handlers
+  const toggleFilter = (dimension: keyof FilterState, value: string) => {
+    setFilters((prev) => ({
+      ...prev,
+      [dimension]: prev[dimension] === value ? null : value,
+    }));
+    setCurrentPage(1);
+  };
+
+  const removeFilter = (dimension: keyof FilterState) => {
+    setFilters((prev) => ({
+      ...prev,
+      [dimension]: dimension === 'hideTestTraffic' ? false : null,
+    }));
+    setCurrentPage(1);
+  };
+
+  const clearAllFilters = () => {
+    setFilters({
+      source: null,
+      medium: null,
+      campaign: null,
+      landingPage: null,
+      hideTestTraffic: false,
+    });
+    setCurrentPage(1);
+  };
+
+  const hasActiveFilters =
+    filters.source ||
+    filters.medium ||
+    filters.campaign ||
+    filters.landingPage ||
+    filters.hideTestTraffic;
 
   const handlePresetClick = (newPreset: '7d' | '30d' | '90d') => {
     const dates = getPresetDates(newPreset);
@@ -147,6 +309,7 @@ export default function TrafficPage() {
     );
   }
 
+  // Use UNFILTERED data for pie chart (it acts as a filter selector)
   const pieData = stats?.bySource.map((item) => ({
     name: item.source,
     value: item.count,
@@ -155,6 +318,93 @@ export default function TrafficPage() {
   return (
     <div className="space-y-8" aria-busy={isLoading}>
       <RefreshIndicator isRefreshing={isValidating && !isLoading} />
+
+      {/* Filter bar */}
+      {stats && stats.rawEvents.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-4">
+          {/* Active filter chips */}
+          {filters.source && (
+            <div className="inline-flex items-center gap-2 rounded-full bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white">
+              <span>source: {filters.source}</span>
+              <button
+                onClick={() => removeFilter('source')}
+                className="hover:opacity-70"
+                aria-label={`Remove filter: source equals ${filters.source}`}
+              >
+                ✕
+              </button>
+            </div>
+          )}
+          {filters.medium && (
+            <div className="inline-flex items-center gap-2 rounded-full bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white">
+              <span>medium: {filters.medium}</span>
+              <button
+                onClick={() => removeFilter('medium')}
+                className="hover:opacity-70"
+                aria-label={`Remove filter: medium equals ${filters.medium}`}
+              >
+                ✕
+              </button>
+            </div>
+          )}
+          {filters.campaign && (
+            <div className="inline-flex items-center gap-2 rounded-full bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white">
+              <span>campaign: {filters.campaign}</span>
+              <button
+                onClick={() => removeFilter('campaign')}
+                className="hover:opacity-70"
+                aria-label={`Remove filter: campaign equals ${filters.campaign}`}
+              >
+                ✕
+              </button>
+            </div>
+          )}
+          {filters.landingPage && (
+            <div className="inline-flex items-center gap-2 rounded-full bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white">
+              <span>page: {filters.landingPage}</span>
+              <button
+                onClick={() => removeFilter('landingPage')}
+                className="hover:opacity-70"
+                aria-label={`Remove filter: landing page equals ${filters.landingPage}`}
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Clear all button */}
+          {hasActiveFilters && (
+            <button
+              onClick={clearAllFilters}
+              className="px-3 py-1.5 text-sm text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
+            >
+              Clear all filters
+            </button>
+          )}
+
+          {/* Test traffic toggle */}
+          <label className="ml-auto inline-flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={filters.hideTestTraffic}
+              onChange={(e) => setFilters((prev) => ({ ...prev, hideTestTraffic: e.target.checked }))}
+              className="rounded"
+            />
+            <span className="text-sm">Hide test traffic</span>
+          </label>
+
+          {/* Session count indicator */}
+          <div className="text-sm text-[var(--color-text-muted)]">
+            Showing {formatNumber(filteredStats.totalSessions)} of {formatNumber(stats.totalSessions)} sessions
+          </div>
+        </div>
+      )}
+
+      {/* Live region for screen reader announcements */}
+      <div className="sr-only" role="status" aria-live="polite">
+        {hasActiveFilters && `Showing ${filteredStats.totalSessions} of ${stats?.totalSessions || 0} sessions`}
+      </div>
+
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[var(--color-text)]">Traffic Sources</h1>
@@ -218,19 +468,19 @@ export default function TrafficPage() {
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-6">
           <p className="text-sm text-[var(--color-text-muted)]">Total Sessions</p>
           <p className="mt-1 text-3xl font-bold text-[var(--color-text)]">
-            {formatNumber(stats?.totalSessions || 0)}
+            {formatNumber(filteredStats.totalSessions)}
           </p>
         </div>
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-6">
           <p className="text-sm text-[var(--color-text-muted)]">Unique Sources</p>
           <p className="mt-1 text-3xl font-bold text-[var(--color-text)]">
-            {stats?.bySource.length || 0}
+            {filteredStats.bySource.length}
           </p>
         </div>
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-6">
           <p className="text-sm text-[var(--color-text-muted)]">Active Campaigns</p>
           <p className="mt-1 text-3xl font-bold text-[var(--color-text)]">
-            {stats?.byCampaign.length || 0}
+            {filteredStats.byCampaign.length}
           </p>
         </div>
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-6">
@@ -251,11 +501,16 @@ export default function TrafficPage() {
           </h2>
           {pieData.length > 0 ? (
             <>
-              <div className="h-80" role="img" aria-label={`Pie chart showing traffic distribution across ${pieData.length} sources`}>
+              <div className="h-80" role="img" aria-label="Pie chart showing traffic distribution - click to filter">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={pieData}
+                      onClick={(data) => {
+                        const clickedSource = data.name;
+                        toggleFilter('source', clickedSource);
+                      }}
+                      cursor="pointer"
                       cx="50%"
                       cy="50%"
                       innerRadius={60}
@@ -263,8 +518,12 @@ export default function TrafficPage() {
                       paddingAngle={2}
                       dataKey="value"
                     >
-                      {pieData.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      {pieData.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS[index % COLORS.length]}
+                          opacity={filters.source && filters.source !== entry.name ? 0.3 : 1}
+                        />
                       ))}
                     </Pie>
                     <Tooltip
@@ -337,9 +596,14 @@ export default function TrafficPage() {
                 </tr>
               </thead>
               <tbody>
-                {stats?.bySource.map((item, index) => (
+                {filteredStats.bySource.map((item, index) => (
                   <tr key={item.source} className="border-b border-[var(--color-border)]/50">
-                    <td className="py-2">
+                    <td
+                      onClick={() => toggleFilter('source', item.source)}
+                      className={`cursor-pointer py-2 transition-colors hover:text-[var(--color-accent)] hover:underline ${
+                        filters.source === item.source ? 'bg-[var(--color-border)] font-bold' : ''
+                      }`}
+                    >
                       <div className="flex items-center gap-2">
                         <div
                           className="h-3 w-3 rounded-full"
@@ -356,7 +620,7 @@ export default function TrafficPage() {
                     </td>
                   </tr>
                 ))}
-                {(!stats?.bySource || stats.bySource.length === 0) && (
+                {filteredStats.bySource.length === 0 && (
                   <tr>
                     <td colSpan={3} className="py-4 text-center text-sm text-[var(--color-text-muted)]">
                       No data available
@@ -375,8 +639,14 @@ export default function TrafficPage() {
           Traffic by Medium
         </h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {stats?.byMedium.map((item) => (
-            <div key={item.medium} className="rounded-lg bg-[var(--color-bg)] p-3">
+          {filteredStats.byMedium.map((item) => (
+            <div
+              key={item.medium}
+              onClick={() => toggleFilter('medium', item.medium)}
+              className={`cursor-pointer rounded-lg bg-[var(--color-bg)] p-3 transition-all hover:ring-2 hover:ring-[var(--color-accent)] ${
+                filters.medium === item.medium ? 'ring-2 ring-[var(--color-accent)]' : ''
+              }`}
+            >
               <p className="text-sm text-[var(--color-text-muted)]">{item.medium || 'none'}</p>
               <p className="text-xl font-semibold text-[var(--color-text)]">
                 {formatNumber(item.count)}
@@ -384,14 +654,14 @@ export default function TrafficPage() {
               <p className="text-xs text-[var(--color-text-muted)]">{item.percentage}%</p>
             </div>
           ))}
-          {(!stats?.byMedium || stats.byMedium.length === 0) && (
+          {filteredStats.byMedium.length === 0 && (
             <p className="text-sm text-[var(--color-text-muted)]">No data available</p>
           )}
         </div>
       </div>
 
       {/* Campaigns */}
-      {stats?.byCampaign && stats.byCampaign.length > 0 && (
+      {filteredStats.byCampaign.length > 0 && (
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-6">
           <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">
             Campaigns
@@ -412,9 +682,16 @@ export default function TrafficPage() {
                 </tr>
               </thead>
               <tbody>
-                {stats.byCampaign.map((item) => (
+                {filteredStats.byCampaign.map((item) => (
                   <tr key={item.campaign} className="border-b border-[var(--color-border)]/50">
-                    <td className="py-2 text-sm text-[var(--color-text)]">{item.campaign}</td>
+                    <td
+                      onClick={() => toggleFilter('campaign', item.campaign)}
+                      className={`cursor-pointer py-2 text-sm text-[var(--color-text)] transition-colors hover:text-[var(--color-accent)] hover:underline ${
+                        filters.campaign === item.campaign ? 'bg-[var(--color-border)] font-bold' : ''
+                      }`}
+                    >
+                      {item.campaign}
+                    </td>
                     <td className="py-2 text-right text-sm text-[var(--color-text)]">
                       {formatNumber(item.count)}
                     </td>
@@ -450,9 +727,16 @@ export default function TrafficPage() {
               </tr>
             </thead>
             <tbody>
-              {stats?.topLandingPages.map((item) => (
+              {filteredStats.topLandingPages.map((item) => (
                 <tr key={item.path} className="border-b border-[var(--color-border)]/50">
-                  <td className="py-2 text-sm font-mono text-[var(--color-text)]">{item.path}</td>
+                  <td
+                    onClick={() => toggleFilter('landingPage', item.path)}
+                    className={`cursor-pointer py-2 font-mono text-sm text-[var(--color-text)] transition-colors hover:text-[var(--color-accent)] hover:underline ${
+                      filters.landingPage === item.path ? 'bg-[var(--color-border)] font-bold' : ''
+                    }`}
+                  >
+                    {item.path}
+                  </td>
                   <td className="py-2 text-right text-sm text-[var(--color-text)]">
                     {formatNumber(item.count)}
                   </td>
@@ -461,7 +745,7 @@ export default function TrafficPage() {
                   </td>
                 </tr>
               ))}
-              {(!stats?.topLandingPages || stats.topLandingPages.length === 0) && (
+              {filteredStats.topLandingPages.length === 0 && (
                 <tr>
                   <td colSpan={3} className="py-4 text-center text-sm text-[var(--color-text-muted)]">
                     No data available
@@ -475,11 +759,11 @@ export default function TrafficPage() {
 
       {/* Individual page views table */}
       {(() => {
-        const totalPages = Math.ceil((stats?.rawEvents.length || 0) / ITEMS_PER_PAGE);
-        const paginatedEvents = stats?.rawEvents.slice(
+        const totalPages = Math.ceil(filteredRawEvents.length / ITEMS_PER_PAGE);
+        const paginatedEvents = filteredRawEvents.slice(
           (currentPage - 1) * ITEMS_PER_PAGE,
           currentPage * ITEMS_PER_PAGE
-        ) || [];
+        );
 
         return (
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-6">
@@ -535,8 +819,20 @@ export default function TrafficPage() {
                   ))}
                   {paginatedEvents.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="py-4 text-center text-sm text-[var(--color-text-muted)]">
-                        No page views available
+                      <td colSpan={6} className="py-8 text-center">
+                        <p className="mb-3 text-sm text-[var(--color-text-muted)]">
+                          {hasActiveFilters
+                            ? 'No page views match the selected filters.'
+                            : 'No page views available.'}
+                        </p>
+                        {hasActiveFilters && (
+                          <button
+                            onClick={clearAllFilters}
+                            className="text-sm text-[var(--color-accent)] hover:underline"
+                          >
+                            Clear all filters
+                          </button>
+                        )}
                       </td>
                     </tr>
                   )}
@@ -548,7 +844,7 @@ export default function TrafficPage() {
             {totalPages > 1 && (
               <div className="mt-4 flex items-center justify-between border-t border-[var(--color-border)] pt-4">
                 <p className="text-sm text-[var(--color-text-muted)]">
-                  Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, stats?.rawEvents.length || 0)} of {stats?.rawEvents.length || 0} page views
+                  Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredRawEvents.length)} of {filteredRawEvents.length} page views
                 </p>
                 <div className="flex items-center gap-2">
                   <button
@@ -574,9 +870,9 @@ export default function TrafficPage() {
               </div>
             )}
 
-            {stats?.rawEvents && stats.rawEvents.length > 0 && totalPages <= 1 && (
+            {filteredRawEvents.length > 0 && totalPages <= 1 && (
               <p className="mt-3 text-xs text-[var(--color-text-muted)]">
-                Showing {stats.rawEvents.length} page view{stats.rawEvents.length !== 1 ? 's' : ''}
+                Showing {filteredRawEvents.length} page view{filteredRawEvents.length !== 1 ? 's' : ''}
               </p>
             )}
           </div>
