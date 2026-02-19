@@ -118,10 +118,10 @@ export function CompatibilityScoreCard({
           description="Years, scope, title, and education match (20 pts max)"
         />
         <ScoreBar
-          label="Content Quality"
+          label="Match Quality"
           value={breakdown.contentQuality}
           maxValue={10}
-          description="Metrics, action verbs, and bullet structure (10 pts max)"
+          description="Exact match ratio, keyword density, and section completeness (10 pts max)"
         />
       </div>
     </div>

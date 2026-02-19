@@ -5,10 +5,10 @@
  * Produces identical scores across multiple runs for the same inputs.
  *
  * Scoring breakdown (0-100 total):
- * - Keyword Relevance: 0-45 points (weighted by JD section priority)
- * - Skills Quality: 0-25 points
- * - Experience Alignment: 0-20 points (years, team/depth, title, education)
- * - Content Quality: 0-10 points (metrics, action verbs, structure)
+ * - Keyword Relevance: 0-45 points (weighted by JD section priority + placement + frequency)
+ * - Skills Quality: 0-25 points (required coverage, JD alignment, breadth)
+ * - Experience Alignment: 0-20 points (smooth year curve, team/depth, title, education)
+ * - Match Quality: 0-10 points (exact ratio, density compliance, section completeness)
  *
  * Sources: 20+ industry sources including Jobscan, Indeed, LinkedIn Talent Report
  */
@@ -20,8 +20,8 @@ import {
   calculateMatchRate,
   calculateKeywordDensity,
   calculateActualKeywordDensity,
+  calculateDynamicKeywordCount,
   stemWord,
-  ACTION_VERBS,
   type ExtractedKeywords,
   type MatchResult,
   type KeywordPriority,
@@ -37,7 +37,7 @@ export interface ScoreBreakdown {
   skillsQuality: number;
   /** Experience alignment (0-20) */
   experienceAlignment: number;
-  /** Content quality score (0-10) */
+  /** Match quality score (0-10) — measures exact match ratio, density, section completeness */
   contentQuality: number;
 }
 
@@ -110,65 +110,118 @@ export interface ScoringInput {
 /**
  * Calculate keyword relevance score (0-45 points).
  *
- * Keywords are weighted by their JD section priority:
- * - Title keywords: 3 pts (exact), 2 pts (stem), 1.5 pts (synonym)
- * - Required keywords: 2.5 pts (exact), 2 pts (stem), 1 pt (synonym)
- * - Nice-to-have: 1.5 pts (exact), 1 pt (stem), 0.5 pt (synonym)
- * - General: 1 pt (exact), 0.5 pt (stem/synonym)
+ * Point values per keyword (by priority and match type):
+ * - Title:           exact=3.5, stem=2,   synonym=1.5
+ * - Required:        exact=3,   stem=2,   synonym=1
+ * - Responsibilities:exact=2,   stem=1.5, synonym=0.75
+ * - Nice-to-have:    exact=2,   stem=1,   synonym=0.5
+ * - General:         exact=1.5, stem=0.5, synonym=0.5
  *
- * Penalty: -5 if actual keyword density > 3% or any keyword stuffed (5+ occurrences)
+ * Frequency multiplier: 1 + min(0.5, (freq-1) * 0.1)
+ * Placement bonus: +1.5 (title), +1.0 (summary), +0.5 (first bullet)
+ * Penalty: -5 if actual keyword density > 3% or any keyword stuffed
  */
 function calculateKeywordScore(
   matchResult: MatchResult,
   extractedKeywords: ExtractedKeywords,
   resumeText: string,
-  resumeWordCount: number
+  resumeWordCount: number,
+  resumeData: ResumeData
 ): number {
   let score = 0;
   const priorities = extractedKeywords.keywordPriorities;
+  const frequencies = extractedKeywords.keywordFrequency || {};
 
-  // Calculate points based on match type AND keyword priority
+  // Build resume zones for placement bonus
+  const resumeTitle = (resumeData.title || '').toLowerCase();
+  const resumeLines = resumeText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const summaryText = resumeLines.slice(0, 3).join(' ').toLowerCase();
+  const firstBullets = new Set<string>();
+  if (resumeData.experiences) {
+    for (const exp of resumeData.experiences) {
+      if (exp.highlights && exp.highlights.length > 0) {
+        firstBullets.add(exp.highlights[0].toLowerCase());
+      }
+    }
+  }
+  const firstBulletsText = [...firstBullets].join(' ');
+
+  // Calculate points based on match type, priority, and frequency
   for (const detail of matchResult.matchDetails) {
     const priority: KeywordPriority = priorities[detail.keyword] || 'general';
+    let points = 0;
 
     switch (priority) {
       case 'title':
         switch (detail.matchType) {
-          case 'exact': score += 3; break;
-          case 'stem': score += 2; break;
-          case 'synonym': score += 1.5; break;
+          case 'exact': points = 3.5; break;
+          case 'stem': points = 2; break;
+          case 'synonym': points = 1.5; break;
         }
         break;
       case 'required':
         switch (detail.matchType) {
-          case 'exact': score += 2.5; break;
-          case 'stem': score += 2; break;
-          case 'synonym': score += 1; break;
+          case 'exact': points = 3; break;
+          case 'stem': points = 2; break;
+          case 'synonym': points = 1; break;
+        }
+        break;
+      case 'responsibilities':
+        switch (detail.matchType) {
+          case 'exact': points = 2; break;
+          case 'stem': points = 1.5; break;
+          case 'synonym': points = 0.75; break;
         }
         break;
       case 'niceToHave':
         switch (detail.matchType) {
-          case 'exact': score += 1.5; break;
-          case 'stem': score += 1; break;
-          case 'synonym': score += 0.5; break;
+          case 'exact': points = 2; break;
+          case 'stem': points = 1; break;
+          case 'synonym': points = 0.5; break;
         }
         break;
       default: // 'general'
         switch (detail.matchType) {
-          case 'exact': score += 1; break;
-          case 'stem': score += 0.5; break;
-          case 'synonym': score += 0.5; break;
+          case 'exact': points = 1.5; break;
+          case 'stem': points = 0.5; break;
+          case 'synonym': points = 0.5; break;
         }
         break;
     }
+
+    // Apply frequency multiplier: 1 + min(0.5, (freq-1) * 0.1)
+    const freq = frequencies[detail.keyword] || 1;
+    const multiplier = 1 + Math.min(0.5, (freq - 1) * 0.1);
+    points *= multiplier;
+
+    // Placement bonus: check if keyword appears in resume title/summary/first bullet
+    // Use word-boundary regex for short keywords to avoid substring false-positives
+    const kwLower = detail.keyword.toLowerCase();
+    const isShortKw = kwLower.length <= 3 && !kwLower.includes(' ');
+    const kwMatch = (text: string) => {
+      if (isShortKw) {
+        const escaped = kwLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return new RegExp(`\\b${escaped}\\b`).test(text);
+      }
+      return text.includes(kwLower);
+    };
+    if (kwMatch(resumeTitle)) {
+      points += 1.5;
+    } else if (kwMatch(summaryText)) {
+      points += 1.0;
+    } else if (kwMatch(firstBulletsText)) {
+      points += 0.5;
+    }
+
+    score += points;
   }
 
   // Cap at 45 points
   score = Math.min(score, 45);
 
-  // Penalty for keyword stuffing using actual occurrence-based density
+  // Penalty for extreme keyword stuffing only (density compliance handled by Match Quality)
   const actualDensity = calculateActualKeywordDensity(resumeText, matchResult.matched);
-  if (actualDensity.overallDensity > 3 || actualDensity.stuffedKeywords.length > 0) {
+  if (actualDensity.stuffedKeywords.length >= 3) {
     score = Math.max(0, score - 5);
   }
 
@@ -178,78 +231,98 @@ function calculateKeywordScore(
 /**
  * Calculate skills quality score (0-25 points).
  *
- * Scoring:
- * - Required skills present: (matched/required) * 15 points
- * - Skills aligned with JD priority: 5 points
- * - Skills section well-organized: 5 points
+ * Sub-scores (pure ATS signals, no organization bonus):
+ * - Required skills coverage (12pts): JD technologies present in skills section
+ * - Skills-JD alignment (8pts): Top JD keywords appearing in skills section
+ * - Skills breadth (5pts): Having relevant adjacent skills beyond strict JD requirements
+ *
+ * Skills already credited in keyword score get 30% credit (de-overlap).
  */
 function calculateSkillsScore(
   extractedKeywords: ExtractedKeywords,
   resumeData: ResumeData,
+  matchedKeywordsInText: Set<string>
 ): number {
   let score = 0;
 
-  // Get all skills from resume
+  // Get all skills from resume (normalized)
   const resumeSkills = new Set<string>();
+  const addSkill = (s: string) => {
+    const lower = s.toLowerCase();
+    resumeSkills.add(lower);
+    // Also add normalized version (ci/cd → cicd, etc.)
+    const normalized = lower.replace(/ci\/cd/g, 'cicd').replace(/\./g, '').replace(/\+\+/g, 'pp');
+    if (normalized !== lower) resumeSkills.add(normalized);
+  };
   if (resumeData.skills) {
     for (const skill of resumeData.skills) {
-      resumeSkills.add(skill.toLowerCase());
+      addSkill(skill);
     }
   }
   if (resumeData.skillsByCategory) {
     for (const category of resumeData.skillsByCategory) {
+      addSkill(category.category); // Include category names
       for (const item of category.items) {
-        resumeSkills.add(item.toLowerCase());
+        addSkill(item);
       }
     }
   }
 
-  // Count how many JD technologies are in resume skills
+  // Required skills coverage (12pts): JD technologies in skills section
   const techKeywords = extractedKeywords.technologies;
   let techMatches = 0;
   for (const tech of techKeywords) {
-    if (resumeSkills.has(tech) || [...resumeSkills].some(s => s.includes(tech))) {
-      techMatches++;
+    const isInSkills = resumeSkills.has(tech) || [...resumeSkills].some(s => s.includes(tech));
+    if (isInSkills) {
+      // De-overlap: if already matched in keyword score, give 80% credit
+      const alreadyMatched = matchedKeywordsInText.has(tech);
+      techMatches += alreadyMatched ? 0.8 : 1;
     }
   }
 
-  // Required skills present (max 15 points)
   if (techKeywords.length > 0) {
-    score += Math.min(15, (techMatches / techKeywords.length) * 15);
+    score += Math.min(12, (techMatches / techKeywords.length) * 12);
   } else {
-    // No specific tech requirements - give partial credit for having skills
-    score += resumeSkills.size > 0 ? 10 : 0;
+    score += resumeSkills.size > 0 ? 6 : 0;
   }
 
-  // Skills aligned with JD priority (5 points)
-  // Check if top JD keywords appear in skills section
-  const topJdKeywords = extractedKeywords.all.slice(0, 5);
-  let alignedCount = 0;
+  // Skills-JD alignment (8pts): Top JD keywords in skills section, weighted by priority
+  const topJdKeywords = extractedKeywords.all.slice(0, 8);
+  let alignedScore = 0;
   for (const keyword of topJdKeywords) {
-    if (resumeSkills.has(keyword) ||
-        [...resumeSkills].some(s => s.toLowerCase().includes(keyword.toLowerCase()))) {
-      alignedCount++;
+    const isInSkills = resumeSkills.has(keyword) ||
+      [...resumeSkills].some(s => s.toLowerCase().includes(keyword.toLowerCase()));
+    if (isInSkills) {
+      const priority = extractedKeywords.keywordPriorities[keyword] || 'general';
+      const weight = priority === 'title' ? 2 : priority === 'required' ? 1.5 : 1;
+      // De-overlap
+      const alreadyMatched = matchedKeywordsInText.has(keyword);
+      alignedScore += (alreadyMatched ? 0.8 : 1) * weight;
     }
   }
-  score += (alignedCount / Math.max(topJdKeywords.length, 1)) * 5;
+  score += Math.min(8, (alignedScore / Math.max(topJdKeywords.length, 1)) * 8);
 
-  // Skills section organization (5 points)
-  // Give full points if skills are categorized
-  if (resumeData.skillsByCategory && resumeData.skillsByCategory.length > 0) {
-    score += 5;
-  } else if (resumeData.skills && resumeData.skills.length > 0) {
-    score += 3;
-  }
+  // Skills breadth (5pts): relevant adjacent skills beyond strict JD match
+  const techKeywordsSet = new Set(techKeywords);
+  const extraSkills = [...resumeSkills].filter(s =>
+    !matchedKeywordsInText.has(s) &&
+    !techKeywordsSet.has(s) &&
+    s.length > 2
+  );
+  const breadthScore = Math.min(5, extraSkills.length * 0.5);
+  score += breadthScore;
 
-  return Math.round(score * 10) / 10;
+  return Math.min(25, Math.round(score * 10) / 10);
 }
 
 /**
  * Extract years of experience from JD text.
  */
 function extractYearsFromJd(jd: string): number | null {
-  // Look for patterns like "8+ years", "5-7 years", "10 years"
   const patterns = [
+    // "10+ years of experience", "10+ years software engineering experience"
+    /(\d+)\+?\s*(?:years?|yrs?)\s+(?:of\s+)?(?:\w+\s+){0,4}(?:experience|exp)\b/i,
+    // Simple "10+ years" standalone
     /(\d+)\+?\s*(?:years?|yrs?)\s*(?:of\s+)?(?:experience|exp)/i,
     /(\d+)\s*-\s*\d+\s*(?:years?|yrs?)/i,
     /minimum\s+(?:of\s+)?(\d+)\s*(?:years?|yrs?)/i,
@@ -269,7 +342,6 @@ function extractYearsFromJd(jd: string): number | null {
  * Extract team size from JD text.
  */
 function extractTeamSizeFromJd(jd: string): number | null {
-  // Look for patterns like "team of 6", "manage 10+ engineers", "6-10 engineers"
   const patterns = [
     /(?:team\s+of|manage|lead)\s+(\d+)/i,
     /(\d+)\+?\s*(?:engineers?|developers?|reports?)/i,
@@ -290,7 +362,6 @@ function extractTeamSizeFromJd(jd: string): number | null {
  * Extract team size from resume data.
  */
 function extractTeamSizeFromResume(resumeData: ResumeData): number | null {
-  // Check explicit team size field
   if (resumeData.teamSize) {
     const match = resumeData.teamSize.match(/(\d+)/);
     if (match?.[1]) {
@@ -298,12 +369,10 @@ function extractTeamSizeFromResume(resumeData: ResumeData): number | null {
     }
   }
 
-  // Look in experience highlights
   if (resumeData.experiences) {
     for (const exp of resumeData.experiences) {
       if (exp.highlights) {
         for (const highlight of exp.highlights) {
-          // Look for team size mentions
           const match = highlight.match(/(?:team\s+of|scaling\s+to|led|managed)\s+(\d+)\s*(?:engineers?|people|members|reports)/i);
           if (match?.[1]) {
             return parseInt(match[1], 10);
@@ -319,7 +388,7 @@ function extractTeamSizeFromResume(resumeData: ResumeData): number | null {
 /**
  * Detect whether a JD is for an IC (individual contributor) or management role.
  */
-function detectRoleType(jd: string): 'ic' | 'management' | 'unknown' {
+function detectRoleType(jd: string): 'ic' | 'management' {
   const lower = jd.toLowerCase();
   const mgmtSignals = ['manage', 'direct reports', 'team of', 'people management',
     'managing', 'supervise', 'leadership of', 'lead a team', 'build a team',
@@ -338,8 +407,8 @@ function detectRoleType(jd: string): 'ic' | 'management' | 'unknown' {
   }
 
   if (mgmtScore > icScore && mgmtScore >= 2) return 'management';
-  if (icScore > mgmtScore && icScore >= 1) return 'ic';
-  return 'unknown';
+  // Default to IC when no clear management signals — most engineering JDs are IC
+  return 'ic';
 }
 
 /**
@@ -356,7 +425,6 @@ function extractEducationFromJd(jd: string): { level: EducationLevel; field: str
   let level: EducationLevel = null;
   let field: string | null = null;
 
-  // Check for degree levels (most specific first)
   if (/\b(ph\.?d|doctorate|doctoral)\b/.test(lower)) {
     level = 'phd';
   } else if (/\b(master'?s?|m\.?s\.?|m\.?a\.?|mba)\b/.test(lower)) {
@@ -367,8 +435,6 @@ function extractEducationFromJd(jd: string): { level: EducationLevel; field: str
     level = 'associate';
   }
 
-  // Check for field requirements
-  // Match "IT" only as uppercase in original text to avoid matching the pronoun "it"
   if (/\b(computer science|cs|software engineering|information technology)\b/.test(lower) || /\bI\.?T\.?\b/.test(jd)) {
     field = 'cs';
   } else if (/\b(engineering|technical)\b/.test(lower) && level) {
@@ -386,7 +452,7 @@ function matchEducation(
   jdRequirement: { level: EducationLevel; field: string | null }
 ): number {
   if (!jdRequirement.level || !resumeData.education || resumeData.education.length === 0) {
-    return 0; // No education requirement or no education data
+    return 0;
   }
 
   const educationLevels: Record<string, number> = {
@@ -400,13 +466,11 @@ function matchEducation(
   for (const edu of resumeData.education) {
     const degreeLower = (edu.degree || '').toLowerCase();
 
-    // Detect level
     if (/\b(ph\.?d|doctorate)\b/.test(degreeLower)) bestLevel = Math.max(bestLevel, 4);
     else if (/\b(master|m\.?s\.?|m\.?a\.?|mba)\b/.test(degreeLower)) bestLevel = Math.max(bestLevel, 3);
     else if (/\b(bachelor|b\.?s\.?|b\.?a\.?)\b/.test(degreeLower)) bestLevel = Math.max(bestLevel, 2);
     else if (/\b(associate|a\.?s\.?)\b/.test(degreeLower)) bestLevel = Math.max(bestLevel, 1);
 
-    // Check field
     if (jdRequirement.field === 'cs' &&
         /\b(computer|software|information|computing|cs)\b/.test(degreeLower)) {
       fieldMatch = true;
@@ -418,12 +482,11 @@ function matchEducation(
 
   let points = 0;
   if (bestLevel >= requiredLevel) {
-    points = 2; // Meets or exceeds level
+    points = 2;
   } else if (bestLevel >= requiredLevel - 1) {
-    points = 1; // Close (e.g., has bachelor's, needs master's)
+    points = 1;
   }
 
-  // Bonus for field match
   if (fieldMatch && points > 0) {
     points = Math.min(3, points + 1);
   }
@@ -432,19 +495,38 @@ function matchEducation(
 }
 
 /**
+ * Check domain relevance between resume title and JD title keywords.
+ * Returns discount factor (0.6 for no overlap, 1.0 for overlap).
+ */
+function calculateDomainRelevance(
+  resumeTitle: string,
+  jdTitleKeywords: string[]
+): number {
+  if (jdTitleKeywords.length === 0) return 1.0;
+
+  const titleLower = resumeTitle.toLowerCase();
+  const titleWords = titleLower.split(/\s+/);
+  const titleStems = titleWords.map(stemWord);
+
+  let overlap = 0;
+  for (const jdKw of jdTitleKeywords) {
+    const jdLower = jdKw.toLowerCase();
+    const jdStem = stemWord(jdLower);
+    if (titleLower.includes(jdLower) || titleStems.includes(jdStem)) {
+      overlap++;
+    }
+  }
+
+  return overlap > 0 ? 1.0 : 0.6; // 40% discount for zero overlap
+}
+
+/**
  * Calculate experience alignment score (0-20 points).
  *
- * For management roles:
- * - Years match: 6 points
- * - Team size match: 6 points
- * - Title match: 5 points
- * - Education match: 3 points
- *
- * For IC roles (team size reallocated):
- * - Years match: 9 points (6 + 3 from team)
- * - Technical depth: 3 points (remaining from team)
- * - Title match: 5 points
- * - Education match: 3 points
+ * Uses smooth exponential decay for year deficits instead of cliff function.
+ * Applies mild overqualification penalty when resume years > JD years * 1.8.
+ * Applies domain-relevance gate: 40% discount if resume title has zero
+ * overlap with JD title keywords.
  */
 function calculateExperienceScore(
   jd: string,
@@ -455,26 +537,40 @@ function calculateExperienceScore(
   const roleType = detectRoleType(jd);
   const isIC = roleType === 'ic';
 
-  // Years of experience match (6 pts management, 9 pts IC)
+  // Domain relevance gate
+  const domainFactor = calculateDomainRelevance(
+    resumeData.title || '',
+    extractedKeywords.fromTitle
+  );
+
+  // Years of experience match (6 pts management, 9 pts IC) — smooth curve
   const yearsMax = isIC ? 9 : 6;
   const jdYears = extractYearsFromJd(jd);
   const resumeYears = resumeData.yearsExperience;
 
   if (jdYears !== null && resumeYears !== undefined) {
     if (resumeYears >= jdYears) {
-      score += yearsMax; // Meets or exceeds
-    } else if (resumeYears >= jdYears - 2) {
-      score += Math.round(yearsMax * 0.625 * 10) / 10; // ~63%
-    } else if (resumeYears >= jdYears - 5) {
-      score += Math.round(yearsMax * 0.25 * 10) / 10; // 25%
+      let yearScore = yearsMax;
+      // Mild overqualification penalty when resumeYears > jdYears * 1.8
+      if (jdYears > 0 && resumeYears > jdYears * 1.8) {
+        const overRatio = resumeYears / jdYears;
+        const penalty = Math.min(0.15, (overRatio - 1.8) * 0.1);
+        yearScore *= (1 - penalty);
+      }
+      score += yearScore;
+    } else {
+      // Smooth exponential decay: exp(-deficit / (jdYears * 0.3))
+      const deficit = jdYears - resumeYears;
+      const denominator = Math.max(jdYears * 0.3, 0.5);
+      const decay = Math.exp(-deficit / denominator);
+      score += yearsMax * decay;
     }
   } else if (resumeYears !== undefined && resumeYears >= 5) {
-    score += Math.round(yearsMax * 0.625 * 10) / 10; // partial credit
+    score += Math.round(yearsMax * 0.625 * 10) / 10;
   }
 
   // Team size / technical depth
   if (isIC) {
-    // IC: 3 points for technical depth (having many skills + experience)
     const hasMultipleExperiences = (resumeData.experiences?.length || 0) >= 2;
     const hasSkills = (resumeData.skills?.length || 0) + (resumeData.skillsByCategory?.length || 0) > 0;
     if (hasMultipleExperiences && hasSkills) {
@@ -483,7 +579,6 @@ function calculateExperienceScore(
       score += 1.5;
     }
   } else {
-    // Management: Team size match (6 points)
     const jdTeamSize = extractTeamSizeFromJd(jd);
     const resumeTeamSize = extractTeamSizeFromResume(resumeData);
 
@@ -496,7 +591,7 @@ function calculateExperienceScore(
         score += 2;
       }
     } else if (resumeTeamSize !== null && resumeTeamSize > 0) {
-      score += 3; // Has team management experience
+      score += 3;
     }
   }
 
@@ -527,71 +622,69 @@ function calculateExperienceScore(
   if (educationReq.level) {
     score += matchEducation(resumeData, educationReq);
   } else if (resumeData.education && resumeData.education.length > 0) {
-    // No explicit requirement but candidate has education — small bonus
     score += 1;
   }
+
+  // Apply domain relevance factor
+  score *= domainFactor;
 
   return Math.min(20, Math.round(score * 10) / 10);
 }
 
 /**
- * Calculate content quality score (0-10 points).
+ * Calculate match quality score (0-10 points).
  *
- * Scoring:
- * - Metrics presence (5 pts): Experience bullets with numbers/percentages/dollar amounts
- * - Action verb usage (3 pts): Bullets starting with strong action verbs
- * - Bullet structure (2 pts): Consistent bullet formatting
+ * Replaces old Content Quality (which measured writing advice, not ATS signals).
+ * Sub-scores:
+ * - Exact match ratio (4pts): % of keyword matches that are exact vs stem/synonym
+ * - Keyword density compliance (3pts): Is density in optimal 2-3% range
+ * - Section completeness (3pts): Resume data has all ATS-expected fields populated
  */
-function calculateContentQuality(resumeData: ResumeData): number {
+function calculateMatchQuality(
+  matchResult: MatchResult,
+  resumeText: string,
+  resumeData: ResumeData
+): number {
   let score = 0;
 
-  if (!resumeData.experiences || resumeData.experiences.length === 0) {
-    return 0;
+  // Exact match ratio (4pts)
+  if (matchResult.matchDetails.length > 0) {
+    const exactMatches = matchResult.matchDetails.filter(d => d.matchType === 'exact').length;
+    const exactRatio = exactMatches / matchResult.matchDetails.length;
+    score += exactRatio * 4;
   }
 
-  // Collect all highlights
-  const allHighlights: string[] = [];
-  for (const exp of resumeData.experiences) {
-    if (exp.highlights) {
-      allHighlights.push(...exp.highlights);
+  // Keyword density compliance (3pts)
+  if (matchResult.matched.length > 0 && resumeText.length > 0) {
+    const density = calculateActualKeywordDensity(resumeText, matchResult.matched);
+    const d = density.overallDensity;
+    if (d >= 2 && d <= 3) {
+      score += 3; // Optimal range
+    } else if (d >= 1 && d < 2) {
+      score += 2; // Slightly low
+    } else if (d > 3 && d <= 4) {
+      score += 2; // Slightly high
+    } else if (d >= 0.5 && d < 1) {
+      score += 1; // Too low
+    } else if (d > 4) {
+      score += 0.5; // Too high
     }
+    // d < 0.5: 0 points
   }
 
-  if (allHighlights.length === 0) return 0;
-
-  // Metrics presence (5 pts): proportion of bullets with quantified achievements
-  const metricsPattern = /(\d+%|\$[\d,]+|\d+x|\d+\+|\d[\d,]*\s*(?:engineers?|people|users?|systems?|teams?))/i;
-  let bulletsWithMetrics = 0;
-  for (const bullet of allHighlights) {
-    if (metricsPattern.test(bullet)) {
-      bulletsWithMetrics++;
-    }
+  // Section completeness (3pts): resume data has all ATS-expected fields
+  let completeness = 0;
+  if (resumeData.title && resumeData.title.length > 0) completeness += 0.5;
+  if ((resumeData.skills && resumeData.skills.length > 0) ||
+      (resumeData.skillsByCategory && resumeData.skillsByCategory.length > 0)) completeness += 0.75;
+  if (resumeData.experiences && resumeData.experiences.length > 0) {
+    completeness += 0.5;
+    // Bonus for experiences with highlights
+    const hasHighlights = resumeData.experiences.some(e => e.highlights && e.highlights.length > 0);
+    if (hasHighlights) completeness += 0.5;
   }
-  const metricsRate = bulletsWithMetrics / allHighlights.length;
-  score += Math.min(5, metricsRate * 5);
-
-  // Action verb usage (3 pts): proportion starting with action verbs
-  let bulletsWithActionVerbs = 0;
-  for (const bullet of allHighlights) {
-    const firstWord = bullet.trim().split(/\s+/)[0]?.toLowerCase();
-    if (firstWord && ACTION_VERBS.has(firstWord)) {
-      bulletsWithActionVerbs++;
-    }
-  }
-  const actionVerbRate = bulletsWithActionVerbs / allHighlights.length;
-  score += Math.min(3, actionVerbRate * 3);
-
-  // Bullet structure (2 pts): consistent formatting
-  // Check if bullets are reasonably sized (not too short, not too long)
-  let wellFormatted = 0;
-  for (const bullet of allHighlights) {
-    const wordLen = bullet.trim().split(/\s+/).length;
-    if (wordLen >= 5 && wordLen <= 40) {
-      wellFormatted++;
-    }
-  }
-  const structureRate = wellFormatted / allHighlights.length;
-  score += Math.min(2, structureRate * 2);
+  if (resumeData.education && resumeData.education.length > 0) completeness += 0.75;
+  score += Math.min(3, completeness);
 
   return Math.round(score * 10) / 10;
 }
@@ -608,6 +701,7 @@ function emptyExtractedKeywords(): ExtractedKeywords {
     technologies: [],
     actionVerbs: [],
     keywordPriorities: {},
+    keywordFrequency: {},
   };
 }
 
@@ -646,7 +740,8 @@ export function calculateATSScore(input: ScoringInput): ATSScore {
   }
 
   if (!resumeText || resumeText.trim().length === 0) {
-    const extractedKeywords = extractKeywords(jobDescription, 20);
+    const dynamicCount = calculateDynamicKeywordCount(jobDescription);
+    const extractedKeywords = extractKeywords(jobDescription, dynamicCount);
     return {
       total: 0,
       isATSOptimized: true,
@@ -668,7 +763,8 @@ export function calculateATSScore(input: ScoringInput): ATSScore {
   }
 
   // 1. Extract keywords from JD (dynamic count based on JD complexity)
-  const extractedKeywords = extractKeywords(jobDescription);
+  const dynamicCount = calculateDynamicKeywordCount(jobDescription);
+  const extractedKeywords = extractKeywords(jobDescription, dynamicCount);
 
   // 2. Match keywords against resume
   const matchResult = matchKeywords(extractedKeywords.all, resumeText);
@@ -676,17 +772,20 @@ export function calculateATSScore(input: ScoringInput): ATSScore {
   // 3. Calculate word count for density
   const resumeWordCount = wordCount(resumeText);
 
-  // 4. Calculate each score component
-  const keywordRelevance = calculateKeywordScore(matchResult, extractedKeywords, resumeText, resumeWordCount);
-  const skillsQuality = calculateSkillsScore(extractedKeywords, resumeData);
-  const experienceAlignment = calculateExperienceScore(jobDescription, resumeData, extractedKeywords);
-  const contentQuality = calculateContentQuality(resumeData);
+  // 4. Build set of matched keywords for de-overlap in skills scoring
+  const matchedKeywordsInText = new Set(matchResult.matched.map(k => k.toLowerCase()));
 
-  // 5. Calculate total and create result
+  // 5. Calculate each score component
+  const keywordRelevance = calculateKeywordScore(matchResult, extractedKeywords, resumeText, resumeWordCount, resumeData);
+  const skillsQuality = calculateSkillsScore(extractedKeywords, resumeData, matchedKeywordsInText);
+  const experienceAlignment = calculateExperienceScore(jobDescription, resumeData, extractedKeywords);
+  const contentQuality = calculateMatchQuality(matchResult, resumeText, resumeData);
+
+  // 6. Calculate total and create result
   const total = Math.round((keywordRelevance + skillsQuality + experienceAlignment + contentQuality) * 10) / 10;
 
   return {
-    total: Math.min(100, total), // Cap at 100
+    total: Math.min(100, total),
     isATSOptimized: true,
     breakdown: {
       keywordRelevance,
@@ -719,7 +818,6 @@ export function resumeDataToText(data: ResumeData & {
   if (data.title) parts.push(data.title);
   if (data.summary) parts.push(data.summary);
 
-  // Skills
   if (data.skillsByCategory) {
     for (const category of data.skillsByCategory) {
       parts.push(category.category + ': ' + category.items.join(', '));
@@ -728,7 +826,6 @@ export function resumeDataToText(data: ResumeData & {
     parts.push('Skills: ' + data.skills.join(', '));
   }
 
-  // Experience
   if (data.experiences) {
     for (const exp of data.experiences) {
       if (exp.title) parts.push(exp.title);
@@ -739,7 +836,6 @@ export function resumeDataToText(data: ResumeData & {
     }
   }
 
-  // Education
   if (data.education) {
     for (const edu of data.education) {
       if (edu.degree) parts.push(edu.degree);
@@ -754,8 +850,8 @@ export function resumeDataToText(data: ResumeData & {
  * Format score for display.
  */
 export function formatScoreAssessment(score: number): string {
-  if (score >= 80) return 'Excellent match - highly likely to pass ATS filters';
-  if (score >= 65) return 'Good match - should pass most ATS systems';
-  if (score >= 50) return 'Fair match - optimization recommended';
+  if (score >= 85) return 'Excellent match - highly likely to pass ATS filters';
+  if (score >= 70) return 'Good match - should pass most ATS systems';
+  if (score >= 55) return 'Fair match - optimization recommended';
   return 'Weak match - significant gaps identified';
 }

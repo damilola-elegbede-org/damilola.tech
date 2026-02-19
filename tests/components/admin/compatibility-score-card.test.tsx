@@ -135,7 +135,7 @@ describe('CompatibilityScoreCard', () => {
     expect(screen.getByText('Keyword Relevance')).toBeInTheDocument();
     expect(screen.getByText('Skills Quality')).toBeInTheDocument();
     expect(screen.getByText('Experience Alignment')).toBeInTheDocument();
-    expect(screen.getByText('Content Quality')).toBeInTheDocument();
+    expect(screen.getByText('Match Quality')).toBeInTheDocument();
   });
 
   it('displays breakdown values with max values', () => {

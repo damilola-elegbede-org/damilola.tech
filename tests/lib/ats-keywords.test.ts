@@ -2,16 +2,21 @@ import { describe, it, expect } from 'vitest';
 import {
   STOPWORDS,
   SKILL_SYNONYMS,
+  SYNONYM_REVERSE_INDEX,
   TECH_KEYWORDS,
   ACTION_VERBS,
   NICE_TO_HAVE_MARKERS,
+  KNOWN_PHRASES,
   stemWord,
   extractKeywords,
+  extractPhrases,
   wordCount,
   matchKeywords,
   calculateMatchRate,
   calculateKeywordDensity,
   calculateActualKeywordDensity,
+  calculateDynamicKeywordCount,
+  parseJDSections,
 } from '@/lib/ats-keywords';
 
 describe('ATS Keywords - Data Structures', () => {
@@ -1236,5 +1241,443 @@ describe('ATS Keywords - calculateActualKeywordDensity', () => {
       results.push(JSON.stringify(calculateActualKeywordDensity(text, keywords)));
     }
     expect(new Set(results).size).toBe(1);
+  });
+});
+
+// ============================================================
+// Phase 1 Tests: Synonym Expansion + Reverse Index
+// ============================================================
+
+describe('ATS Keywords - SYNONYM_REVERSE_INDEX', () => {
+  it('maps synonym values back to their canonical keys', () => {
+    // 'k8s' is a synonym under 'kubernetes'
+    const entries = SYNONYM_REVERSE_INDEX.get('k8s');
+    expect(entries).toBeDefined();
+    expect(entries).toContain('kubernetes');
+  });
+
+  it('maps a canonical key to itself when it appears as a synonym elsewhere', () => {
+    // 'gcp' is both a key and a synonym of 'cloud'
+    const entries = SYNONYM_REVERSE_INDEX.get('gcp');
+    expect(entries).toBeDefined();
+    // Should include canonical terms that list 'gcp' as a synonym
+    expect(entries!.some(e => e === 'cloud' || e === 'gcp')).toBe(true);
+  });
+
+  it('includes all synonym values from SKILL_SYNONYMS', () => {
+    for (const [, synonyms] of Object.entries(SKILL_SYNONYMS)) {
+      for (const syn of synonyms) {
+        const entries = SYNONYM_REVERSE_INDEX.get(syn.toLowerCase());
+        expect(entries).toBeDefined();
+        // The reverse index entry should include the canonical term or its synonyms
+        expect(entries!.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('provides O(1) lookup instead of O(n) scan', () => {
+    // Simply verify the reverse index is a Map (O(1) lookup)
+    expect(SYNONYM_REVERSE_INDEX instanceof Map).toBe(true);
+    expect(SYNONYM_REVERSE_INDEX.size).toBeGreaterThan(0);
+  });
+});
+
+describe('ATS Keywords - Expanded SKILL_SYNONYMS', () => {
+  it('contains AI/ML synonyms', () => {
+    expect(SKILL_SYNONYMS['machine learning']).toBeDefined();
+    expect(SKILL_SYNONYMS['machine learning']).toContain('ml');
+  });
+
+  it('contains data engineering synonyms', () => {
+    expect(SKILL_SYNONYMS['data pipeline']).toBeDefined();
+    expect(SKILL_SYNONYMS['data pipeline']!.some(s => s.includes('etl'))).toBe(true);
+  });
+
+  it('contains security synonyms', () => {
+    expect(SKILL_SYNONYMS['security']).toBeDefined();
+  });
+
+  it('contains product synonyms', () => {
+    expect(SKILL_SYNONYMS['product management']).toBeDefined();
+  });
+
+  it('contains frontend synonyms', () => {
+    expect(SKILL_SYNONYMS['frontend']).toBeDefined();
+  });
+
+  it('contains mobile synonyms', () => {
+    expect(SKILL_SYNONYMS['mobile']).toBeDefined();
+  });
+
+  it('reverse index matches synonyms correctly in matchKeywords', () => {
+    // 'machine learning' keyword should match resume with 'ml' via synonym
+    const keywords = ['machine learning'];
+    const resume = 'Experience with ML models and deep learning systems';
+    const { matched } = matchKeywords(keywords, resume);
+    expect(matched).toContain('machine learning');
+  });
+});
+
+// ============================================================
+// Phase 2 Tests: Multi-Word Phrase Extraction
+// ============================================================
+
+describe('ATS Keywords - KNOWN_PHRASES', () => {
+  it('contains multi-word technical terms', () => {
+    expect(KNOWN_PHRASES.has('machine learning')).toBe(true);
+    expect(KNOWN_PHRASES.has('system design')).toBe(true);
+    expect(KNOWN_PHRASES.has('data pipeline')).toBe(true);
+  });
+
+  it('contains management terms', () => {
+    expect(KNOWN_PHRASES.has('engineering manager')).toBe(true);
+    expect(KNOWN_PHRASES.has('people management')).toBe(true);
+  });
+
+  it('contains infrastructure terms', () => {
+    expect(KNOWN_PHRASES.has('infrastructure as code')).toBe(true);
+    expect(KNOWN_PHRASES.has('continuous integration')).toBe(true);
+  });
+});
+
+describe('ATS Keywords - extractPhrases', () => {
+  it('extracts known phrases from text', () => {
+    const { phrases } = extractPhrases(
+      'Experience with machine learning and system design'
+    );
+    expect(phrases).toContain('machine learning');
+    expect(phrases).toContain('system design');
+  });
+
+  it('returns remaining text after phrase extraction', () => {
+    const { remainder } = extractPhrases(
+      'Experience with machine learning and data pipeline work'
+    );
+    // The remainder should not contain the extracted phrases
+    expect(remainder.toLowerCase()).not.toContain('machine learning');
+    expect(remainder.toLowerCase()).not.toContain('data pipeline');
+  });
+
+  it('uses longest-first greedy matching', () => {
+    const { phrases } = extractPhrases(
+      'Infrastructure as code experience with terraform'
+    );
+    expect(phrases).toContain('infrastructure as code');
+  });
+
+  it('handles text with no known phrases', () => {
+    const { phrases, remainder } = extractPhrases('simple text with no phrases');
+    expect(phrases).toHaveLength(0);
+    expect(remainder).toBe('simple text with no phrases');
+  });
+
+  it('is case insensitive', () => {
+    const { phrases } = extractPhrases('MACHINE LEARNING and System Design');
+    expect(phrases).toContain('machine learning');
+    expect(phrases).toContain('system design');
+  });
+});
+
+describe('ATS Keywords - Short word boundary matching', () => {
+  it('does not match "go" inside "google"', () => {
+    const keywords = ['go'];
+    const resume = 'Worked at Google on search infrastructure';
+    const { matched } = matchKeywords(keywords, resume);
+    expect(matched).not.toContain('go');
+  });
+
+  it('matches "go" as standalone word', () => {
+    const keywords = ['go'];
+    const resume = 'Experience with Go programming language';
+    const { matched } = matchKeywords(keywords, resume);
+    expect(matched).toContain('go');
+  });
+
+  it('does not match "sql" inside "nosqldb"', () => {
+    const keywords = ['sql'];
+    const resume = 'Used nosqldb for storage';
+    const { matched } = matchKeywords(keywords, resume);
+    expect(matched).not.toContain('sql');
+  });
+
+  it('matches "sql" as standalone word', () => {
+    const keywords = ['sql'];
+    const resume = 'Proficient in SQL and database design';
+    const { matched } = matchKeywords(keywords, resume);
+    expect(matched).toContain('sql');
+  });
+
+  it('does not match "api" inside "capital"', () => {
+    const keywords = ['api'];
+    const resume = 'Raised capital for the startup';
+    const { matched } = matchKeywords(keywords, resume);
+    expect(matched).not.toContain('api');
+  });
+});
+
+describe('ATS Keywords - Multi-word keyword extraction', () => {
+  it('extracts multi-word phrases as keywords from JD', () => {
+    const jd = `
+      Senior Engineering Manager
+      Requirements:
+      - Machine learning experience
+      - System design expertise
+      - Data pipeline development
+    `;
+    const keywords = extractKeywords(jd, 25);
+    // Should extract multi-word phrases
+    expect(keywords.all.some(k => k.includes(' '))).toBe(true);
+  });
+
+  it('matches multi-word keywords in resume', () => {
+    const jd = 'Requirements: machine learning, system design';
+    const keywords = extractKeywords(jd, 20);
+    const resume = 'Built machine learning models and led system design reviews';
+    const { matched } = matchKeywords(keywords.all, resume);
+    const hasMultiWord = matched.some(m => m.includes(' '));
+    expect(hasMultiWord).toBe(true);
+  });
+});
+
+// ============================================================
+// Phase 3 Tests: JD Section Parser
+// ============================================================
+
+describe('ATS Keywords - parseJDSections', () => {
+  it('parses JD with colon-terminated section headers', () => {
+    const jd = `
+      Engineering Manager
+
+      Requirements:
+      - Python experience
+      - AWS knowledge
+
+      Nice to have:
+      - Kubernetes
+    `;
+    const sections = parseJDSections(jd);
+    expect(sections.length).toBeGreaterThan(0);
+    const required = sections.find(s => s.type === 'required');
+    expect(required).toBeDefined();
+  });
+
+  it('parses JD with ALL CAPS section headers', () => {
+    const jd = `
+      Engineering Manager
+
+      REQUIREMENTS
+      - Python experience
+      - AWS knowledge
+
+      PREFERRED QUALIFICATIONS
+      - Kubernetes
+    `;
+    const sections = parseJDSections(jd);
+    const required = sections.find(s => s.type === 'required');
+    expect(required).toBeDefined();
+    const niceToHave = sections.find(s => s.type === 'niceToHave');
+    expect(niceToHave).toBeDefined();
+  });
+
+  it('parses JD with markdown ## headers', () => {
+    const jd = `
+      ## Engineering Manager
+
+      ## Requirements
+      - Python experience
+
+      ## Nice to have
+      - Kubernetes
+    `;
+    const sections = parseJDSections(jd);
+    expect(sections.length).toBeGreaterThan(0);
+  });
+
+  it('classifies responsibilities section', () => {
+    const jd = `
+      Engineering Manager
+
+      Responsibilities:
+      - Lead engineering teams
+      - Drive technical strategy
+
+      Requirements:
+      - 8+ years experience
+    `;
+    const sections = parseJDSections(jd);
+    const responsibilities = sections.find(s => s.type === 'responsibilities');
+    expect(responsibilities).toBeDefined();
+  });
+
+  it('handles JD without clear headers (fallback)', () => {
+    const jd = `
+      Engineering Manager at Acme Corp
+
+      We are looking for someone who has:
+      - Python and AWS experience
+      - Team leadership skills
+      - It would be a plus to have Kubernetes knowledge
+    `;
+    const sections = parseJDSections(jd);
+    // Even without headers, should return at least one section
+    expect(sections.length).toBeGreaterThan(0);
+  });
+
+  it('is deterministic', () => {
+    const jd = `
+      Requirements:
+      - Python
+      Nice to have:
+      - Go
+    `;
+    const results: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      results.push(JSON.stringify(parseJDSections(jd)));
+    }
+    expect(new Set(results).size).toBe(1);
+  });
+});
+
+describe('ATS Keywords - Responsibilities priority', () => {
+  it('extractKeywords includes responsibilities priority', () => {
+    const jd = `
+      Engineering Manager
+
+      Responsibilities:
+      - Lead platform engineering team
+      - Drive cloud migration initiatives
+
+      Requirements:
+      - 8+ years experience
+      - Python, AWS
+    `;
+    const keywords = extractKeywords(jd, 25);
+    // Some keywords should have 'responsibilities' priority
+    const hasResponsibilities = Object.values(keywords.keywordPriorities).some(
+      p => p === 'responsibilities'
+    );
+    expect(hasResponsibilities).toBe(true);
+  });
+});
+
+// ============================================================
+// Phase 4 Tests: Title Extraction + Frequency Weighting
+// ============================================================
+
+describe('ATS Keywords - Enhanced title extraction', () => {
+  it('extracts title from explicit label patterns', () => {
+    const jd = `
+      Position: Senior Engineering Manager
+      Location: San Francisco
+      Requirements:
+      - 8+ years experience
+    `;
+    const keywords = extractKeywords(jd, 20);
+    expect(keywords.fromTitle.length).toBeGreaterThan(0);
+    expect(keywords.fromTitle.some(k =>
+      ['senior', 'engineering', 'manager'].includes(k)
+    )).toBe(true);
+  });
+
+  it('extracts title from first few lines with role words', () => {
+    const jd = `
+      About Acme Corp
+      Senior Data Scientist
+      Join our team to work on exciting ML problems.
+    `;
+    const keywords = extractKeywords(jd, 20);
+    expect(keywords.fromTitle.length).toBeGreaterThan(0);
+  });
+
+  it('supports expanded role words (analyst, scientist, designer)', () => {
+    const jd = 'Senior Product Designer\nRequirements: 5+ years design';
+    const keywords = extractKeywords(jd, 20);
+    // Phrase extraction may produce "product designer" as one token
+    expect(keywords.fromTitle.some(k => k.includes('designer') || k.includes('product'))).toBe(true);
+  });
+});
+
+describe('ATS Keywords - Frequency weighting', () => {
+  it('tracks keyword frequency in ExtractedKeywords', () => {
+    const jd = `
+      Python Python Python
+      AWS AWS
+      Kubernetes
+      Requirements:
+      - Python experience
+    `;
+    const keywords = extractKeywords(jd, 20);
+    expect(keywords.keywordFrequency).toBeDefined();
+    expect(keywords.keywordFrequency['python']).toBeGreaterThan(1);
+  });
+
+  it('frequency multiplier is bounded at 1.5x', () => {
+    const jd = `
+      Python Python Python Python Python Python Python Python Python Python
+      Requirements:
+      - Python is essential
+    `;
+    const keywords = extractKeywords(jd, 20);
+    // Even with 10+ occurrences, multiplier caps at 1.5
+    expect(keywords.keywordFrequency['python']).toBeGreaterThanOrEqual(5);
+    // The actual multiplier application is in ats-scorer, so we just verify frequency is tracked
+  });
+
+  it('frequency of 1 produces 1.0x multiplier concept', () => {
+    const jd = 'Engineering Manager\nRequirements:\n- Kubernetes experience';
+    const keywords = extractKeywords(jd, 20);
+    if (keywords.keywordFrequency['kubernetes'] !== undefined) {
+      expect(keywords.keywordFrequency['kubernetes']).toBeGreaterThanOrEqual(1);
+    }
+  });
+});
+
+// ============================================================
+// Phase 5 Tests: Dynamic Keyword Count
+// ============================================================
+
+describe('ATS Keywords - calculateDynamicKeywordCount', () => {
+  it('returns higher count for longer JDs', () => {
+    const shortJd = 'Python developer needed';
+    const longJd = Array(200).fill('Python AWS GCP Kubernetes Docker experience needed for this role.').join(' ');
+    const shortCount = calculateDynamicKeywordCount(shortJd);
+    const longCount = calculateDynamicKeywordCount(longJd);
+    expect(longCount).toBeGreaterThan(shortCount);
+  });
+
+  it('clamps to minimum of 10', () => {
+    const tinyJd = 'Hi';
+    expect(calculateDynamicKeywordCount(tinyJd)).toBeGreaterThanOrEqual(10);
+  });
+
+  it('clamps to maximum of 40', () => {
+    const hugeJd = Array(10000).fill('word ').join('');
+    expect(calculateDynamicKeywordCount(hugeJd)).toBeLessThanOrEqual(40);
+  });
+
+  it('accounts for section count', () => {
+    const jdWithSections = `
+      Requirements:
+      - Python
+      Nice to have:
+      - AWS
+      Responsibilities:
+      - Lead team
+      About us:
+      - Great company
+    `;
+    const jdWithoutSections = 'Python AWS Lead team Great company';
+    const countWithSections = calculateDynamicKeywordCount(jdWithSections);
+    const countWithoutSections = calculateDynamicKeywordCount(jdWithoutSections);
+    expect(countWithSections).toBeGreaterThanOrEqual(countWithoutSections);
+  });
+
+  it('is deterministic', () => {
+    const jd = 'Engineering Manager with Python AWS GCP Kubernetes';
+    const results = new Set<number>();
+    for (let i = 0; i < 10; i++) {
+      results.add(calculateDynamicKeywordCount(jd));
+    }
+    expect(results.size).toBe(1);
   });
 });

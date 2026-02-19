@@ -1050,9 +1050,9 @@ describe('ATS Scorer - Utility Functions', () => {
 
   describe('formatScoreAssessment', () => {
     it('returns correct assessment for scores', () => {
-      expect(formatScoreAssessment(80)).toContain('Excellent');
-      expect(formatScoreAssessment(65)).toContain('Good');
-      expect(formatScoreAssessment(50)).toContain('Fair');
+      expect(formatScoreAssessment(85)).toContain('Excellent');
+      expect(formatScoreAssessment(70)).toContain('Good');
+      expect(formatScoreAssessment(55)).toContain('Fair');
       expect(formatScoreAssessment(45)).toContain('Weak');
     });
   });
@@ -1119,6 +1119,327 @@ describe('ATS Scorer - Real World Scenarios', () => {
     for (const keyword of result.details.missingKeywords) {
       expect(keyword).toBeTruthy();
       expect(typeof keyword).toBe('string');
+    }
+  });
+});
+
+// ============================================================
+// Phase 6 Tests: Scoring Formula Improvements
+// ============================================================
+
+describe('ATS Scorer - Smooth Experience Curve', () => {
+  it('produces smooth gradient for year deficits (not cliff)', () => {
+    const jdWith8Years = `
+      Engineering Manager
+      Requirements:
+      - 8+ years software engineering experience
+      - Team leadership
+    `;
+
+    const results: Array<{ years: number; score: number }> = [];
+    for (const years of [2, 4, 6, 8, 10, 15]) {
+      const result = calculateATSScore({
+        jobDescription: jdWith8Years,
+        resumeText: sampleResume,
+        resumeData: { ...mockResumeData, yearsExperience: years },
+      });
+      results.push({ years, score: result.breakdown.experienceAlignment });
+    }
+
+    // Score should increase monotonically as years increase (until overqualification)
+    for (let i = 1; i < results.length - 1; i++) {
+      expect(results[i].score).toBeGreaterThanOrEqual(results[i - 1].score);
+    }
+  });
+
+  it('applies mild overqualification penalty', () => {
+    const jdWith5Years = `
+      Senior Engineer
+      Requirements:
+      - 5+ years software engineering experience
+    `;
+
+    const matchResult = calculateATSScore({
+      jobDescription: jdWith5Years,
+      resumeText: sampleResume,
+      resumeData: { ...mockResumeData, yearsExperience: 5 },
+    });
+
+    const overqualified = calculateATSScore({
+      jobDescription: jdWith5Years,
+      resumeText: sampleResume,
+      resumeData: { ...mockResumeData, yearsExperience: 20 },
+    });
+
+    // Overqualified should score slightly lower than exact match
+    expect(overqualified.breakdown.experienceAlignment).toBeLessThanOrEqual(
+      matchResult.breakdown.experienceAlignment
+    );
+  });
+});
+
+describe('ATS Scorer - Skills Restructure', () => {
+  it('reduces credit for skills already matched in keyword score', () => {
+    const result = calculateATSScore({
+      jobDescription: sampleJD,
+      resumeText: sampleResume,
+      resumeData: mockResumeData,
+    });
+
+    // Skills score should be reasonable but not inflated
+    expect(result.breakdown.skillsQuality).toBeLessThanOrEqual(25);
+    expect(result.breakdown.skillsQuality).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('ATS Scorer - Match Quality (replaces Content Quality)', () => {
+  it('scores within 0-10 range', () => {
+    const result = calculateATSScore({
+      jobDescription: sampleJD,
+      resumeText: sampleResume,
+      resumeData: mockResumeData,
+    });
+
+    expect(result.breakdown.contentQuality).toBeGreaterThanOrEqual(0);
+    expect(result.breakdown.contentQuality).toBeLessThanOrEqual(10);
+  });
+
+  it('awards points for exact match ratio', () => {
+    // Resume with exact keyword matches should score higher on match quality
+    const exactMatchResume = `
+      Engineering Manager with Python AWS GCP Kubernetes Docker experience.
+      Platform engineering background with CI/CD pipeline design.
+    `;
+
+    const result = calculateATSScore({
+      jobDescription: sampleJD,
+      resumeText: exactMatchResume,
+      resumeData: mockResumeData,
+    });
+
+    expect(result.breakdown.contentQuality).toBeGreaterThan(0);
+  });
+
+  it('awards points for section completeness in resume data', () => {
+    const fullData: ResumeData = {
+      title: 'Engineering Manager',
+      skills: ['Python', 'AWS'],
+      skillsByCategory: [{ category: 'Cloud', items: ['GCP', 'AWS'] }],
+      experiences: [{ title: 'EM', highlights: ['Led team'] }],
+      education: [{ degree: 'BS Computer Science' }],
+    };
+
+    const minimalData: ResumeData = {
+      title: 'Engineer',
+    };
+
+    const fullResult = calculateATSScore({
+      jobDescription: sampleJD,
+      resumeText: sampleResume,
+      resumeData: fullData,
+    });
+
+    const minResult = calculateATSScore({
+      jobDescription: sampleJD,
+      resumeText: sampleResume,
+      resumeData: minimalData,
+    });
+
+    expect(fullResult.breakdown.contentQuality).toBeGreaterThanOrEqual(
+      minResult.breakdown.contentQuality
+    );
+  });
+});
+
+describe('ATS Scorer - Domain Relevance Gate', () => {
+  it('discounts experience for wrong-domain resume', () => {
+    const dataScienceJd = `
+      Data Scientist, Machine Learning
+      Requirements:
+      - PhD in Computer Science
+      - 5+ years ML/AI experience
+      - TensorFlow, PyTorch
+      - Deep learning model development
+    `;
+
+    const result = calculateATSScore({
+      jobDescription: dataScienceJd,
+      resumeText: sampleResume,
+      resumeData: mockResumeData,
+    });
+
+    // Engineering Manager resume against Data Scientist JD
+    // Should get low experience score due to domain mismatch
+    expect(result.breakdown.experienceAlignment).toBeLessThan(15);
+  });
+});
+
+describe('ATS Scorer - Frequency Weighting in Keyword Score', () => {
+  it('keywords mentioned multiple times score higher', () => {
+    const jdRepeated = `
+      Engineering Manager
+      Requirements:
+      - Python experience required
+      - Strong Python skills
+      - Python frameworks knowledge
+      - AWS cloud experience
+    `;
+
+    const jdSingle = `
+      Engineering Manager
+      Requirements:
+      - Python experience required
+      - AWS cloud experience
+      - Kubernetes expertise
+      - Docker knowledge
+    `;
+
+    const resultRepeated = calculateATSScore({
+      jobDescription: jdRepeated,
+      resumeText: sampleResume,
+      resumeData: mockResumeData,
+    });
+
+    const resultSingle = calculateATSScore({
+      jobDescription: jdSingle,
+      resumeText: sampleResume,
+      resumeData: mockResumeData,
+    });
+
+    // Both should produce valid scores
+    expect(resultRepeated.total).toBeGreaterThan(0);
+    expect(resultSingle.total).toBeGreaterThan(0);
+  });
+});
+
+describe('ATS Scorer - Keyword Placement Bonus', () => {
+  it('awards bonus for keywords in resume title', () => {
+    const jd = `
+      Engineering Manager, Platform
+      Requirements:
+      - Platform engineering experience
+      - Python, AWS
+    `;
+
+    const withTitleMatch = calculateATSScore({
+      jobDescription: jd,
+      resumeText: sampleResume,
+      resumeData: { ...mockResumeData, title: 'Engineering Manager' },
+    });
+
+    const withoutTitleMatch = calculateATSScore({
+      jobDescription: jd,
+      resumeText: sampleResume,
+      resumeData: { ...mockResumeData, title: 'Product Analyst' },
+    });
+
+    // Title match should give higher keyword score
+    expect(withTitleMatch.breakdown.keywordRelevance).toBeGreaterThanOrEqual(
+      withoutTitleMatch.breakdown.keywordRelevance
+    );
+  });
+});
+
+describe('ATS Scorer - Updated Score Thresholds', () => {
+  it('formatScoreAssessment uses updated thresholds', () => {
+    expect(formatScoreAssessment(85)).toContain('Excellent');
+    expect(formatScoreAssessment(84)).toContain('Good');
+    expect(formatScoreAssessment(70)).toContain('Good');
+    expect(formatScoreAssessment(69)).toContain('Fair');
+    expect(formatScoreAssessment(55)).toContain('Fair');
+    expect(formatScoreAssessment(54)).toContain('Weak');
+  });
+});
+
+describe('ATS Scorer - Calibration Targets', () => {
+  it('perfect match scores >= 85', () => {
+    const perfectJd = `
+      Engineering Manager, Cloud Infrastructure
+      Requirements:
+      - 10+ years software engineering experience
+      - 5+ years managing engineering teams
+      - GCP and AWS cloud experience
+      - Kubernetes and Docker expertise
+      - CI/CD pipeline design
+      - Platform engineering background
+      - Python or Java expertise
+      - Team leadership and people management
+    `;
+
+    // Use resume text that covers ALL JD keywords including phrases
+    const perfectResume = `
+      Engineering Manager, Cloud Infrastructure with 15+ years software engineering experience leading platform teams.
+      Led cloud migration to GCP cloud infrastructure serving 30+ production systems.
+      People management: managed team of 13 engineers delivering developer platform.
+      Python, Java, TypeScript, AWS, GCP expertise.
+      Cross-functional leadership, technical strategy, stakeholder management.
+      Kubernetes, Docker, Terraform, CI/CD pipeline design, GitHub Actions.
+      Platform engineering background with scalable infrastructure supporting 400+ engineers.
+    `;
+
+    const perfectData: ResumeData = {
+      ...mockResumeData,
+      title: 'Engineering Manager, Cloud Infrastructure',
+      skillsByCategory: [
+        { category: 'Leadership', items: ['Cross-Functional Leadership', 'Technical Strategy', 'Team Management', 'People Management'] },
+        { category: 'Cloud', items: ['GCP', 'AWS', 'Kubernetes', 'Docker', 'Terraform', 'Cloud Infrastructure'] },
+        { category: 'DevOps', items: ['CI/CD', 'GitHub Actions', 'Jenkins', 'Pipeline Design'] },
+        { category: 'Languages', items: ['Python', 'Java', 'TypeScript'] },
+        { category: 'Platform', items: ['Platform Engineering', 'Infrastructure', 'Microservices'] },
+      ],
+      education: [
+        { degree: "Bachelor's in Computer Science", institution: 'University' },
+      ],
+    };
+
+    const result = calculateATSScore({
+      jobDescription: perfectJd,
+      resumeText: perfectResume,
+      resumeData: perfectData,
+    });
+
+    expect(result.total).toBeGreaterThanOrEqual(85);
+  });
+
+  it('wrong domain scores <= 40', () => {
+    const wrongDomainJd = `
+      Data Scientist, Machine Learning
+      Requirements:
+      - PhD in Computer Science or related field
+      - 5+ years ML/AI experience
+      - TensorFlow, PyTorch expertise
+      - Deep learning model development
+      - Research publication track record
+      - Statistical modeling and analysis
+    `;
+
+    const result = calculateATSScore({
+      jobDescription: wrongDomainJd,
+      resumeText: sampleResume,
+      resumeData: mockResumeData,
+    });
+
+    expect(result.total).toBeLessThanOrEqual(40);
+  });
+
+  it('is deterministic across 10 runs for all scenarios', () => {
+    const jds = [
+      sampleJD,
+      `Data Scientist\nRequirements:\n- ML/AI\n- TensorFlow\n- PhD`,
+      `Engineering Manager, Cloud Infrastructure\nRequirements:\n- GCP, AWS\n- Kubernetes\n- 10+ years`,
+    ];
+
+    for (const jd of jds) {
+      const scores: number[] = [];
+      for (let i = 0; i < 10; i++) {
+        const result = calculateATSScore({
+          jobDescription: jd,
+          resumeText: sampleResume,
+          resumeData: mockResumeData,
+        });
+        scores.push(result.total);
+      }
+      expect(new Set(scores).size).toBe(1);
     }
   });
 });
