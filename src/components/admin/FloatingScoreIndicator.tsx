@@ -35,18 +35,18 @@ export function FloatingScoreIndicator({
       <p className="text-xs font-medium text-[var(--color-text-muted)]">ATS Score</p>
       <div className="mt-1 flex items-baseline gap-1">
         <span className={`text-lg font-bold ${getScoreColor(initialScore)}`}>
-          {initialScore}
+          {Math.round(initialScore * 10) / 10}
         </span>
         {hasImprovement && (
           <>
             <span className="text-sm text-[var(--color-text-muted)]">→</span>
             <span className={`text-lg font-bold ${getScoreColor(currentScore)}`}>
-              {currentScore}
+              {Math.round(currentScore * 10) / 10}
             </span>
           </>
         )}
         <span className="text-xs text-[var(--color-text-muted)]">
-          (of {maximumScore})
+          (of {Math.round(maximumScore * 10) / 10})
         </span>
       </div>
     </button>
