@@ -21,12 +21,15 @@
     "content:ship": "tsx scripts/content-ship.ts",
     "resume:pull": "tsx scripts/resume-pull.ts",
     "resume:push": "tsx scripts/resume-push.ts",
-    "cleanup:chats": "tsx scripts/cleanup-chats.ts"
+    "cleanup:chats": "tsx scripts/cleanup-chats.ts",
+    "mcp": "tsx mcp/server.ts",
+    "mcp:dev": "DK_API_BASE_URL=http://localhost:3000 tsx mcp/server.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.15",
     "@ai-sdk/react": "^3.0.41",
     "@anthropic-ai/sdk": "^0.71.2",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "@react-pdf/renderer": "^4.3.2",
     "@upstash/redis": "^1.36.1",
     "@vercel/blob": "^2.0.0",

@@ -195,4 +195,53 @@ describe('CompatibilityScoreCard', () => {
     expect(screen.getByText('100')).toBeInTheDocument();
     expect(screen.getByText('Excellent')).toBeInTheDocument();
   });
+
+  it('renders undefined breakdown values as 0 not blank', () => {
+    const partialBreakdown = {
+      keywordRelevance: 28,
+      skillsQuality: 18,
+      experienceAlignment: 16,
+      contentQuality: undefined as unknown as number,
+    };
+
+    render(
+      <CompatibilityScoreCard
+        title="Test"
+        score={72}
+        breakdown={partialBreakdown}
+        assessment="Test"
+      />
+    );
+
+    expect(screen.getByText('0/10')).toBeInTheDocument();
+  });
+
+  it('rounds floating point scores to one decimal place', () => {
+    render(
+      <CompatibilityScoreCard
+        title="Test"
+        score={88.99999}
+        breakdown={mockBreakdown}
+        assessment="Test"
+      />
+    );
+
+    expect(screen.getByText('89')).toBeInTheDocument();
+    expect(screen.queryByText('88.99999')).not.toBeInTheDocument();
+  });
+
+  it('rounds floating point targetScore to one decimal place', () => {
+    render(
+      <CompatibilityScoreCard
+        title="Test"
+        score={60}
+        breakdown={mockBreakdown}
+        assessment="Test"
+        targetScore={84.55555}
+      />
+    );
+
+    expect(screen.getByText('84.6')).toBeInTheDocument();
+    expect(screen.queryByText('84.55555')).not.toBeInTheDocument();
+  });
 });

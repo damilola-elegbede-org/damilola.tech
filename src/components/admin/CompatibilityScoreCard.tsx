@@ -36,7 +36,7 @@ function ScoreBar({
   maxValue: number;
   description: string;
 }) {
-  const percentage = (value / maxValue) * 100;
+  const percentage = ((value ?? 0) / maxValue) * 100;
   const barColor =
     percentage >= 75 ? 'bg-green-500' : percentage >= 50 ? 'bg-blue-500' : percentage >= 25 ? 'bg-yellow-500' : 'bg-red-500';
 
@@ -47,7 +47,7 @@ function ScoreBar({
           {label}
         </span>
         <span className="text-[var(--color-text)]">
-          {value}/{maxValue}
+          {Math.round((value ?? 0) * 10) / 10}/{maxValue}
         </span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-[var(--color-bg-alt)]">
@@ -74,11 +74,11 @@ export function CompatibilityScoreCard({
       <h3 className="text-sm font-medium text-[var(--color-text-muted)]">{title}</h3>
 
       <div className="mt-4 flex items-baseline gap-2">
-        <span className={`text-4xl font-bold ${getScoreColor(score)}`}>{score}</span>
+        <span className={`text-4xl font-bold ${getScoreColor(score)}`}>{Math.round(score * 10) / 10}</span>
         {showTarget && (
           <>
             <span className="text-2xl text-[var(--color-text-muted)]">→</span>
-            <span className={`text-2xl font-medium ${getScoreColor(targetScore)}`}>{targetScore}</span>
+            <span className={`text-2xl font-medium ${getScoreColor(targetScore)}`}>{Math.round(targetScore * 10) / 10}</span>
           </>
         )}
         <span

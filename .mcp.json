@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "damilola-tech": {
+      "command": "npx",
+      "args": ["tsx", "mcp/server.ts"],
+      "env": {
+        "DK_API_KEY": "${DK_API_KEY}",
+        "DK_API_BASE_URL": "http://localhost:3000"
+      }
+    }
+  }
+}

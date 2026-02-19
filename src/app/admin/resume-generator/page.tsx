@@ -70,16 +70,17 @@ function calculateDynamicBreakdown(
     // Map section to breakdown category and distribute impact
     if (change.section === 'summary') {
       // Summary changes primarily affect keyword relevance
-      result.keywordRelevance = Math.min(40, result.keywordRelevance + Math.ceil(effectiveImpact * 0.7));
+      result.keywordRelevance = Math.min(45, result.keywordRelevance + Math.ceil(effectiveImpact * 0.7));
       result.experienceAlignment = Math.min(20, result.experienceAlignment + Math.floor(effectiveImpact * 0.3));
     } else if (change.section.startsWith('experience.')) {
-      // Experience bullets affect keyword relevance and alignment
-      result.keywordRelevance = Math.min(40, result.keywordRelevance + Math.ceil(effectiveImpact * 0.6));
-      result.experienceAlignment = Math.min(20, result.experienceAlignment + Math.floor(effectiveImpact * 0.4));
+      // Experience bullets affect keyword relevance, alignment, and content quality
+      result.keywordRelevance = Math.min(45, result.keywordRelevance + Math.ceil(effectiveImpact * 0.5));
+      result.experienceAlignment = Math.min(20, result.experienceAlignment + Math.round(effectiveImpact * 0.3));
+      result.contentQuality = Math.min(10, result.contentQuality + Math.floor(effectiveImpact * 0.2));
     } else if (change.section.startsWith('skills.')) {
       // Skills changes primarily affect skills quality
       result.skillsQuality = Math.min(25, result.skillsQuality + Math.ceil(effectiveImpact * 0.8));
-      result.keywordRelevance = Math.min(40, result.keywordRelevance + Math.floor(effectiveImpact * 0.2));
+      result.keywordRelevance = Math.min(45, result.keywordRelevance + Math.floor(effectiveImpact * 0.2));
     } else if (change.section.startsWith('education.')) {
       // Education changes affect alignment
       result.experienceAlignment = Math.min(20, result.experienceAlignment + effectiveImpact);
@@ -175,6 +176,7 @@ export default function ResumeGeneratorPage() {
 
       let fullText = '';
       let isFirstLine = true;
+      let metadata: { deterministicScore?: { total: number; breakdown: import('@/lib/types/resume-generation').ScoreBreakdown } } | null = null;
       const decoder = new TextDecoder();
 
       while (true) {
@@ -184,10 +186,15 @@ export default function ResumeGeneratorPage() {
         const chunk = decoder.decode(value, { stream: true });
         fullText += chunk;
 
-        // Extract metadata from first line (metadata contains wasUrl, extractedUrl)
+        // Extract metadata from first line (contains deterministic score)
         if (isFirstLine && fullText.includes('\n')) {
           const newlineIndex = fullText.indexOf('\n');
-          // Skip the metadata line, we don't need it client-side
+          const metadataLine = fullText.substring(0, newlineIndex);
+          try {
+            metadata = JSON.parse(metadataLine);
+          } catch {
+            // Non-JSON first line, ignore
+          }
           fullText = fullText.substring(newlineIndex + 1);
           isFirstLine = false;
         }
@@ -209,6 +216,15 @@ export default function ResumeGeneratorPage() {
       }
 
       const result: ResumeAnalysisResult = JSON.parse(jsonText);
+
+      // Override AI-generated score with deterministic score from server
+      if (metadata?.deterministicScore) {
+        result.currentScore = {
+          ...result.currentScore,
+          total: metadata.deterministicScore.total,
+          breakdown: metadata.deterministicScore.breakdown,
+        };
+      }
 
       // Validation logging (fire-and-forget for monitoring compliance)
       if (result.proposedChanges.length < 8) {
@@ -479,7 +495,8 @@ export default function ResumeGeneratorPage() {
       }
     }
 
-    return Math.min(analysisResult.scoreCeiling?.maximum ?? 100, score);
+    const capped = Math.min(analysisResult.scoreCeiling?.maximum ?? 100, score);
+    return Math.round(capped * 10) / 10;
   }, [analysisResult, acceptedIndices, reviewedChanges]);
 
   // Calculate dynamic breakdown based on accepted changes (with edit-aware rescoring)
@@ -496,11 +513,12 @@ export default function ResumeGeneratorPage() {
   // Maximum score if ALL changes accepted (constant for this analysis)
   const maximumScore = useMemo(() => {
     if (!analysisResult) return 0;
-    return Math.min(
+    const raw = Math.min(
       analysisResult.scoreCeiling?.maximum ?? 100,
       analysisResult.currentScore.total +
         analysisResult.proposedChanges.reduce((sum, c) => sum + c.impactPoints, 0)
     );
+    return Math.round(raw * 10) / 10;
   }, [analysisResult]);
 
   // Target score that respects ceiling (for display purposes)
