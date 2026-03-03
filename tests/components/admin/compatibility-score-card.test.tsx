@@ -39,6 +39,7 @@ describe('CompatibilityScoreCard', () => {
     expect(screen.getByText('60')).toBeInTheDocument();
     expect(screen.getByText('→')).toBeInTheDocument();
     expect(screen.getByText('85')).toBeInTheDocument();
+    expect(screen.getByText('(of 85)')).toBeInTheDocument();
   });
 
   it('does not show arrow when targetScore equals score', () => {
@@ -54,6 +55,7 @@ describe('CompatibilityScoreCard', () => {
 
     expect(screen.getByText('85')).toBeInTheDocument();
     expect(screen.queryByText('→')).not.toBeInTheDocument();
+    expect(screen.getByText('(of 85)')).toBeInTheDocument();
   });
 
   it('shows correct score label for excellent score (85+)', () => {

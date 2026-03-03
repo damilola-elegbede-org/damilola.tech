@@ -99,6 +99,11 @@ export function CompatibilityScoreCard({
         >
           {getScoreLabel(safeScore)}
         </span>
+        {safeTargetScore !== undefined && (
+          <span className="text-xs text-[var(--color-text-muted)]">
+            (of {Math.round(safeTargetScore * 10) / 10})
+          </span>
+        )}
       </div>
 
       <p className="mt-2 text-sm text-[var(--color-text-muted)]">{assessment}</p>

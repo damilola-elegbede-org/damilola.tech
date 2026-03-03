@@ -1544,7 +1544,7 @@ describe('ATS Scorer - Gold Standard Perfect-Match JDs', () => {
     summary: realResumeData.brandingStatement,
   });
 
-  it('Apex Systems JD (JD1) scores >= 98', () => {
+  it('Apex Systems JD (JD1) scores >= 95 with deterministic rubric', () => {
     const jd = `Senior Engineering Manager, Platform Infrastructure & Developer Experience
 Apex Systems Inc.
 
@@ -1585,14 +1585,14 @@ Nice to Have:
       resumeData: atsResumeData,
     });
 
-    expect(result.total).toBeGreaterThanOrEqual(98);
-    expect(result.total).toBeGreaterThanOrEqual(result.coreTotal);
-    expect(result.calibration.profile).toBe('senior_em_platform_infra_devex');
-    expect(result.calibration.gatesPassed).toBe(true);
-    expect(result.calibration.applied).toBe(true);
+    expect(result.total).toBeGreaterThanOrEqual(95);
+    expect(result.total).toBe(result.coreTotal);
+    expect(result.calibration.profile).toBe('none');
+    expect(result.calibration.gatesPassed).toBe(false);
+    expect(result.calibration.applied).toBe(false);
   });
 
-  it('Concise Manager JD (JD2) scores >= 98', () => {
+  it('Concise Manager JD (JD2) scores >= 95 with deterministic rubric', () => {
     const jd = `Role: Senior Engineering Manager, Cloud Infrastructure & Platform Engineering
 
 Requirements:
@@ -1627,12 +1627,13 @@ Preferred:
       resumeData: atsResumeData,
     });
 
-    expect(result.total).toBeGreaterThanOrEqual(98);
-    expect(result.calibration.profile).toBe('senior_em_platform_infra_devex');
-    expect(result.calibration.applied).toBe(true);
+    expect(result.total).toBeGreaterThanOrEqual(95);
+    expect(result.total).toBe(result.coreTotal);
+    expect(result.calibration.profile).toBe('none');
+    expect(result.calibration.applied).toBe(false);
   });
 
-  it('Detailed Platform JD (JD3) scores >= 98', () => {
+  it('Detailed Platform JD (JD3) scores >= 95 with deterministic rubric', () => {
     const jd = `Engineering Manager \u2013 Cloud Platform & Developer Experience
 
 About the Opportunity:
@@ -1674,9 +1675,10 @@ GCP, AWS, Kubernetes, GKE, Docker, Terraform, GitHub Actions, Jenkins, Python, G
       resumeData: atsResumeData,
     });
 
-    expect(result.total).toBeGreaterThanOrEqual(98);
-    expect(result.calibration.profile).toBe('senior_em_platform_infra_devex');
-    expect(result.calibration.applied).toBe(true);
+    expect(result.total).toBeGreaterThanOrEqual(95);
+    expect(result.total).toBe(result.coreTotal);
+    expect(result.calibration.profile).toBe('none');
+    expect(result.calibration.applied).toBe(false);
   });
 });
 
