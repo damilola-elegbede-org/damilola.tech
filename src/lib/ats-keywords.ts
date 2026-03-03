@@ -106,8 +106,10 @@ export const SKILL_SYNONYMS: Record<string, string[]> = {
   'scrum': ['sprint', 'sprint planning', 'scrum master', 'agile scrum'],
 
   // Architecture
-  'microservices': ['microservice', 'service-oriented', 'distributed services'],
+  'microservices': ['microservice', 'microservices architecture', 'service-oriented', 'distributed services'],
+  'microservices architecture': ['microservices', 'microservice architecture', 'service architecture'],
   'distributed systems': ['distributed computing', 'distributed architecture'],
+  'software engineering': ['software development', 'software engineer', 'software developer'],
   'api': ['api design', 'rest', 'restful', 'graphql', 'grpc', 'api development'],
   'event-driven': ['event sourcing', 'cqrs', 'message-driven', 'pub/sub'],
 
@@ -685,13 +687,14 @@ function extractJobTitle(jd: string): string | null {
   const rolePattern = /\b(engineer|manager|director|lead|senior|staff|principal|architect|developer|analyst|scientist|designer|head|vp|vice president|coordinator|administrator|specialist|consultant|strategist)\b/i;
 
   // Check for explicit label patterns first
+  // Use [ \t]* instead of \s* to avoid consuming newlines
   const titlePatterns = [
-    /job title:\s*([^\n]+)/i,
-    /position:\s*([^\n]+)/i,
-    /role:\s*([^\n]+)/i,
-    /title:\s*([^\n]+)/i,
-    /hiring for:\s*([^\n]+)/i,
-    /we are hiring[^:]*:\s*([^\n]+)/i,
+    /job title:[ \t]*([^\n]+)/i,
+    /position:[ \t]*([^\n]+)/i,
+    /role:[ \t]*([^\n]+)/i,
+    /title:[ \t]*([^\n]+)/i,
+    /hiring for:[ \t]*([^\n]+)/i,
+    /we are hiring[^:]*:[ \t]*([^\n]+)/i,
   ];
 
   for (const pattern of titlePatterns) {
@@ -742,13 +745,13 @@ function extractJobTitle(jd: string): string | null {
 
 /**
  * Calculate dynamic keyword count based on JD complexity.
- * Formula: clamp(15 + floor(words/50) + min(sections, 5), 10, 40)
+ * Formula: clamp(15 + floor(words/50) + min(sections, 5), 10, 50)
  */
 export function calculateDynamicKeywordCount(jd: string): number {
   const words = tokenize(jd).length;
   const sections = parseJDSections(jd).length;
   const count = 15 + Math.floor(words / 50) + Math.min(sections, 5);
-  return Math.max(10, Math.min(40, count));
+  return Math.max(10, Math.min(50, count));
 }
 
 /**

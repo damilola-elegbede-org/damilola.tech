@@ -30,6 +30,8 @@ const MAX_BODY_SIZE = 50 * 1024;
 function buildScorePayload(atsScore: ATSScore) {
   return {
     total: atsScore.total,
+    coreTotal: atsScore.coreTotal,
+    calibration: atsScore.calibration,
     breakdown: sanitizeBreakdown(atsScore.breakdown),
     matchedKeywords: atsScore.details.matchedKeywords,
     missingKeywords: atsScore.details.missingKeywords,
@@ -98,6 +100,7 @@ function buildAtsInput(jobDescription: string) {
       degree: e.degree,
       institution: e.institution,
     })) ?? [],
+    openToRoles: resumeData.openToRoles,
   };
 
   const resumeText = resumeDataToText({

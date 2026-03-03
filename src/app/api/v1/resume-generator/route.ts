@@ -101,6 +101,7 @@ function buildAtsInput(jobDescription: string) {
       degree: e.degree,
       institution: e.institution,
     })) ?? [],
+    openToRoles: resumeData.openToRoles,
   };
 
   const resumeText = resumeDataToText({
@@ -288,6 +289,8 @@ export async function POST(req: Request) {
         : (typeof parsed.roleTitle === 'string' ? parsed.roleTitle : 'Unknown'),
       currentScore: {
         total: atsScore.total,
+        coreTotal: atsScore.coreTotal,
+        calibration: atsScore.calibration,
         breakdown: sanitizeBreakdown(atsScore.breakdown),
         matchedKeywords: atsScore.details.matchedKeywords,
         missingKeywords: atsScore.details.missingKeywords,
