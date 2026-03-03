@@ -19,12 +19,6 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-// Mock @vercel/blob
-const mockList = vi.fn();
-vi.mock("@vercel/blob", () => ({
-  list: (...args: unknown[]) => mockList(...args),
-}));
-
 const mockSummary: ActivitySummary = {
   id: "abc-123",
   weekEnding: "2026-02-22",
@@ -38,24 +32,10 @@ const mockSummary: ActivitySummary = {
 // We test the page as an async server component by calling it directly
 // and awaiting the result rendered with render()
 async function renderPage(summaries: ActivitySummary[]) {
-  // Mock blob list to return blob URLs for each summary
-  const blobs = summaries.map((s, i) => ({
-    url: `https://blob.vercel-storage.com/activity-${i}.json`,
-    pathname: `damilola.tech/activity/${s.weekEnding}-${s.id}.json`,
-  }));
-  mockList.mockResolvedValue({ blobs, cursor: undefined });
-
-  // Mock fetch to return summary data when fetching blob URLs
-  global.fetch = vi.fn().mockImplementation((url: string) => {
-    const index = blobs.findIndex((b) => b.url === url);
-    if (index >= 0) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(summaries[index]),
-      } as unknown as Response);
-    }
-    return Promise.resolve({ ok: false } as unknown as Response);
-  });
+  global.fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve({ data: summaries }),
+  } as unknown as Response);
 
   // Dynamic import so mock is in place first
   const { default: Page } = await import(

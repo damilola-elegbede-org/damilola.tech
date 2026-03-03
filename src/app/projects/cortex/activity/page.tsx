@@ -1,10 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { list } from "@vercel/blob";
 import { Badge } from "@/components/ui";
 import type { ActivitySummary } from "@/lib/types/activity-summary";
-
-export const revalidate = 3600;
 
 export const metadata: Metadata = {
   title: "Engineering Activity — Cortex Agent Fleet | Damilola Elegbede",
@@ -12,37 +9,25 @@ export const metadata: Metadata = {
     "Weekly engineering activity from the Cortex multi-agent system — PRs shipped, features delivered, and highlights from each week.",
 };
 
-const ACTIVITY_PREFIX = "damilola.tech/activity/";
-
 async function getActivityData(): Promise<ActivitySummary[]> {
   try {
-    const allBlobs: { url: string }[] = [];
-    let cursor: string | undefined;
-    do {
-      const result = await list({ prefix: ACTIVITY_PREFIX, cursor, limit: 1000 });
-      allBlobs.push(...result.blobs);
-      cursor = result.cursor ?? undefined;
-    } while (cursor);
+    const baseUrl =
+      process.env.NEXT_PUBLIC_BASE_URL ??
+      (process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "http://localhost:3000");
 
-    const summaries: ActivitySummary[] = [];
-    const results = await Promise.allSettled(
-      allBlobs.map(async (blob) => {
-        const response = await fetch(blob.url, {
-          signal: AbortSignal.timeout(10000),
-        });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return (await response.json()) as ActivitySummary;
-      }),
-    );
+    const response = await fetch(`${baseUrl}/api/v1/activity?limit=52`, {
+      headers: {
+        "x-api-key": process.env.DK_API_KEY ?? "",
+      },
+      next: { revalidate: 3600 },
+    });
 
-    for (const result of results) {
-      if (result.status === "fulfilled") {
-        summaries.push(result.value);
-      }
-    }
+    if (!response.ok) return [];
 
-    summaries.sort((a, b) => (b.weekEnding < a.weekEnding ? -1 : b.weekEnding > a.weekEnding ? 1 : 0));
-    return summaries.slice(0, 52);
+    const json = await response.json();
+    return Array.isArray(json?.data) ? json.data : [];
   } catch {
     return [];
   }
