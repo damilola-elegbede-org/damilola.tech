@@ -714,7 +714,7 @@ export default function ResumeGeneratorPage() {
               breakdown={projectedBreakdown ?? analysisResult.currentScore.breakdown}
               assessment={acceptedIndices.size > 0 ? `After ${acceptedIndices.size} accepted changes` : 'No changes accepted yet'}
               highlight={true}
-              targetScore={acceptedIndices.size > 0 ? targetScore : undefined}
+              targetScore={targetScore}
             />
           </div>
 

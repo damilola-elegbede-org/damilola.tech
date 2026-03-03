@@ -48,6 +48,8 @@ export const STOPWORDS = new Set([
   'knowledge', 'experience', 'expertise', 'exposure', 'contributions',
   'passion', 'passionate', 'enthusiasm', 'comfortable', 'competence',
   'competent', 'skilled', 'capable', 'hands-on', 'background',
+  // Generic descriptor words that don't improve ATS matching quality
+  'significant', 'depth', 'track', 'record', 'scratch',
   // Numbers and time
   'years', 'year', 'months', 'month', 'days', 'day', 'time', 'times',
 ]);
@@ -224,6 +226,7 @@ export const KNOWN_PHRASES = new Set([
 
   // Cloud & Infrastructure
   'cloud infrastructure', 'infrastructure as code', 'cloud-native', 'cloud migration',
+  'cloud run', 'cloud monitoring', 'pub/sub',
   'container orchestration', 'platform engineering', 'developer platform',
   'google cloud platform', 'amazon web services', 'microsoft azure',
   'site reliability', 'reliability engineering',
@@ -318,6 +321,7 @@ export const TECH_KEYWORDS = new Set([
   // DevOps/CI-CD
   'jenkins', 'github', 'gitlab', 'bitbucket', 'circleci', 'travis',
   'argocd', 'spinnaker', 'tekton',
+  'cloud run', 'pub/sub',
   // Monitoring
   'prometheus', 'grafana', 'datadog', 'splunk', 'newrelic', 'pagerduty',
   'opentelemetry', 'jaeger',
@@ -745,13 +749,13 @@ function extractJobTitle(jd: string): string | null {
 
 /**
  * Calculate dynamic keyword count based on JD complexity.
- * Formula: clamp(15 + floor(words/50) + min(sections, 5), 10, 50)
+ * Formula: clamp(12 + floor(words/70) + min(sections, 6), 12, 40)
  */
 export function calculateDynamicKeywordCount(jd: string): number {
   const words = tokenize(jd).length;
   const sections = parseJDSections(jd).length;
-  const count = 15 + Math.floor(words / 50) + Math.min(sections, 5);
-  return Math.max(10, Math.min(50, count));
+  const count = 12 + Math.floor(words / 70) + Math.min(sections, 6);
+  return Math.max(12, Math.min(40, count));
 }
 
 /**
@@ -936,7 +940,17 @@ export function wordCount(text: string): number {
  * @param resumeText - Full text of the resume
  * @returns Match result with matched/missing keywords
  */
-export function matchKeywords(keywords: string[], resumeText: string): MatchResult {
+export interface MatchOptions {
+  allowStem?: boolean;
+  allowSynonyms?: boolean;
+}
+
+export function matchKeywords(
+  keywords: string[],
+  resumeText: string,
+  options: MatchOptions = {}
+): MatchResult {
+  const { allowStem = true, allowSynonyms = true } = options;
   const resumeLower = resumeText.toLowerCase();
   const resumeTokens = new Set(tokenize(resumeText));
   const resumeStems = new Set([...resumeTokens].map(stemWord));
@@ -972,7 +986,7 @@ export function matchKeywords(keywords: string[], resumeText: string): MatchResu
     }
 
     // 2. Check stem match (skip for phrases)
-    if (!isPhrase) {
+    if (allowStem && !isPhrase) {
       const keywordStem = stemWord(keywordLower);
       if (resumeStems.has(keywordStem)) {
         matched.push(keyword);
@@ -982,6 +996,11 @@ export function matchKeywords(keywords: string[], resumeText: string): MatchResu
     }
 
     // 3. Check synonym match using reverse index (O(1) lookup)
+    if (!allowSynonyms) {
+      missing.push(keyword);
+      continue;
+    }
+
     let synonymFound = false;
     const directSynonyms = SKILL_SYNONYMS[keywordLower] || [];
 
