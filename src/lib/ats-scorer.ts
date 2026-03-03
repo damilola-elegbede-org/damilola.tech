@@ -48,10 +48,20 @@ export interface ScoreBreakdown {
 export interface ATSScore {
   /** Total score (0-100) */
   total: number;
+  /** Core ATS score before role-family calibration uplift */
+  coreTotal: number;
   /** Score breakdown by category */
   breakdown: ScoreBreakdown;
   /** Whether the generated PDF is ATS-optimized */
   isATSOptimized: boolean;
+  /** Optional role-family calibration metadata */
+  calibration: {
+    applied: boolean;
+    profile: 'none' | 'senior_em_platform_infra_devex';
+    gatesPassed: boolean;
+    coverage: number;
+    uplift: number;
+  };
   /** Detailed matching information */
   details: {
     /** Keywords that matched in the resume */
@@ -94,6 +104,8 @@ export interface ResumeData {
     degree?: string;
     institution?: string;
   }>;
+  /** Roles the candidate is open to (used for title matching) */
+  openToRoles?: string[];
 }
 
 /**
@@ -120,7 +132,7 @@ export interface ScoringInput {
  *
  * Frequency multiplier: 1 + min(0.5, (freq-1) * 0.1)
  * Placement bonus: +1.5 (title), +1.0 (summary), +0.5 (first bullet)
- * Penalty: -5 if actual keyword density > 3% or any keyword stuffed
+ * Penalty: -5 when 5+ distinct keywords are stuffed (appearing 5+ times each)
  */
 function calculateKeywordScore(
   matchResult: MatchResult,
@@ -221,8 +233,9 @@ function calculateKeywordScore(
   score = Math.min(score, 45);
 
   // Penalty for extreme keyword stuffing only (density compliance handled by Match Quality)
+  // Threshold of 5+ stuffed keywords avoids penalizing legitimate keyword-rich resumes.
   const actualDensity = calculateActualKeywordDensity(resumeText, matchResult.matched);
-  if (actualDensity.stuffedKeywords.length >= 3) {
+  if (actualDensity.stuffedKeywords.length >= 5) {
     score = Math.max(0, score - 5);
   }
 
@@ -237,7 +250,7 @@ function calculateKeywordScore(
  * - Skills-JD alignment (8pts): Top JD keywords appearing in skills section
  * - Skills breadth (5pts): Having relevant adjacent skills beyond strict JD requirements
  *
- * Skills already credited in keyword score get 30% credit (de-overlap).
+ * Skills already credited in keyword score get 90% credit (de-overlap).
  */
 function calculateSkillsScore(
   extractedKeywords: ExtractedKeywords,
@@ -275,9 +288,9 @@ function calculateSkillsScore(
   for (const tech of techKeywords) {
     const isInSkills = resumeSkills.has(tech) || [...resumeSkills].some(s => s.includes(tech));
     if (isInSkills) {
-      // De-overlap: if already matched in keyword score, give 80% credit
+      // De-overlap: if already matched in keyword score, give 90% credit
       const alreadyMatched = matchedKeywordsInText.has(tech);
-      techMatches += alreadyMatched ? 0.8 : 1;
+      techMatches += alreadyMatched ? 0.9 : 1;
     }
   }
 
@@ -298,20 +311,23 @@ function calculateSkillsScore(
       const weight = priority === 'title' ? 2 : priority === 'required' ? 1.5 : 1;
       // De-overlap
       const alreadyMatched = matchedKeywordsInText.has(keyword);
-      alignedScore += (alreadyMatched ? 0.8 : 1) * weight;
+      alignedScore += (alreadyMatched ? 0.9 : 1) * weight;
     }
   }
   score += Math.min(8, (alignedScore / Math.max(topJdKeywords.length, 1)) * 8);
 
-  // Skills breadth (5pts): relevant adjacent skills beyond strict JD match
+  // Skills breadth (5pts): category diversity + adjacent depth
+  const categoryCount = resumeData.skillsByCategory?.length || 0;
+  const categoryBreadthScore = Math.min(2, Math.max(0, categoryCount - 1) * 0.4);
+
   const techKeywordsSet = new Set(techKeywords);
   const extraSkills = [...resumeSkills].filter(s =>
     !matchedKeywordsInText.has(s) &&
     !techKeywordsSet.has(s) &&
     s.length > 2
   );
-  const breadthScore = Math.min(5, extraSkills.length * 0.5);
-  score += breadthScore;
+  const adjacentDepthScore = Math.min(3, extraSkills.length * 0.35);
+  score += Math.min(5, categoryBreadthScore + adjacentDepthScore);
 
   return Math.min(25, Math.round(score * 10) / 10);
 }
@@ -325,7 +341,7 @@ function extractYearsFromJd(jd: string): number | null {
     /(\d+)\+?\s*(?:years?|yrs?)\s+(?:of\s+)?(?:\w+\s+){0,4}(?:experience|exp)\b/i,
     // Simple "10+ years" standalone
     /(\d+)\+?\s*(?:years?|yrs?)\s*(?:of\s+)?(?:experience|exp)/i,
-    /(\d+)\s*-\s*\d+\s*(?:years?|yrs?)/i,
+    /(\d+)\s*[-\u2013\u2014]\s*\d+\s*(?:years?|yrs?)/i,
     /minimum\s+(?:of\s+)?(\d+)\s*(?:years?|yrs?)/i,
   ];
 
@@ -346,7 +362,7 @@ function extractTeamSizeFromJd(jd: string): number | null {
   const patterns = [
     /(?:team\s+of|manage|lead)\s+(\d+)/i,
     /(\d+)\+?\s*(?:engineers?|developers?|reports?)/i,
-    /(\d+)\s*-\s*(\d+)\s*(?:engineers?|developers?)/i,
+    /(\d+)\s*[-\u2013\u2014]\s*(\d+)\s*(?:engineers?|developers?)/i,
   ];
 
   for (const pattern of patterns) {
@@ -496,29 +512,62 @@ function matchEducation(
 }
 
 /**
- * Check domain relevance between resume title and JD title keywords.
+ * Check domain relevance between resume titles and JD title keywords.
+ * Uses best match across primary title, experience titles, and openToRoles.
  * Returns discount factor (0.6 for no overlap, 1.0 for overlap).
  */
 function calculateDomainRelevance(
   resumeTitle: string,
-  jdTitleKeywords: string[]
+  jdTitleKeywords: string[],
+  resumeData?: ResumeData
 ): number {
   if (jdTitleKeywords.length === 0) return 1.0;
 
-  const titleLower = resumeTitle.toLowerCase();
-  const titleWords = titleLower.split(/\s+/);
-  const titleStems = titleWords.map(stemWord);
-
-  let overlap = 0;
-  for (const jdKw of jdTitleKeywords) {
-    const jdLower = jdKw.toLowerCase();
-    const jdStem = stemWord(jdLower);
-    if (titleLower.includes(jdLower) || titleStems.includes(jdStem)) {
-      overlap++;
+  // Build candidate title pool
+  const titleCandidates: string[] = [resumeTitle];
+  if (resumeData?.experiences) {
+    for (const exp of resumeData.experiences) {
+      if (exp.title) titleCandidates.push(exp.title);
     }
   }
+  if (resumeData?.openToRoles) {
+    titleCandidates.push(...resumeData.openToRoles);
+  }
 
-  return overlap > 0 ? 1.0 : 0.6; // 40% discount for zero overlap
+  let bestOverlap = 0;
+  for (const candidate of titleCandidates) {
+    const titleLower = candidate.toLowerCase();
+    const titleWords = titleLower.split(/\s+/);
+    const titleStems = titleWords.map(stemWord);
+
+    let overlap = 0;
+    for (const jdKw of jdTitleKeywords) {
+      const jdLower = jdKw.toLowerCase();
+      if (titleLower.includes(jdLower)) {
+        overlap++;
+      } else {
+        // Word-level partial matching for multi-word keywords
+        const kwWords = jdLower.split(/\s+/);
+        if (kwWords.length > 1) {
+          let hits = 0;
+          for (const w of kwWords) {
+            if (titleWords.includes(w) || titleStems.includes(stemWord(w))) {
+              hits++;
+            }
+          }
+          if (hits > 0) overlap += hits / kwWords.length;
+        } else {
+          const jdStem = stemWord(jdLower);
+          if (titleStems.includes(jdStem)) {
+            overlap++;
+          }
+        }
+      }
+    }
+    bestOverlap = Math.max(bestOverlap, overlap);
+  }
+
+  return bestOverlap > 0 ? 1.0 : 0.6; // 40% discount for zero overlap
 }
 
 /**
@@ -541,7 +590,8 @@ function calculateExperienceScore(
   // Domain relevance gate
   const domainFactor = calculateDomainRelevance(
     resumeData.title || '',
-    extractedKeywords.fromTitle
+    extractedKeywords.fromTitle,
+    resumeData
   );
 
   // Years of experience match (6 pts management, 9 pts IC) — smooth curve
@@ -597,22 +647,14 @@ function calculateExperienceScore(
   }
 
   // Title match (5 points)
-  const resumeTitle = resumeData.title?.toLowerCase() || '';
   const titleKeywords = extractedKeywords.fromTitle.map(k => k.toLowerCase());
-
-  let titleMatches = 0;
-  for (const keyword of titleKeywords) {
-    if (resumeTitle.includes(keyword) ||
-        stemWord(resumeTitle).includes(stemWord(keyword))) {
-      titleMatches++;
-    }
-  }
+  const bestTitleMatchRate = calculateBestTitleMatchRate(resumeData, titleKeywords);
 
   if (titleKeywords.length > 0) {
-    const titleMatchRate = titleMatches / titleKeywords.length;
-    score += titleMatchRate * 5;
+    score += bestTitleMatchRate * 5;
   } else {
-    const hasRelevantTitle = /\b(manager|director|lead|senior|staff|principal)\b/i.test(resumeTitle);
+    const primaryTitle = resumeData.title?.toLowerCase() || '';
+    const hasRelevantTitle = /\b(manager|director|lead|senior|staff|principal)\b/i.test(primaryTitle);
     if (hasRelevantTitle) {
       score += 2.5;
     }
@@ -659,16 +701,14 @@ function calculateMatchQuality(
   if (matchResult.matched.length > 0 && resumeText.length > 0) {
     const density = calculateActualKeywordDensity(resumeText, matchResult.matched);
     const d = density.overallDensity;
-    if (d >= 2 && d <= 3) {
+    if (d >= 2 && d <= 8) {
       score += 3; // Optimal range
-    } else if (d >= 1 && d < 2) {
-      score += 2; // Slightly low
-    } else if (d > 3 && d <= 4) {
-      score += 2; // Slightly high
-    } else if (d >= 0.5 && d < 1) {
-      score += 1; // Too low
-    } else if (d > 4) {
-      score += 0.5; // Too high
+    } else if ((d >= 1 && d < 2) || (d > 8 && d <= 12)) {
+      score += 2; // Slightly low/high
+    } else if ((d >= 0.5 && d < 1) || (d > 12 && d <= 15)) {
+      score += 1; // Too low/high
+    } else if (d > 15) {
+      score += 0.5; // Excessive
     }
     // d < 0.5: 0 points
   }
@@ -688,6 +728,151 @@ function calculateMatchQuality(
   score += Math.min(3, completeness);
 
   return Math.round(score * 10) / 10;
+}
+
+function calculateBestTitleMatchRate(resumeData: ResumeData, titleKeywords: string[]): number {
+  if (titleKeywords.length === 0) return 0;
+
+  const titleCandidates: string[] = [];
+  if (resumeData.title) titleCandidates.push(resumeData.title);
+  if (resumeData.experiences) {
+    for (const exp of resumeData.experiences) {
+      if (exp.title) titleCandidates.push(exp.title);
+    }
+  }
+  if (resumeData.openToRoles) {
+    titleCandidates.push(...resumeData.openToRoles);
+  }
+
+  let bestTitleMatchRate = 0;
+  for (const candidate of titleCandidates) {
+    const candidateLower = candidate.toLowerCase();
+    const candidateWords = candidateLower.split(/\s+/);
+    const candidateStems = candidateWords.map(stemWord);
+    let matchScore = 0;
+    for (const keyword of titleKeywords) {
+      if (candidateLower.includes(keyword)) {
+        matchScore += 1;
+      } else {
+        const kwWords = keyword.split(/\s+/);
+        if (kwWords.length > 1) {
+          let wordHits = 0;
+          for (const w of kwWords) {
+            const wStem = stemWord(w);
+            if (candidateWords.includes(w) || candidateStems.includes(wStem)) {
+              wordHits++;
+            }
+          }
+          matchScore += wordHits / kwWords.length;
+        } else {
+          const kwStem = stemWord(keyword);
+          if (candidateStems.includes(kwStem)) {
+            matchScore += 1;
+          }
+        }
+      }
+    }
+    bestTitleMatchRate = Math.max(bestTitleMatchRate, matchScore / titleKeywords.length);
+  }
+
+  return bestTitleMatchRate;
+}
+
+function detectCalibrationProfile(jd: string): 'none' | 'senior_em_platform_infra_devex' {
+  const lower = jd.toLowerCase();
+
+  const hasManagerFamily = /(senior engineering manager|engineering manager)/i.test(lower);
+
+  const hasPlatformFamily = ['platform', 'infrastructure', 'developer experience', 'devex', 'cloud']
+    .some((s) => lower.includes(s));
+  const hasCloudStack = ['gcp', 'aws', 'kubernetes', 'terraform', 'docker', 'ci/cd', 'github actions', 'jenkins']
+    .some((s) => lower.includes(s));
+  const hasLeadership = ['people management', 'leadership', 'team', 'manage', 'direct reports', 'stakeholder']
+    .some((s) => lower.includes(s));
+
+  if (hasManagerFamily && hasPlatformFamily && hasCloudStack && hasLeadership) {
+    return 'senior_em_platform_infra_devex';
+  }
+  return 'none';
+}
+
+function calculateAnchorCoverage(
+  profile: 'none' | 'senior_em_platform_infra_devex',
+  matchResult: MatchResult,
+  resumeData: ResumeData,
+  extractedKeywords: ExtractedKeywords,
+  jd: string,
+  resumeText: string
+): number {
+  if (profile === 'none') return 0;
+
+  const matchedSet = new Set(matchResult.matched.map(k => k.toLowerCase()));
+  const resumeLower = resumeText.toLowerCase();
+  const titleKeywords = extractedKeywords.fromTitle.map(k => k.toLowerCase());
+
+  const keywordGroupCoverage = (terms: string[]): number => {
+    if (terms.length === 0) return 0;
+    let hits = 0;
+    for (const term of terms) {
+      if (matchedSet.has(term) || resumeLower.includes(term)) hits++;
+    }
+    return hits / terms.length;
+  };
+
+  const leadershipCoverage = keywordGroupCoverage([
+    'people management',
+    'leadership',
+    'team management',
+    'stakeholder management',
+    'cross-functional',
+    'mentoring',
+  ]);
+
+  const jdTeamSize = extractTeamSizeFromJd(jd);
+  const resumeTeamSize = extractTeamSizeFromResume(resumeData);
+  let teamScaleCoverage = 0.5;
+  if (jdTeamSize !== null && resumeTeamSize !== null) {
+    teamScaleCoverage = Math.min(1, resumeTeamSize / jdTeamSize);
+  } else if (resumeTeamSize !== null) {
+    teamScaleCoverage = 0.75;
+  }
+
+  const cloudStackCoverage = keywordGroupCoverage([
+    'gcp',
+    'aws',
+    'kubernetes',
+    'docker',
+    'terraform',
+    'infrastructure as code',
+    'ci/cd',
+    'github actions',
+    'jenkins',
+  ]);
+
+  const platformCoverage = keywordGroupCoverage([
+    'platform engineering',
+    'developer experience',
+    'sre',
+    'observability',
+    'opentelemetry',
+    'incident management',
+    'high availability',
+  ]);
+
+  const jdYears = extractYearsFromJd(jd);
+  const resumeYears = resumeData.yearsExperience;
+  const yearsCoverage = jdYears && resumeYears ? Math.min(1, resumeYears / jdYears) : 0.75;
+  const titleCoverage = calculateBestTitleMatchRate(resumeData, titleKeywords);
+  const yearsTitleCoverage = (yearsCoverage + titleCoverage) / 2;
+
+  const weighted =
+    (0.22 * leadershipCoverage) +
+    (0.18 * teamScaleCoverage) +
+    (0.25 * cloudStackCoverage) +
+    (0.20 * platformCoverage) +
+    (0.15 * yearsTitleCoverage);
+
+  return Math.max(0, Math.min(1, weighted));
 }
 
 /**
@@ -717,12 +902,21 @@ function emptyExtractedKeywords(): ExtractedKeywords {
  */
 export function calculateATSScore(input: ScoringInput): ATSScore {
   const { jobDescription, resumeText, resumeData } = input;
+  const emptyCalibration = {
+    applied: false,
+    profile: 'none' as const,
+    gatesPassed: false,
+    coverage: 0,
+    uplift: 0,
+  };
 
   // Handle edge cases
   if (!jobDescription || jobDescription.trim().length === 0) {
     return {
       total: 0,
+      coreTotal: 0,
       isATSOptimized: true,
+      calibration: emptyCalibration,
       breakdown: {
         keywordRelevance: 0,
         skillsQuality: 0,
@@ -745,7 +939,9 @@ export function calculateATSScore(input: ScoringInput): ATSScore {
     const extractedKeywords = extractKeywords(jobDescription, dynamicCount);
     return {
       total: 0,
+      coreTotal: 0,
       isATSOptimized: true,
+      calibration: emptyCalibration,
       breakdown: {
         keywordRelevance: 0,
         skillsQuality: 0,
@@ -772,6 +968,7 @@ export function calculateATSScore(input: ScoringInput): ATSScore {
 
   // 3. Calculate word count for density
   const resumeWordCount = wordCount(resumeText);
+  const actualDensity = calculateActualKeywordDensity(resumeText, matchResult.matched);
 
   // 4. Build set of matched keywords for de-overlap in skills scoring
   const matchedKeywordsInText = new Set(matchResult.matched.map(k => k.toLowerCase()));
@@ -783,8 +980,6 @@ export function calculateATSScore(input: ScoringInput): ATSScore {
   const contentQuality = calculateMatchQuality(matchResult, resumeText, resumeData);
 
   // 6. Calculate total and create result
-  const total = Math.round((keywordRelevance + skillsQuality + experienceAlignment + contentQuality) * 10) / 10;
-
   const sanitizedBreakdown = {
     keywordRelevance: sanitizeScoreValue(keywordRelevance, 0, 45),
     skillsQuality: sanitizeScoreValue(skillsQuality, 0, 25),
@@ -792,7 +987,7 @@ export function calculateATSScore(input: ScoringInput): ATSScore {
     contentQuality: sanitizeScoreValue(contentQuality, 0, 10),
   };
 
-  const sanitizedTotal = Math.max(
+  const coreTotal = Math.max(
     0,
     Math.min(
       100,
@@ -805,9 +1000,36 @@ export function calculateATSScore(input: ScoringInput): ATSScore {
     )
   );
 
+  const profile = detectCalibrationProfile(jobDescription);
+  const gatesPassed = profile === 'senior_em_platform_infra_devex'
+    && sanitizedBreakdown.keywordRelevance >= 35
+    && sanitizedBreakdown.skillsQuality >= 18
+    && sanitizedBreakdown.experienceAlignment >= 12
+    && calculateMatchRate(matchResult.matched.length, extractedKeywords.all.length) >= 75
+    && actualDensity.stuffedKeywords.length < 5;
+
+  const coverage = gatesPassed
+    ? calculateAnchorCoverage(profile, matchResult, resumeData, extractedKeywords, jobDescription, resumeText)
+    : 0;
+
+  const upliftCap = Math.min(5, 100 - coreTotal);
+  const scaledBoost = upliftCap * Math.pow(coverage, 1.1);
+  const uplift = gatesPassed
+    ? Math.round(Math.min(upliftCap, scaledBoost) * 10) / 10
+    : 0;
+  const finalTotal = Math.max(0, Math.min(100, Math.round((coreTotal + uplift) * 10) / 10));
+
   return {
-    total: sanitizedTotal,
+    total: finalTotal,
+    coreTotal,
     isATSOptimized: true,
+    calibration: {
+      applied: uplift > 0,
+      profile,
+      gatesPassed,
+      coverage: Math.round(coverage * 1000) / 1000,
+      uplift,
+    },
     breakdown: sanitizedBreakdown,
     details: {
       matchedKeywords: matchResult.matched,

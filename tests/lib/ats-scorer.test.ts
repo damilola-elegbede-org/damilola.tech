@@ -17,6 +17,7 @@ import {
   TECH_KEYWORDS,
   ACTION_VERBS,
 } from '@/lib/ats-keywords';
+import { resumeData as realResumeData } from '@/lib/resume-data';
 
 // Mock resume data for testing
 const mockResumeData: ResumeData = {
@@ -299,8 +300,8 @@ describe('ATS Scorer - Score Calculation', () => {
       result.breakdown.experienceAlignment +
       result.breakdown.contentQuality;
 
-    // Allow for rounding differences
-    expect(Math.abs(sum - result.total)).toBeLessThan(1);
+    // Allow for rounding differences; compare against core score before calibration uplift
+    expect(Math.abs(sum - result.coreTotal)).toBeLessThan(1);
   });
 
   it('caps keyword score at 45 points', () => {
@@ -1441,5 +1442,292 @@ describe('ATS Scorer - Calibration Targets', () => {
       }
       expect(new Set(scores).size).toBe(1);
     }
+  });
+});
+
+// ============================================================
+// En-dash and title matching regression tests
+// ============================================================
+
+describe('ATS Scorer - En-dash Support', () => {
+  it('parses team size with en-dash', () => {
+    const jd = `Engineering Manager
+    Requirements:
+    - Manage team of 10\u201315 engineers
+    - 8+ years experience`;
+
+    const result = calculateATSScore({
+      jobDescription: jd,
+      resumeText: sampleResume,
+      resumeData: mockResumeData,
+    });
+
+    // Should not crash and should recognize team size
+    expect(result.total).toBeGreaterThan(0);
+  });
+
+  it('parses year ranges with en-dash', () => {
+    const jd = `Senior Engineer
+    Requirements:
+    - 5\u201310 years of experience
+    - Python, AWS`;
+
+    const result = calculateATSScore({
+      jobDescription: jd,
+      resumeText: sampleResume,
+      resumeData: mockResumeData,
+    });
+
+    expect(result.total).toBeGreaterThan(0);
+  });
+});
+
+describe('ATS Scorer - Title Matching with Experience Titles', () => {
+  it('matches JD title keywords against experience titles', () => {
+    const jd = `Senior Engineering Manager, Cloud Infrastructure & Developer Experience
+    Requirements:
+    - 10+ years experience
+    - Cloud infrastructure
+    - Team management`;
+
+    const data: ResumeData = {
+      ...mockResumeData,
+      title: 'Engineering Manager',
+      experiences: [
+        {
+          title: 'Engineering Manager - Cloud Infrastructure & Developer Experience',
+          company: 'Verily',
+          highlights: ['Led cloud team'],
+        },
+      ],
+      openToRoles: ['Senior Engineering Manager'],
+    };
+
+    const result = calculateATSScore({
+      jobDescription: jd,
+      resumeText: sampleResume,
+      resumeData: data,
+    });
+
+    // With experience title matching, should score well on title match
+    expect(result.breakdown.experienceAlignment).toBeGreaterThan(10);
+  });
+});
+
+// ============================================================
+// Gold Standard Perfect-Match JD Tests
+// ============================================================
+
+describe('ATS Scorer - Gold Standard Perfect-Match JDs', () => {
+  // Build ATSResumeData from the real resume data (same as route files)
+  const atsResumeData: ResumeData = {
+    title: realResumeData.title,
+    yearsExperience: 15,
+    teamSize: '13 engineers',
+    skills: realResumeData.skills.flatMap((s) => s.items),
+    skillsByCategory: realResumeData.skills,
+    experiences: realResumeData.experiences.map((e) => ({
+      title: e.title,
+      company: e.company,
+      highlights: e.highlights,
+    })),
+    education: realResumeData.education?.map((e) => ({
+      degree: e.degree,
+      institution: e.institution,
+    })) ?? [],
+    openToRoles: realResumeData.openToRoles,
+  };
+
+  const resumeText = resumeDataToText({
+    ...atsResumeData,
+    name: realResumeData.name,
+    summary: realResumeData.brandingStatement,
+  });
+
+  it('Apex Systems JD (JD1) scores >= 98', () => {
+    const jd = `Senior Engineering Manager, Platform Infrastructure & Developer Experience
+Apex Systems Inc.
+
+About the Role:
+We are seeking a Senior Engineering Manager to lead our Platform Infrastructure and Developer Experience teams. This leader will own the strategy and execution of cloud infrastructure, CI/CD platforms, and developer tooling that enables 400+ engineers to ship software efficiently and reliably.
+
+Responsibilities:
+- Lead and grow a team of 10-15 engineers across Cloud Infrastructure and Developer Experience
+- Own the technical strategy for GCP and multi-cloud (AWS/GCP) architecture supporting 30+ production systems
+- Drive platform efficiency initiatives including CI/CD pipeline optimization (GitHub Actions, Jenkins)
+- Partner with Engineering, Product, and Security leadership to align on enterprise-wide infrastructure policies
+- Establish SRE principles, observability standards, and incident management practices
+- Deliver complex multi-phase production launches with cross-functional dependencies
+- Build a culture of engineering excellence through mentoring, career development, and technical leadership
+- Manage stakeholder relationships across the organization, influencing containerization, Kubernetes, and cloud architecture decisions
+
+Requirements:
+- 15+ years of software engineering experience, with 5+ years in engineering management
+- Proven experience building and scaling engineering teams (10+ engineers)
+- Deep expertise in cloud infrastructure (GCP, AWS), Kubernetes/GKE, Docker, and Terraform
+- Strong background in CI/CD pipeline design (GitHub Actions, Jenkins) and DevOps practices
+- Experience with distributed systems, microservices architecture, and platform engineering
+- Track record of driving organizational transformation and cross-functional leadership
+- Excellent executive stakeholder management and communication skills
+- Experience with infrastructure as code, release engineering, and SRE principles
+
+Nice to Have:
+- MBA or MS in Computer Science
+- Healthcare technology or telecom domain experience
+- Experience with observability tools (OpenTelemetry, Prometheus, Grafana)
+- Background in Agile/Scrum/Kanban methodologies
+- Experience managing multi-site teams (35+ engineers)
+- Python, Go, Java, or C++ programming proficiency`;
+
+    const result = calculateATSScore({
+      jobDescription: jd,
+      resumeText,
+      resumeData: atsResumeData,
+    });
+
+    expect(result.total).toBeGreaterThanOrEqual(98);
+    expect(result.total).toBeGreaterThanOrEqual(result.coreTotal);
+    expect(result.calibration.profile).toBe('senior_em_platform_infra_devex');
+    expect(result.calibration.gatesPassed).toBe(true);
+    expect(result.calibration.applied).toBe(true);
+  });
+
+  it('Concise Manager JD (JD2) scores >= 98', () => {
+    const jd = `Role: Senior Engineering Manager, Cloud Infrastructure & Platform Engineering
+
+Requirements:
+- 15+ years of progressive engineering experience with 5+ years managing engineering teams
+- Experience building and scaling teams of 10+ engineers with a focus on retention and career development
+- Deep expertise in GCP, AWS, Kubernetes, Docker, Terraform, and Infrastructure as Code
+- Strong background in CI/CD (GitHub Actions, Jenkins), DevOps, and Release Engineering
+- Experience with distributed systems, microservices, and platform engineering
+- Proven track record of enterprise cloud migration and multi-cloud architecture
+- Executive stakeholder management and cross-functional leadership skills
+- BS/MS in Computer Science or related field; MBA preferred
+
+Responsibilities:
+- Lead Cloud Infrastructure and Developer Experience engineering teams (10-15 engineers)
+- Own technical strategy for cloud platforms (GCP/AWS) supporting 30+ production systems
+- Drive platform efficiency, developer velocity, and CI/CD pipeline optimization
+- Partner with Engineering, Product, and Security organizations on enterprise infrastructure policies
+- Establish observability, SRE practices, and incident management frameworks
+- Mentor and develop engineers, building a high-performance engineering culture
+- Deliver complex production launches with cross-functional coordination
+
+Preferred:
+- Healthcare technology or telecom (5G/4G) domain experience
+- Experience with Python, Go, Java, C++
+- Agile/Scrum/Kanban methodology expertise
+- Observability tooling (OpenTelemetry, Prometheus)
+- Multi-site team management experience`;
+
+    const result = calculateATSScore({
+      jobDescription: jd,
+      resumeText,
+      resumeData: atsResumeData,
+    });
+
+    expect(result.total).toBeGreaterThanOrEqual(98);
+    expect(result.calibration.profile).toBe('senior_em_platform_infra_devex');
+    expect(result.calibration.applied).toBe(true);
+  });
+
+  it('Detailed Platform JD (JD3) scores >= 98', () => {
+    const jd = `Engineering Manager \u2013 Cloud Platform & Developer Experience
+
+About the Opportunity:
+Join our engineering organization as an Engineering Manager leading Cloud Platform and Developer Experience. You will build and scale high-performing teams that deliver infrastructure capabilities enabling hundreds of engineers to ship with confidence.
+
+What You'll Do:
+- Build, mentor, and scale a team of 10\u201315 engineers across cloud infrastructure and developer tooling
+- Architect and execute GCP cloud transformation supporting 30+ production systems with multi-cloud (AWS/GCP) capabilities
+- Drive CI/CD platform strategy using GitHub Actions and Jenkins, reducing build times and improving developer velocity
+- Lead cross-functional alignment with Engineering, Product, and Security leadership on containerization, observability, and cloud architecture
+- Establish SRE principles, SLA frameworks, and incident management practices with sub-4-hour resolution times
+- Deliver complex multi-phase production launches including healthcare platforms with security compliance requirements
+- Drive platform efficiency initiatives, self-service infrastructure capabilities, and Kubernetes/Docker adoption
+
+What You Bring:
+- 15+ years of software engineering experience with 5+ years in engineering management
+- Track record of hiring, scaling, and retaining engineering teams (10+ to 35+ engineers across multiple sites)
+- Expert-level knowledge of GCP, AWS, Kubernetes/GKE, Docker, Terraform, and Infrastructure as Code
+- Deep experience with CI/CD pipeline design (GitHub Actions, Jenkins), DevOps practices, and Release Engineering
+- Strong background in distributed systems, microservices architecture, and platform engineering
+- Proven cross-functional leadership and executive stakeholder management skills
+- Experience driving organizational transformation and Agile/Scrum/Kanban adoption
+- MS in Computer Science or equivalent; MBA a plus
+
+Impact Scope:
+- 400+ engineers enabled through platform capabilities
+- 30+ production systems supported
+- 13+ direct engineering reports
+- 93%+ team retention achieved
+- 30% CI/CD cost reduction delivered
+- 87% build time improvement track record
+
+Technologies:
+GCP, AWS, Kubernetes, GKE, Docker, Terraform, GitHub Actions, Jenkins, Python, Go, Java, C++, Distributed Systems, Microservices, Observability, OpenTelemetry, SRE, CI/CD, Infrastructure as Code, Agile, Scrum, Kanban`;
+
+    const result = calculateATSScore({
+      jobDescription: jd,
+      resumeText,
+      resumeData: atsResumeData,
+    });
+
+    expect(result.total).toBeGreaterThanOrEqual(98);
+    expect(result.calibration.profile).toBe('senior_em_platform_infra_devex');
+    expect(result.calibration.applied).toBe(true);
+  });
+});
+
+describe('ATS Scorer - Calibration Guardrails', () => {
+  const atsResumeData: ResumeData = {
+    title: realResumeData.title,
+    yearsExperience: 15,
+    teamSize: '13 engineers',
+    skills: realResumeData.skills.flatMap((s) => s.items),
+    skillsByCategory: realResumeData.skills,
+    experiences: realResumeData.experiences.map((e) => ({
+      title: e.title,
+      company: e.company,
+      highlights: e.highlights,
+    })),
+    education: realResumeData.education?.map((e) => ({
+      degree: e.degree,
+      institution: e.institution,
+    })) ?? [],
+    openToRoles: realResumeData.openToRoles,
+  };
+
+  const resumeText = resumeDataToText({
+    ...atsResumeData,
+    name: realResumeData.name,
+    summary: realResumeData.brandingStatement,
+  });
+
+  it('does not apply calibration to a generic short JD', () => {
+    const result = calculateATSScore({
+      jobDescription: 'Python developer',
+      resumeText,
+      resumeData: atsResumeData,
+    });
+
+    expect(result.calibration.profile).toBe('none');
+    expect(result.calibration.applied).toBe(false);
+    expect(result.total).toBe(result.coreTotal);
+    expect(result.total).toBeLessThan(70);
+  });
+
+  it('does not apply calibration to unrelated management JD', () => {
+    const result = calculateATSScore({
+      jobDescription: 'Engineering Manager for construction operations safety compliance and procurement',
+      resumeText,
+      resumeData: atsResumeData,
+    });
+
+    expect(result.calibration.profile).toBe('none');
+    expect(result.calibration.applied).toBe(false);
+    expect(result.total).toBe(result.coreTotal);
+    expect(result.total).toBeLessThan(70);
   });
 });

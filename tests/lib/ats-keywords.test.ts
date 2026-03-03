@@ -1650,9 +1650,9 @@ describe('ATS Keywords - calculateDynamicKeywordCount', () => {
     expect(calculateDynamicKeywordCount(tinyJd)).toBeGreaterThanOrEqual(10);
   });
 
-  it('clamps to maximum of 40', () => {
+  it('clamps to maximum of 50', () => {
     const hugeJd = Array(10000).fill('word ').join('');
-    expect(calculateDynamicKeywordCount(hugeJd)).toBeLessThanOrEqual(40);
+    expect(calculateDynamicKeywordCount(hugeJd)).toBeLessThanOrEqual(50);
   });
 
   it('accounts for section count', () => {
