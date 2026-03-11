@@ -198,7 +198,7 @@ Weave the narrative naturally: describe the challenge, what Damilola did, and th
 
 Example - Contact info format:
 - **Email:** damilola.elegbede@gmail.com
-- **Phone:** 303 641 2581
+- **Phone:** (303) 641-2581
 - **LinkedIn:** [linkedin.com/in/damilola-elegbede](https://linkedin.com/in/damilola-elegbede/)
 - **Location:** Boulder, CO
 
