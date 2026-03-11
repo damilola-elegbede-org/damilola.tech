@@ -20,8 +20,7 @@ describe('health API route', () => {
 
     const { GET } = await import('@/app/api/health/route');
 
-    const request = new Request('https://damilola.tech/api/health');
-    const response = await GET(request);
+    const response = await GET();
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -39,8 +38,7 @@ describe('health API route', () => {
   it('disables caching for real-time health checks', async () => {
     const { GET } = await import('@/app/api/health/route');
 
-    const request = new Request('https://damilola.tech/api/health');
-    const response = await GET(request);
+    const response = await GET();
 
     expect(response.headers.get('Cache-Control')).toBe('no-store, max-age=0');
     expect(response.headers.get('X-Health-Endpoint')).toBe('/api/health');
