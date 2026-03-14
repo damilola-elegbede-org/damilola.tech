@@ -16,7 +16,7 @@
  * - targetRoles (resume-full.json has a curated short list)
  */
 
-import { readFileSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, writeFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { join } from "path";
 import { resumeData } from "../src/lib/resume-data";
@@ -109,12 +109,28 @@ export function generateResumeJson(
 export function readExistingResumeJson(
   jsonPath: string = JSON_PATH,
 ): ExistingResumeJson {
-  try {
-    return JSON.parse(readFileSync(jsonPath, "utf-8")) as ExistingResumeJson;
-  } catch (error) {
-    console.error(`❌ Failed to read or parse ${jsonPath}:`, error);
-    process.exit(1);
+  if (!existsSync(jsonPath)) {
+    throw new Error(`Local file not found: ${jsonPath}`);
   }
+  const content = readFileSync(jsonPath, "utf-8");
+  return JSON.parse(content) as ExistingResumeJson;
+}
+
+function readExistingResumeJsonOrSkip(
+  jsonPath: string = JSON_PATH,
+): ExistingResumeJson | null {
+  if (existsSync(jsonPath)) {
+    return readExistingResumeJson(jsonPath);
+  }
+
+  // Submodule not available (CI/Vercel) — skip gracefully
+  console.log(
+    `⏭ Skipping resume-json generation: ${jsonPath} not found (submodule not available).`,
+  );
+  console.log(
+    `  This is expected on Vercel builds. Run locally with submodule to regenerate.`,
+  );
+  return null;
 }
 
 export function writeResumeJson(
@@ -132,7 +148,8 @@ export function writeResumeJson(
 }
 
 export function main(): void {
-  const existing = readExistingResumeJson();
+  const existing = readExistingResumeJsonOrSkip();
+  if (!existing) return; // Submodule not available — skip
   const result = generateResumeJson(existing);
   writeResumeJson(result);
 }

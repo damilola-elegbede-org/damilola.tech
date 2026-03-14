@@ -92,26 +92,10 @@ describe("readExistingResumeJson", () => {
     vi.restoreAllMocks();
   });
 
-  it("logs a descriptive error and exits when the JSON file is missing", () => {
-    const errorSpy = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation(((
-      code?: string | number | null,
-    ) => {
-      throw new Error(`process.exit:${code}`);
-    }) as never);
-
+  it("throws a descriptive error when the JSON file is missing", () => {
     expect(() => readExistingResumeJson("/does/not/exist.json")).toThrow(
-      "process.exit:1",
+      "Local file not found: /does/not/exist.json",
     );
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining(
-        "❌ Failed to read or parse /does/not/exist.json:",
-      ),
-      expect.any(Error),
-    );
-    expect(exitSpy).toHaveBeenCalledWith(1);
   });
 });
 
@@ -160,27 +144,13 @@ describe("writeResumeJson", () => {
     }
   });
 
-  it("surfaces invalid JSON with a clear error message", () => {
+  it("throws on invalid JSON content", () => {
     const dir = mkdtempSync(join(tmpdir(), "generate-resume-json-"));
     const filePath = join(dir, "resume-full.json");
-    const errorSpy = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation(((
-      code?: string | number | null,
-    ) => {
-      throw new Error(`process.exit:${code}`);
-    }) as never);
 
     try {
       writeFileSync(filePath, "{invalid json");
-
-      expect(() => readExistingResumeJson(filePath)).toThrow("process.exit:1");
-      expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringContaining(`❌ Failed to read or parse ${filePath}:`),
-        expect.any(Error),
-      );
-      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(() => readExistingResumeJson(filePath)).toThrow();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
