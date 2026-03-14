@@ -239,7 +239,7 @@ export const suggestedQuestions: SuggestedQuestion[] = [
   },
   {
     label: "Scaling Teams",
-    question: "Tell me about a time you scaled a team",
+    question: "Tell me about a time you scaled a team?",
   },
   {
     label: "Conflict Resolution",
