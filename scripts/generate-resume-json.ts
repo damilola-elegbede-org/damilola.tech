@@ -20,7 +20,6 @@ import { existsSync, readFileSync, writeFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { join } from "path";
 import { resumeData } from "../src/lib/resume-data";
-import { fetchBlob } from "../src/lib/blob";
 
 export const JSON_PATH = join(
   process.cwd(),
@@ -117,33 +116,21 @@ export function readExistingResumeJson(
   return JSON.parse(content) as ExistingResumeJson;
 }
 
-async function readExistingResumeJsonWithFallback(
+function readExistingResumeJsonOrSkip(
   jsonPath: string = JSON_PATH,
-): Promise<ExistingResumeJson> {
-  // Try local file first (submodule available)
+): ExistingResumeJson | null {
   if (existsSync(jsonPath)) {
-    console.log(`  Reading existing resume from local: ${jsonPath}`);
     return readExistingResumeJson(jsonPath);
   }
 
-  // Fallback: fetch from Vercel Blob (CI/Vercel builds where submodule is unavailable)
+  // Submodule not available (CI/Vercel) — skip gracefully
   console.log(
-    `  Local file not found, fetching resume-full.json from Vercel Blob...`,
+    `⏭ Skipping resume-json generation: ${jsonPath} not found (submodule not available).`,
   );
-  try {
-    const blobContent = await fetchBlob("resume-full.json");
-    if (!blobContent) {
-      throw new Error("Empty response from Vercel Blob");
-    }
-    console.log(`  ✓ Fetched resume-full.json from Vercel Blob`);
-    return JSON.parse(blobContent) as ExistingResumeJson;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(
-      `❌ Failed to read resume-full.json from any source: ${message}`,
-    );
-    process.exit(1);
-  }
+  console.log(
+    `  This is expected on Vercel builds. Run locally with submodule to regenerate.`,
+  );
+  return null;
 }
 
 export function writeResumeJson(
@@ -160,8 +147,9 @@ export function writeResumeJson(
   }
 }
 
-export async function main(): Promise<void> {
-  const existing = await readExistingResumeJsonWithFallback();
+export function main(): void {
+  const existing = readExistingResumeJsonOrSkip();
+  if (!existing) return; // Submodule not available — skip
   const result = generateResumeJson(existing);
   writeResumeJson(result);
 }
@@ -169,8 +157,5 @@ export async function main(): Promise<void> {
 const isDirectRun = process.argv[1] === fileURLToPath(import.meta.url);
 
 if (isDirectRun) {
-  main().catch((error) => {
-    console.error("Error:", error);
-    process.exit(1);
-  });
+  main();
 }
