@@ -10,6 +10,7 @@ import {
   Projects,
   ResumeCta,
   Contact,
+  GitHubActivity,
 } from '@/components/sections';
 import { ChatFab, ChatPanel } from '@/components/chat';
 
@@ -35,6 +36,7 @@ export default function Home() {
         <Projects />
         <FitAssessment />
         <ResumeCta />
+        <GitHubActivity />
         <Contact />
       </main>
 

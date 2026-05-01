@@ -6,3 +6,4 @@ export { Education } from './education';
 export { Projects } from './projects';
 export { Contact } from './contact';
 export { ResumeCta } from './resume-cta';
+export { GitHubActivity } from './github-activity';
