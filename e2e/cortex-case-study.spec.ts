@@ -18,17 +18,19 @@ test.describe('Cortex Case Study Page', () => {
   });
 
   test('should display all four impact metrics', async ({ page }) => {
-    await expect(page.getByText('73+', { exact: true })).toBeVisible();
-    await expect(page.getByText('Tasks completed autonomously')).toBeVisible();
+    const metricsGrid = page.locator('.grid').first();
 
-    await expect(page.getByText('20+', { exact: true })).toBeVisible();
-    await expect(page.getByText(/PRs in D's review queue/i)).toBeVisible();
+    await expect(metricsGrid.getByText('73+', { exact: true })).toBeVisible();
+    await expect(metricsGrid.getByText('Tasks completed autonomously')).toBeVisible();
 
-    await expect(page.getByText('5', { exact: true })).toBeVisible();
-    await expect(page.getByText('Repos actively maintained')).toBeVisible();
+    await expect(metricsGrid.getByText('20+', { exact: true })).toBeVisible();
+    await expect(metricsGrid.getByText(/PRs in D's review queue/i)).toBeVisible();
 
-    await expect(page.getByText('14.5M', { exact: true })).toBeVisible();
-    await expect(page.getByText('Tokens/week (post-efficiency trim)', { exact: true })).toBeVisible();
+    await expect(metricsGrid.getByText('5', { exact: true })).toBeVisible();
+    await expect(metricsGrid.getByText('Repos actively maintained')).toBeVisible();
+
+    await expect(metricsGrid.getByText('14.5M', { exact: true })).toBeVisible();
+    await expect(metricsGrid.getByText('Tokens/week (post-efficiency trim)', { exact: true })).toBeVisible();
   });
 
   test('should display all content sections', async ({ page }) => {
@@ -40,8 +42,9 @@ test.describe('Cortex Case Study Page', () => {
   });
 
   test('should display breadcrumb back link', async ({ page }) => {
-    const breadcrumb = page.getByRole('navigation');
-    await expect(breadcrumb.getByRole('link', { name: /back to projects/i })).toBeVisible();
+    const backLink = page.getByRole('link', { name: '← Back to Projects' });
+    await expect(backLink).toBeVisible();
+    await expect(backLink).toHaveAttribute('href', '/#projects');
   });
 
   test('breadcrumb back link navigates to /#projects', async ({ page }) => {
