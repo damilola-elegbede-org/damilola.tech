@@ -27,7 +27,9 @@ describe('AdminNav', () => {
     expect(screen.getByText('Usage')).toBeInTheDocument();
     expect(screen.getByText('Chats')).toBeInTheDocument();
     expect(screen.getByText('Fit Assessments')).toBeInTheDocument();
+    expect(screen.getByText('Job Pipeline')).toBeInTheDocument();
     expect(screen.getByText('Resume Generator')).toBeInTheDocument();
+    expect(screen.getByText('API Keys')).toBeInTheDocument();
     expect(screen.getByText('Audit Log')).toBeInTheDocument();
     expect(screen.getByText('Docs')).toBeInTheDocument();
   });
@@ -45,7 +47,9 @@ describe('AdminNav', () => {
     const usageLink = screen.getByText('Usage').closest('a');
     const chatsLink = screen.getByText('Chats').closest('a');
     const fitAssessmentsLink = screen.getByText('Fit Assessments').closest('a');
+    const jobPipelineLink = screen.getByText('Job Pipeline').closest('a');
     const resumeGeneratorLink = screen.getByText('Resume Generator').closest('a');
+    const apiKeysLink = screen.getByText('API Keys').closest('a');
     const auditLogLink = screen.getByText('Audit Log').closest('a');
     const docsLink = screen.getByText('Docs').closest('a');
 
@@ -54,7 +58,9 @@ describe('AdminNav', () => {
     expect(usageLink).toHaveAttribute('href', '/admin/usage');
     expect(chatsLink).toHaveAttribute('href', '/admin/chats');
     expect(fitAssessmentsLink).toHaveAttribute('href', '/admin/fit-assessments');
+    expect(jobPipelineLink).toHaveAttribute('href', '/admin/applications');
     expect(resumeGeneratorLink).toHaveAttribute('href', '/admin/resume-generator');
+    expect(apiKeysLink).toHaveAttribute('href', '/admin/api-keys');
     expect(auditLogLink).toHaveAttribute('href', '/admin/audit');
     expect(docsLink).toHaveAttribute('href', '/admin/docs');
   });
@@ -110,8 +116,8 @@ describe('AdminNav', () => {
 
     // Each nav item has an SVG icon
     const svgElements = container.querySelectorAll('svg');
-    // 9 nav items + 1 logout button = 10 SVG icons
-    expect(svgElements.length).toBe(10);
+    // 10 nav items + 1 logout button = 11 SVG icons
+    expect(svgElements.length).toBe(11);
   });
 
   it('applies hover styles to inactive links', () => {
