@@ -13,6 +13,16 @@ export const APPLICATION_STATUSES = [
 
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
+export const APPLICATION_STAGES = [
+  'Applied',
+  'PhoneScreen',
+  'Technical',
+  'Offer',
+  'Rejected',
+] as const;
+
+export type ApplicationStage = (typeof APPLICATION_STAGES)[number];
+
 export interface Application {
   id: string;
   company: string;
@@ -21,6 +31,7 @@ export interface Application {
   role_id: string | null;
   applied_at: string; // ISO-Z
   status: ApplicationStatus;
+  stage: ApplicationStage; // interview stage, defaults to 'Applied'
   score: number | null; // 0–100
   notes: string | null;
   cover_letter_draft?: string | null;
@@ -31,5 +42,5 @@ export interface Application {
 /** Subset returned in POST 201 and GET list items */
 export type ApplicationSummary = Pick<
   Application,
-  'id' | 'company' | 'title' | 'applied_at' | 'status' | 'score' | 'url' | 'notes' | 'role_id' | 'cover_letter_draft'
+  'id' | 'company' | 'title' | 'applied_at' | 'status' | 'stage' | 'score' | 'url' | 'notes' | 'role_id' | 'cover_letter_draft'
 >;

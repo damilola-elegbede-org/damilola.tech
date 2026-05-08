@@ -26,6 +26,7 @@ const makeApp = (overrides: Partial<Application> = {}): Application => ({
   role_id: null,
   applied_at: '2026-04-23T14:00:00Z',
   status: 'applied',
+  stage: 'Applied',
   score: 88,
   notes: null,
   created_at: '2026-04-23T14:00:00Z',

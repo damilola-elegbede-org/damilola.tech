@@ -7,7 +7,7 @@
  */
 
 import { Redis } from '@upstash/redis';
-import type { Application } from '@/lib/types/application';
+import type { Application, ApplicationStage } from '@/lib/types/application';
 
 // Redis key helpers
 const HASH_KEY = (id: string) => `applications:${id}`;
@@ -42,6 +42,7 @@ export async function saveApplication(app: Application): Promise<void> {
     role_id: app.role_id ?? '',
     applied_at: app.applied_at,
     status: app.status,
+    stage: app.stage ?? 'Applied',
     score: app.score !== null ? String(app.score) : '',
     notes: app.notes ?? '',
     cover_letter_draft: app.cover_letter_draft ?? '',
@@ -100,6 +101,33 @@ export async function getApplications(ids: string[]): Promise<Application[]> {
   return apps;
 }
 
+/**
+ * Update the interview stage on an existing application.
+ * Returns the updated record, or null if the application does not exist.
+ */
+export async function updateApplicationStage(
+  id: string,
+  stage: ApplicationStage
+): Promise<Application | null> {
+  const client = getRedis();
+  const hashKey = HASH_KEY(id);
+
+  const exists = await client.exists(hashKey);
+  if (!exists) return null;
+
+  const now = new Date().toISOString();
+  await client.hset(hashKey, { stage, updated_at: now });
+
+  const raw = await client.hgetall(hashKey);
+  if (!raw || Object.keys(raw).length === 0) return null;
+  // TOCTOU guard: if hset raced with a delete, the hash may be partial
+  if (!raw['created_at']) {
+    await client.del(hashKey);
+    return null;
+  }
+  return deserialize(raw as Record<string, string>);
+}
+
 function deserialize(raw: Record<string, string>): Application {
   return {
     id: raw['id'] ?? '',
@@ -109,6 +137,7 @@ function deserialize(raw: Record<string, string>): Application {
     role_id: raw['role_id'] || null,
     applied_at: raw['applied_at'] ?? '',
     status: (raw['status'] ?? 'applied') as Application['status'],
+    stage: (raw['stage'] || 'Applied') as Application['stage'],
     score: raw['score'] !== '' && raw['score'] !== undefined ? Number(raw['score']) : null,
     notes: raw['notes'] || null,
     cover_letter_draft: raw['cover_letter_draft'] || null,
