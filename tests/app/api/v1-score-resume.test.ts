@@ -182,7 +182,7 @@ describe('v1/score-resume API route', () => {
             read: async () => {
               if (done) return { done: true, value: undefined };
               done = true;
-              return { done: false, value: new TextEncoder().encode(`<html><body>Job description responsibilities requirements qualifications experience skills about the role what we're looking for minimum requirements preferred qualifications and extensive details for senior engineering leadership cloud infrastructure kubernetes terraform cost optimization distributed systems observability and delivery excellence with measurable outcomes and team management expectations for this position.</body></html>`) };
+              return { done: false, value: new TextEncoder().encode(`<html><body>Job description responsibilities requirements qualifications experience skills about the role what we're looking for minimum requirements preferred qualifications and extensive details for senior engineering leadership cloud infrastructure kubernetes terraform cost optimization distributed systems observability and delivery excellence with measurable outcomes and team management expectations for this position. Duties include driving technical roadmap, managing oncall rotations, and hiring senior engineers. Apply now to join the platform team.</body></html>`) };
             },
             releaseLock: () => {},
           };

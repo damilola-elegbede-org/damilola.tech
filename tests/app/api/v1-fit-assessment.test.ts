@@ -44,6 +44,19 @@ vi.mock('@/lib/rate-limit', () => ({
   getClientIp: vi.fn().mockReturnValue('127.0.0.1'),
 }));
 
+// Prevent real Chromium launch in headless fallback path
+vi.mock('@sparticuz/chromium', () => ({
+  default: {
+    args: [],
+    executablePath: vi.fn().mockResolvedValue('/nonexistent/chromium'),
+  },
+}));
+vi.mock('puppeteer-core', () => ({
+  default: {
+    launch: vi.fn().mockRejectedValue(new Error('Headless not available in test environment')),
+  },
+}));
+
 describe('v1/fit-assessment API route', () => {
   const originalFetch = global.fetch;
 

@@ -1,4 +1,4 @@
-import { fetchWithResolvedPublicIp } from '@/lib/ssrf-validator';
+import { fetchWithResolvedPublicIp, resolvePublicHttpUrl } from '@/lib/ssrf-validator';
 
 const JD_KEYWORDS = [
   'responsibilities',
@@ -47,6 +47,8 @@ const EMPTY_SHELL_MARKERS: readonly RegExp[] = [
 
 export const URL_FETCH_TIMEOUT = 10000;
 export const MAX_RESPONSE_SIZE = 1024 * 1024;
+export const HEADLESS_TIMEOUT = 15000;
+const HEADLESS_FALLBACK_THRESHOLD = 500;
 
 export class JobDescriptionInputError extends Error {
   statusCode: number;
@@ -147,6 +149,39 @@ async function fetchJobDescriptionHtml(
   }
 }
 
+async function fetchJobDescriptionHeadless(url: string): Promise<string> {
+  const { resolvedUrl, hostname } = await resolvePublicHttpUrl(url);
+
+  const chromiumModule = await import('@sparticuz/chromium');
+  // @sparticuz/chromium types only expose args and executablePath; defaultViewport
+  // and headless are not typed but the chromium args already configure headless-shell mode
+  const chromium = chromiumModule.default;
+  const puppeteer = await import('puppeteer-core');
+
+  const browser = await puppeteer.launch({
+    args: chromium.args,
+    defaultViewport: null,
+    executablePath: await chromium.executablePath(),
+    headless: 'shell',
+    // resolvedUrl is an IP from SSRF pinning; the server's TLS SAN won't match. This flag
+    // applies browser-wide, but the instance is ephemeral and closed immediately after fetch.
+    acceptInsecureCerts: true,
+  });
+
+  try {
+    const page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (compatible; ResumeScoreBot/1.0)');
+    await page.setExtraHTTPHeaders({ Host: hostname });
+    await page.goto(resolvedUrl, { waitUntil: 'networkidle2', timeout: HEADLESS_TIMEOUT });
+    // Allow SPA hydration to settle after network becomes idle
+    // page.waitForTimeout removed in puppeteer v22; use native Promise
+    await new Promise<void>((r) => setTimeout(r, 2000));
+    return await page.content();
+  } finally {
+    await browser.close();
+  }
+}
+
 export function resolvePreFetchedJobDescription(
   content: string,
   sourceUrl: string
@@ -196,7 +231,19 @@ export async function resolveJobDescriptionInput(
 
   try {
     const html = await fetchJobDescriptionHtml(urlToFetch, userAgent);
-    const textContent = extractTextFromHtml(html);
+    let textContent = extractTextFromHtml(html);
+
+    // If plain fetch returned too little content, try headless rendering for SPA/ATS pages
+    if (textContent.length < HEADLESS_FALLBACK_THRESHOLD) {
+      try {
+        const headlessHtml = await fetchJobDescriptionHeadless(urlToFetch);
+        textContent = extractTextFromHtml(headlessHtml);
+      } catch (headlessError) {
+        // Headless launch or navigation failed — fall through to validation below
+        // which will throw JobDescriptionInputError with the original short content
+        console.warn('[score-job] headless fallback failed:', headlessError instanceof Error ? headlessError.message : String(headlessError));
+      }
+    }
 
     if (detectEmptyShell(html)) {
       return {
