@@ -10,6 +10,7 @@ export const metadata: Metadata = {
     description:
       "Fractional VP Engineering advisory for Seed–Series B startups. Architecture reviews, team building, and DevEx strategy.",
     type: "website",
+    url: "https://damilola.tech/consulting",
   },
   twitter: {
     card: "summary_large_image",
@@ -19,57 +20,105 @@ export const metadata: Metadata = {
   },
 };
 
-const services = [
+const tiers = [
   {
     label: "Advisory",
-    headline: "Strategic Engineering Guidance",
-    description:
-      "Weekly or bi-weekly sessions covering roadmap trade-offs, engineering velocity, incident response posture, and executive communication. You get a thought partner who has shipped at scale and can pressure-test your decisions before they calcify.",
-    tags: ["Roadmap", "Velocity", "Incident Posture", "Exec Alignment"],
+    badge: "async",
+    headline: "On-Demand Strategic Guidance",
+    scope:
+      "Architecture questions, roadmap pressure-testing, and decision support — delivered asynchronously.",
+    cadence: "Async Slack/email · 24 h response SLA",
+    outcome:
+      "Expert input on your highest-stakes engineering decisions without scheduling overhead.",
+    cta: "Start a conversation",
   },
   {
-    label: "Architecture Review",
-    headline: "System Design Assessment",
-    description:
-      "A structured review of your current architecture — data flows, service boundaries, deployment topology, and failure modes. Delivered as a written report with prioritized findings and a 90-day action plan your team can execute.",
-    tags: ["Cloud Infra", "Service Design", "DevEx", "Scaling"],
+    label: "Fractional VPE",
+    badge: "part-time embedded",
+    headline: "Embedded Engineering Leadership",
+    scope:
+      "2–5 hrs/week as your part-time VP Engineering: team structure, hiring bar, roadmap ownership, and exec communication.",
+    cadence: "Weekly sync call + async availability",
+    outcome:
+      "A dedicated engineering leader who ships accountability and clarity without the full-time budget.",
+    cta: "Explore fractional",
+    featured: true,
   },
   {
-    label: "Team Building",
-    headline: "Hiring & Org Design",
-    description:
-      "Interview calibration, leveling frameworks, and org structure for engineering teams at inflection points. Helps you hire the right people and build the scaffolding that keeps them effective as the team doubles.",
-    tags: ["Leveling", "Interview Design", "Org Structure", "Retention"],
+    label: "Full Engagement",
+    badge: "intensive",
+    headline: "Interim VPE Coverage",
+    scope:
+      "10–20 hrs/week near-full-time: daily availability, incident response, board prep, and engineering org stand-up.",
+    cadence: "Daily availability · twice-weekly syncs",
+    outcome:
+      "Full VPE coverage — the right bridge to your first permanent engineering leadership hire.",
+    cta: "Discuss your needs",
   },
 ];
 
-function ServiceCard({
+const socialProof = [
+  { name: "Verily Life Sciences", sub: "Alphabet / Google" },
+  { name: "Qualcomm", sub: "Semiconductors · Wireless" },
+  { name: "Visa", sub: "FinTech · Payments" },
+];
+
+function TierCard({
   label,
+  badge,
   headline,
-  description,
-  tags,
-}: (typeof services)[number]) {
+  scope,
+  cadence,
+  outcome,
+  featured,
+}: (typeof tiers)[number]) {
   return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-6 transition-colors hover:border-[var(--color-accent)]/40">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-[var(--color-accent)]">
-        {label}
-      </p>
-      <h3 className="mb-3 text-xl font-semibold text-[var(--color-text)]">
+    <div
+      className={[
+        "relative rounded-xl border p-6 transition-colors",
+        featured
+          ? "border-[var(--color-accent)]/50 bg-[var(--color-card)] ring-1 ring-[var(--color-accent)]/20"
+          : "border-[var(--color-border)] bg-[var(--color-card)] hover:border-[var(--color-accent)]/40",
+      ].join(" ")}
+    >
+      {featured && (
+        <span className="absolute -top-3 left-6 rounded-full bg-[var(--color-accent)] px-3 py-0.5 text-xs font-semibold text-white">
+          Most popular
+        </span>
+      )}
+      <div className="mb-1 flex items-center gap-2">
+        <p className="text-xs font-semibold uppercase tracking-widest text-[var(--color-accent)]">
+          {label}
+        </p>
+        <span className="rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[10px] text-[var(--color-text-muted)]">
+          {badge}
+        </span>
+      </div>
+      <h3 className="mb-4 text-xl font-semibold text-[var(--color-text)]">
         {headline}
       </h3>
-      <p className="mb-4 text-sm leading-relaxed text-[var(--color-text-muted)]">
-        {description}
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {tags.map((tag) => (
-          <span
-            key={tag}
-            className="rounded-full border border-[var(--color-border)] px-3 py-1 text-xs text-[var(--color-text-muted)]"
-          >
-            {tag}
-          </span>
-        ))}
-      </div>
+      <dl className="space-y-3 text-sm">
+        <div>
+          <dt className="mb-0.5 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+            Scope
+          </dt>
+          <dd className="leading-relaxed text-[var(--color-text-muted)]">
+            {scope}
+          </dd>
+        </div>
+        <div>
+          <dt className="mb-0.5 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+            Cadence
+          </dt>
+          <dd className="text-[var(--color-text-muted)]">{cadence}</dd>
+        </div>
+        <div>
+          <dt className="mb-0.5 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+            Outcome
+          </dt>
+          <dd className="leading-relaxed text-[var(--color-text)]">{outcome}</dd>
+        </div>
+      </dl>
     </div>
   );
 }
@@ -101,7 +150,7 @@ export default function ConsultingPage() {
         </Link>
       </nav>
 
-      {/* Header */}
+      {/* Hero */}
       <header className="mb-14">
         <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-[var(--color-accent)]">
           Fractional Advisory
@@ -110,14 +159,19 @@ export default function ConsultingPage() {
           Engineering leadership,{" "}
           <span className="text-[var(--color-text-title)]">fractionally.</span>
         </h1>
-        <p className="max-w-xl text-lg leading-relaxed text-[var(--color-text-muted)]">
+        <p className="mb-6 max-w-xl text-lg leading-relaxed text-[var(--color-text-muted)]">
           15 years building and leading engineering orgs at Verily Life Sciences
-          and Qualcomm. Now available to Seed–Series B startups as a fractional
-          VP Engineering — without the full-time overhead.
+          and Qualcomm. VP Engineering expertise for Seed–Series B startups —
+          without the full-time overhead.
         </p>
 
-        {/* Availability badge */}
-        <div className="mt-6">
+        <div className="flex flex-wrap items-center gap-4">
+          <a
+            href="#contact"
+            className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
+          >
+            Work with me
+          </a>
           <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-2 text-sm text-[var(--color-text-muted)]">
             <span
               className="inline-block h-2 w-2 rounded-full bg-[var(--color-available)]"
@@ -128,6 +182,26 @@ export default function ConsultingPage() {
           </span>
         </div>
       </header>
+
+      {/* Social proof */}
+      <section className="mb-14" aria-label="Background and experience">
+        <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+          Background from
+        </p>
+        <div className="flex flex-wrap gap-3">
+          {socialProof.map(({ name, sub }) => (
+            <div
+              key={name}
+              className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-alt)] px-4 py-3"
+            >
+              <p className="text-sm font-semibold text-[var(--color-text)]">
+                {name}
+              </p>
+              <p className="text-xs text-[var(--color-text-muted)]">{sub}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* Is this you? */}
       <section className="mb-14">
@@ -166,11 +240,19 @@ export default function ConsultingPage() {
           structured 90-minute conversation that produces a written findings doc
           you keep regardless of next steps.
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {[
             { step: "01", label: "Discovery", detail: "90-min scoped session" },
-            { step: "02", label: "Findings", detail: "Written report, yours to keep" },
-            { step: "03", label: "Engagement", detail: "Monthly retainer, cancel anytime" },
+            {
+              step: "02",
+              label: "Findings",
+              detail: "Written report, yours to keep",
+            },
+            {
+              step: "03",
+              label: "Engagement",
+              detail: "Monthly retainer, cancel anytime",
+            },
           ].map(({ step, label, detail }) => (
             <div
               key={step}
@@ -190,20 +272,24 @@ export default function ConsultingPage() {
         </div>
       </section>
 
-      {/* Services */}
+      {/* Service tiers */}
       <section className="mb-14">
-        <h2 className="mb-6 text-2xl font-semibold text-[var(--color-text)]">
-          What I offer
+        <h2 className="mb-2 text-2xl font-semibold text-[var(--color-text)]">
+          Service tiers
         </h2>
+        <p className="mb-6 text-sm text-[var(--color-text-muted)]">
+          Pick the engagement depth that fits your stage and budget.
+        </p>
         <div className="space-y-4">
-          {services.map((service) => (
-            <ServiceCard key={service.label} {...service} />
+          {tiers.map((tier) => (
+            <TierCard key={tier.label} {...tier} />
           ))}
         </div>
       </section>
 
-      {/* CTA */}
+      {/* CTA / contact anchor */}
       <section
+        id="contact"
         className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-alt)] p-8 text-center"
         aria-label="Contact"
       >
