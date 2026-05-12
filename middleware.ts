@@ -16,10 +16,9 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return NextResponse.next();
   }
 
-  // request.ip is set by Vercel's edge and is not spoofable; headers are fallbacks
-  // for non-Vercel environments. 'unknown' is a shared fallback bucket.
+  // x-forwarded-for is set by Vercel's edge and is the canonical IP source in Next.js 15+
+  // (NextRequest.ip was removed in Next.js 15). 'unknown' is a shared fallback bucket.
   const ip =
-    request.ip ??
     request.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
     request.headers.get('x-real-ip') ??
     'unknown';
