@@ -369,6 +369,18 @@ npm run test:e2e:ui
 
 **Test browsers:** Chrome, Firefox, Safari, Mobile Chrome, Mobile Safari
 
+### CI Gates
+
+Commit status checks that block merges when they fail:
+
+| Check | Trigger | Failure condition |
+|---|---|---|
+| `lighthouse` | Vercel preview deployment | Any of Performance / Accessibility / SEO drops >10 pts from `.lighthouse/baseline.json` |
+
+The `lighthouse` gate runs automatically on every Vercel preview deployment. If your PR
+fails the gate, check the PR comment for a score breakdown. To update the baseline after
+an intentional score change, see [`.lighthouse/README.md`](./.lighthouse/README.md).
+
 ## Deployment
 
 ### Vercel (Production)
