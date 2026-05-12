@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+// Edge runtime is required for Vercel NFT tracing to generate middleware.js.nft.json
+export const runtime = 'edge';
+
 export const RATE_LIMIT = 100;  // max requests per window per IP
 export const WINDOW_SEC = 60;   // fixed window size in seconds
 
@@ -8,12 +11,15 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
   const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-  // Fail open when Redis is not configured (local dev)
+  // Deliberate fail-open: Redis unavailable → no rate limiting (availability over strictness)
   if (!redisUrl || !redisToken) {
     return NextResponse.next();
   }
 
+  // request.ip is set by Vercel's edge and is not spoofable; headers are fallbacks
+  // for non-Vercel environments. 'unknown' is a shared fallback bucket.
   const ip =
+    request.ip ??
     request.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
     request.headers.get('x-real-ip') ??
     'unknown';
