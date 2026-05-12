@@ -128,4 +128,21 @@ describe('api/v1 rate limiting middleware', () => {
     expect(body[0][1]).toContain('9.9.9.9');
   });
 
+  it('prefers x-forwarded-for over x-real-ip when both are set', async () => {
+    const { middleware } = await import('../middleware');
+    stubRedisCount(1);
+
+    const req = new NextRequest('https://damilola.tech/api/v1/score-job', {
+      method: 'GET',
+      headers: {
+        'x-forwarded-for': '8.8.8.8',
+        'x-real-ip': '1.2.3.4',
+      },
+    });
+    await middleware(req);
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+    expect(body[0][1]).toContain('8.8.8.8');
+    expect(body[0][1]).not.toContain('1.2.3.4');
+  });
 });
