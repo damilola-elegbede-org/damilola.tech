@@ -24,7 +24,7 @@ jobs:
       !startsWith(github.event.deployment_status.environment, 'Production')
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
         with:
           # Check out the exact commit that was deployed so baseline.json reflects
           # the PR branch, not main.
@@ -45,7 +45,7 @@ jobs:
           fi
 
       - name: Install Lighthouse
-        run: npm install -g lighthouse@12
+        run: npm install -g lighthouse@12.6.0
 
       - name: Run Lighthouse
         id: lh
@@ -175,7 +175,7 @@ jobs:
               sys.exit(1)
           PYEOF
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
         if: always()
         with:
           name: lighthouse-report
