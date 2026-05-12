@@ -70,6 +70,7 @@ function TierCard({
   scope,
   cadence,
   outcome,
+  cta,
   featured,
 }: (typeof tiers)[number]) {
   return (
@@ -97,7 +98,7 @@ function TierCard({
       <h3 className="mb-4 text-xl font-semibold text-[var(--color-text)]">
         {headline}
       </h3>
-      <dl className="space-y-3 text-sm">
+      <dl className="mb-5 space-y-3 text-sm">
         <div>
           <dt className="mb-0.5 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
             Scope
@@ -119,6 +120,17 @@ function TierCard({
           <dd className="leading-relaxed text-[var(--color-text)]">{outcome}</dd>
         </div>
       </dl>
+      <a
+        href="#contact"
+        className={[
+          "inline-flex items-center rounded-lg px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]",
+          featured
+            ? "bg-[var(--color-accent)] text-white"
+            : "border border-[var(--color-accent)] text-[var(--color-accent)]",
+        ].join(" ")}
+      >
+        {cta} →
+      </a>
     </div>
   );
 }

@@ -44,6 +44,11 @@ jobs:
             echo "::notice::No PR found for SHA $SHA — will skip PR comment (commit status still posted)"
           fi
 
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+
       - name: Install Lighthouse
         run: npm install -g lighthouse@12.6.0
 
@@ -96,7 +101,8 @@ jobs:
           failed = False
 
           if os.path.exists(BASELINE):
-              base = json.load(open(BASELINE))
+              with open(BASELINE) as f:
+                  base = json.load(f)
               bp, ba, bs = base['performance'], base['accessibility'], base['seo']
               dp, da, ds = perf - bp, a11y - ba, seo - bs
               failed = dp < -10 or da < -10 or ds < -10
