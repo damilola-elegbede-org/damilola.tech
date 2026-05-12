@@ -8,6 +8,10 @@ permissions:
   pull-requests: write
   statuses: write
 
+concurrency:
+  group: lighthouse-${{ github.event.deployment.id || github.sha }}
+  cancel-in-progress: true
+
 jobs:
   lighthouse:
     name: Lighthouse Score Gate
@@ -30,9 +34,9 @@ jobs:
         id: pr
         env:
           GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.deployment.sha }}
+          REPO: ${{ github.repository }}
         run: |
-          SHA="${{ github.event.deployment.sha }}"
-          REPO="${{ github.repository }}"
           PR_NUM=$(gh api "repos/$REPO/commits/$SHA/pulls" \
             --jq '.[0].number // empty' 2>/dev/null || true)
           echo "number=$PR_NUM" >> "$GITHUB_OUTPUT"
@@ -45,8 +49,10 @@ jobs:
 
       - name: Run Lighthouse
         id: lh
+        env:
+          TARGET_URL: ${{ github.event.deployment_status.target_url }}
         run: |
-          lighthouse "${{ github.event.deployment_status.target_url }}" \
+          lighthouse "$TARGET_URL" \
             --output json \
             --output-path lhr.json \
             --chrome-flags="--headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage" \
@@ -132,26 +138,9 @@ jobs:
           def gh(*args):
               subprocess.run(['gh'] + list(args), check=True, env=os.environ)
 
-          # Upsert PR comment if we have a PR number
-          if pr:
-              with open('/tmp/lh-payload.json', 'w') as f:
-                  json.dump({'body': body}, f)
-              result = subprocess.run(
-                  ['gh', 'api', f'repos/{repo}/issues/{pr}/comments', '--jq',
-                   '[.[] | select(.body | contains("<!-- lighthouse-gate-marker -->"))] | .[0].id // empty'],
-                  capture_output=True, text=True, env=os.environ
-              )
-              existing = result.stdout.strip()
-              if existing:
-                  gh('api', '--method', 'PATCH',
-                     f'repos/{repo}/issues/comments/{existing}',
-                     '--input', '/tmp/lh-payload.json')
-              else:
-                  gh('api', '--method', 'POST',
-                     f'repos/{repo}/issues/{pr}/comments',
-                     '--input', '/tmp/lh-payload.json')
-
-          # Always set a commit status so this appears as a required check in branch protection
+          # Set commit status first — this is the branch-protection gate.
+          # Must succeed before we attempt the PR comment so a comment failure
+          # cannot leave the PR in an ambiguous (no-status) merge-able state.
           gh('api', '--method', 'POST',
              f'repos/{repo}/statuses/{sha}',
              '-f', f'state={status_state}',
@@ -159,7 +148,36 @@ jobs:
              '-f', f'description={status_desc[:140]}',
              '-f', f'target_url={run_url}')
 
+          # Upsert PR comment — best-effort; a failure here must not swallow the status above.
+          if pr:
+              try:
+                  with open('/tmp/lh-payload.json', 'w') as f:
+                      json.dump({'body': body}, f)
+                  result = subprocess.run(
+                      ['gh', 'api', f'repos/{repo}/issues/{pr}/comments', '--jq',
+                       '[.[] | select(.body | contains("<!-- lighthouse-gate-marker -->"))] | .[0].id // empty'],
+                      capture_output=True, text=True, env=os.environ
+                  )
+                  existing = result.stdout.strip()
+                  if existing:
+                      gh('api', '--method', 'PATCH',
+                         f'repos/{repo}/issues/comments/{existing}',
+                         '--input', '/tmp/lh-payload.json')
+                  else:
+                      gh('api', '--method', 'POST',
+                         f'repos/{repo}/issues/{pr}/comments',
+                         '--input', '/tmp/lh-payload.json')
+              except subprocess.CalledProcessError as e:
+                  print(f'::warning::PR comment failed ({e}); commit status was already set')
+
           if failed:
               print('::error::Lighthouse gate failed — see PR comment for score breakdown')
               sys.exit(1)
           PYEOF
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse-report
+          path: lhr.json
+          retention-days: 7
