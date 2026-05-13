@@ -36,7 +36,7 @@ export async function GET(
   }
 
   try {
-    const filePath = join(process.cwd(), fileName);
+    const filePath = join(/*turbopackIgnore: true*/ process.cwd(), fileName);
     const content = await readFile(filePath, 'utf-8');
 
     return Response.json({
