@@ -760,7 +760,7 @@ When the job posting URL returns a client-side-rendered page with no extractable
 | 400 | `BAD_REQUEST` | Invalid or unreachable URL, `job_content` exceeds 200KB |
 | 400 | `VALIDATION_ERROR` | Missing required fields, invalid types |
 | 401 | `UNAUTHORIZED` | Missing or invalid API key |
-| 429 | `RATE_LIMITED` | AI rate limit reached |
+| 429 | `RATE_LIMITED` | IP rate limit exceeded (100 req/min) or AI backend rate limit reached; see `Retry-After` header |
 | 500 | `INTERNAL_ERROR` | AI service error |
 
 ---
@@ -834,7 +834,7 @@ The `cover_letter_markdown` field contains YAML frontmatter (`company`, `role`, 
 | 400 | `BAD_REQUEST` | Both or neither of `job_posting_url`/`job_posting_text` provided, invalid URL |
 | 400 | `VALIDATION_ERROR` | Invalid `tone` value |
 | 401 | `UNAUTHORIZED` | Missing or invalid API key |
-| 429 | `RATE_LIMITED` | AI rate limit reached |
+| 429 | `RATE_LIMITED` | IP rate limit exceeded (100 req/min) or AI backend rate limit reached; see `Retry-After` header |
 | 500 | `INTERNAL_ERROR` | Template unavailable, AI error, generation timeout (>90s) |
 
 ---
