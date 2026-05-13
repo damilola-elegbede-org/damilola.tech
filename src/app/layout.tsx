@@ -5,6 +5,7 @@ import { TrackingProvider } from '@/components/providers/TrackingProvider';
 import './globals.css';
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://damilola.tech'),
   title: 'Damilola Elegbede | Engineering Manager',
   description:
     'Engineering Manager with 15+ years building high-performance organizations at Verily Life Sciences and Qualcomm. Specializing in cloud infrastructure, platform engineering, and developer experience.',
@@ -25,12 +26,22 @@ export const metadata: Metadata = {
       'Building high-performance organizations that deliver enterprise-scale solutions',
     type: 'website',
     locale: 'en_US',
+    url: 'https://damilola.tech',
+    images: [
+      {
+        url: '/api/og',
+        width: 1200,
+        height: 630,
+        alt: 'Damilola Elegbede - Distinguished Engineer',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Damilola Elegbede | Engineering Manager',
     description:
       'Building high-performance organizations that deliver enterprise-scale solutions',
+    images: ['/api/og'],
   },
   robots: {
     index: true,
