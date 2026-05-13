@@ -39,6 +39,15 @@ export function NavMenu({ className }: NavMenuProps) {
             )}
           </span>
         ))}
+        <span className="ml-2">
+          <a
+            href="/api/v1/resume.pdf"
+            download
+            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-1.5 text-sm text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-alt)] hover:text-[var(--color-text)]"
+          >
+            Download Resume
+          </a>
+        </span>
       </nav>
 
       {/* Mobile Navigation - Hamburger */}
@@ -101,6 +110,14 @@ export function NavMenu({ className }: NavMenuProps) {
                   {item.label}
                 </a>
               ))}
+              <a
+                href="/api/v1/resume.pdf"
+                download
+                onClick={handleNavClick}
+                className="block px-4 py-2 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-alt)] hover:text-[var(--color-text)]"
+              >
+                Download Resume
+              </a>
             </nav>
           </>
         )}

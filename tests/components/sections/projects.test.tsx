@@ -65,4 +65,15 @@ describe('Projects', () => {
     expect(liveLinks.length).toBeGreaterThan(0);
     expect(githubLinks.length).toBeGreaterThan(0);
   });
+
+  it('cortex project does not link to a broken private org github url', () => {
+    render(<Projects />);
+
+    // The broken org link damilola-elegbede-org/cortex should not appear
+    const links = screen.getAllByRole('link');
+    const brokenLink = links.find(
+      (link) => link.getAttribute('href') === 'https://github.com/damilola-elegbede-org/cortex'
+    );
+    expect(brokenLink).toBeUndefined();
+  });
 });

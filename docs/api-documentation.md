@@ -209,6 +209,29 @@ Get example job descriptions for testing fit assessment.
 
 **No Rate Limiting**
 
+### Resume Download
+
+#### GET /api/v1/resume.pdf
+
+Download the current resume as a PDF.
+
+**Response:**
+
+- **Content-Type:** `application/pdf`
+- **Content-Disposition:** `attachment; filename="damilola-elegbede-resume.pdf"`
+- **Cache-Control:** `no-store`
+- **Body:** PDF binary
+
+**Authentication:** None required. This is the only `/api/v1/*` endpoint that does not require an API key — it is intentionally public for visitor access from the hero CTA and nav.
+
+**Rate Limiting:** None
+
+**Example:**
+
+```bash
+curl -O -J https://damilola.tech/api/v1/resume.pdf
+```
+
 ## Admin Endpoints
 
 All admin endpoints require authentication. Include JWT token cookie in requests.

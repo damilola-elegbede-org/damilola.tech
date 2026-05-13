@@ -21,6 +21,7 @@ Personal career landing page with an AI chatbot. Recruiters and hiring managers 
 - **Projects Portfolio** - Showcase of key technical projects
 - **Experience Timeline** - Professional history and achievements
 - **Skills Assessment** - Technical and leadership capabilities
+- **Resume Download** - Direct download of current resume PDF via hero CTA and nav
 - **Consulting** - Fractional VP Engineering advisory landing page (`/consulting`)
 
 ### Admin Portal
@@ -312,6 +313,7 @@ Complete audit log of all user interactions:
 - `POST /api/chat` - AI chatbot conversation (50/5min per IP)
 - `POST /api/fit-assessment` - Role fit analysis (10/hour per IP)
 - `GET /api/fit-examples` - Example job descriptions
+- `GET /api/v1/resume.pdf` - Resume PDF download (no auth required)
 
 ### Admin Endpoints
 
