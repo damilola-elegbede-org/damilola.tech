@@ -16,6 +16,7 @@ import { registerChats } from '../../../mcp/tools/chats';
 import { registerAuditLog } from '../../../mcp/tools/audit-log';
 import { registerTraffic } from '../../../mcp/tools/traffic';
 import { registerScoreJob } from '../../../mcp/tools/score-job';
+import { registerGenerateCoverLetter } from '../../../mcp/tools/generate-cover-letter';
 
 /**
  * Creates an MCP server instance with all supported tools registered.
@@ -47,6 +48,7 @@ export function createMcpServer(apiKey: string, apiBaseUrl: string): McpServer {
   registerAuditLog(server, client);
   registerTraffic(server, client);
   registerScoreJob(server, client);
+  registerGenerateCoverLetter(server, client);
 
   return server;
 }

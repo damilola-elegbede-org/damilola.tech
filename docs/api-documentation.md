@@ -219,6 +219,15 @@ All admin endpoints require authentication. Include JWT token cookie in requests
 
 Login to admin portal.
 
+**Request Headers:**
+
+```http
+X-CSRF-Token: <csrf_token>
+Content-Type: application/json
+```
+
+A valid CSRF token must be obtained first via `GET /api/admin/auth` (or the admin UI's session setup). Requests missing or carrying an invalid CSRF token receive `403 Forbidden`. This endpoint is intended to be called from the admin UI, not directly via `curl`.
+
 **Request Body:**
 
 ```json
@@ -247,7 +256,8 @@ Login to admin portal.
 
 ```json
 {
-  "error": "Too many attempts. Please try again later."
+  "error": "Too many login attempts. Please try again later.",
+  "retryAfter": 900
 }
 ```
 
@@ -277,7 +287,7 @@ Aggregate statistics for admin dashboard.
 
 **Query Parameters:**
 
-- `days` - Number of days to include (default: 30, max: 365)
+- `env` - Environment filter: `production` or `preview` (default: current Vercel environment)
 
 **Response:**
 
@@ -447,62 +457,51 @@ List fit assessment submissions.
 
 ### Resume Generation
 
-#### GET /api/admin/resumes
+#### GET /api/admin/resume-generations
 
-List generated resumes.
+List resume generation records.
 
 **Query Parameters:**
 
 - `cursor` - Pagination cursor (optional)
-- `limit` - Results per page (default: 100, max: 1000)
+- `status` - Filter by application status: `draft`, `applied`, `interview`, `offer`, `rejected` (optional)
+- `company` - Case-insensitive partial match on company name (optional)
+- `dateFrom` - ISO 8601 date (`YYYY-MM-DD`) — inclusive lower bound (optional)
+- `dateTo` - ISO 8601 date (`YYYY-MM-DD`) — inclusive upper bound (optional)
+- `minScore` - Minimum fit score after generation (optional)
+- `maxScore` - Maximum fit score after generation (optional)
 
 **Response:**
 
 ```json
 {
-  "resumes": [
+  "generations": [
     {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "id": "damilola.tech/resume-generations/production/...",
+      "jobId": "abc123",
+      "generationId": "550e8400-e29b-41d4-a716-446655440000",
+      "environment": "production",
       "timestamp": "2024-01-15T09:00:00Z",
-      "jobDescription": "Engineering Manager at Acme Corp...",
+      "updatedAt": "2024-01-15T09:05:00Z",
       "companyName": "Acme Corp",
-      "status": "applied",
-      "url": "https://blob.vercel-storage.com/..."
+      "roleTitle": "Engineering Manager",
+      "scoreBefore": 65,
+      "scoreAfter": 82,
+      "scorePossibleMax": 91,
+      "applicationStatus": "applied",
+      "url": "https://blob.vercel-storage.com/...",
+      "size": 4096,
+      "generationCount": 1
     }
   ],
-  "cursor": "next_page_token"
+  "cursor": "next_page_token",
+  "hasMore": true,
+  "totalFetched": 50,
+  "filtered": false
 }
 ```
 
 **Authentication:** Required
-
-#### POST /api/admin/resume/generate
-
-Generate recruiter-ready resume for job description.
-
-**Request Body:**
-
-```json
-{
-  "jobDescription": "Full job description text...",
-  "companyName": "Acme Corp"
-}
-```
-
-**Response:**
-
-- **Content-Type:** `text/plain; charset=utf-8`
-- **Transfer-Encoding:** `chunked`
-- **Body:** Streaming resume content in custom format
-
-**Authentication:** Required
-
-**Rate Limit:** 10 requests per hour per IP
-
-**Validation:**
-
-- Job description required
-- Max 50KB request body
 
 ### Audit Log
 
@@ -651,7 +650,6 @@ Retry-After: 300
 | Endpoint | Limit | Window | Per |
 |----------|-------|--------|-----|
 | `/api/admin/auth` | 5 | 15 min | IP |
-| `/api/admin/resume/generate` | 10 | 1 hour | IP |
 
 ### Implementation
 
@@ -779,12 +777,448 @@ curl http://localhost:3000/api/admin/stats \
 ANTHROPIC_API_KEY=sk-ant-...
 BLOB_READ_WRITE_TOKEN=vercel_blob_...
 JWT_SECRET=your_jwt_secret
-ADMIN_PASSWORD_PREVIEW=dev_password
+ADMIN_PASSWORD_PREVIEW=dev_password      # Used in preview/development environments
+ADMIN_PASSWORD_PRODUCTION=prod_password  # Required in production environments
 
 # Optional for rate limiting
 UPSTASH_REDIS_REST_URL=https://...
 UPSTASH_REDIS_REST_TOKEN=...
 ```
+
+## V1 API Endpoints
+
+The `/api/v1/` surface is an authenticated REST API for programmatic access to job application tracking and AI-powered job search tooling. All routes in this section require an API key (see [V1 Authentication](#v1-authentication) below).
+
+### V1 Authentication
+
+V1 endpoints use API key authentication. Include the key in one of these headers:
+
+```http
+Authorization: Bearer dk_live_your_api_key
+```
+
+or
+
+```http
+X-API-Key: dk_live_your_api_key
+```
+
+Keys have the prefix `dk_`. An invalid or missing key returns `401 Unauthorized`.
+
+### Application Tracking
+
+#### POST /api/v1/log-application
+
+Log a new job application.
+
+**Request Body:**
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `company` | string | Yes | Trimmed; must be non-empty |
+| `title` | string | Yes | Trimmed; must be non-empty |
+| `url` | string | No | Job posting URL |
+| `role_id` | string | No | Internal role identifier |
+| `notes` | string | No | Free-text notes |
+| `cover_letter_draft` | string | No | Draft cover letter text |
+| `status` | string | No | One of `applied`, `screen`, `interview`, `offer`, `rejected`, `withdrawn`. Default: `applied` |
+| `score` | number | No | Fit score 0–100 (inclusive, finite) |
+| `applied_at` | string | No | ISO 8601 timestamp. Default: current UTC time |
+
+**Response (201):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "company": "Acme Corp",
+    "title": "Engineering Manager",
+    "applied_at": "2026-04-26T15:00:00.000Z",
+    "status": "applied",
+    "score": 82,
+    "url": "https://jobs.acme.com/em-123",
+    "cover_letter_draft": null
+  }
+}
+```
+
+**Error codes:**
+
+| Code | Cause |
+|---|---|
+| `400` | Invalid JSON body |
+| `401` | Missing or invalid API key |
+| `422` | Validation error — missing required field, invalid `status`, `score` out of range, or invalid `applied_at` |
+| `500` | Failed to save application |
+
+**Example:**
+
+```bash
+curl -X POST https://damilola.tech/api/v1/log-application \
+  -H "Authorization: Bearer dk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "company": "Acme Corp",
+    "title": "Engineering Manager",
+    "url": "https://jobs.acme.com/em-123",
+    "score": 82
+  }'
+```
+
+---
+
+#### GET /api/v1/log-application
+
+List logged applications with optional filtering.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Notes |
+|---|---|---|---|
+| `stage` | string | No | Alias for `status`. One of `applied`, `screen`, `interview`, `offer`, `rejected`, `withdrawn` |
+| `status` | string | No | Filter by application status. Same valid values as `stage`. If both are provided, `stage` takes precedence |
+| `since` | string | No | ISO 8601 timestamp. Returns only applications with `applied_at >= since` |
+| `limit` | integer | No | Max results to return. Default: `50`, max: `100` |
+
+**Response (200):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "applications": [
+      {
+        "id": "uuid",
+        "company": "Acme Corp",
+        "title": "Engineering Manager",
+        "url": "https://jobs.acme.com/em-123",
+        "role_id": null,
+        "applied_at": "2026-04-26T15:00:00.000Z",
+        "status": "applied",
+        "score": 82,
+        "notes": null,
+        "cover_letter_draft": null,
+        "created_at": "2026-04-26T15:00:00.000Z",
+        "updated_at": "2026-04-26T15:00:00.000Z"
+      }
+    ],
+    "total": 1,
+    "limit": 50
+  }
+}
+```
+
+**Error codes:**
+
+| Code | Cause |
+|---|---|
+| `400` | Invalid `status`/`stage` value or non-ISO `since` |
+| `401` | Missing or invalid API key |
+| `500` | Database failure |
+
+**Example:**
+
+```bash
+curl "https://damilola.tech/api/v1/log-application?stage=interview&since=2026-04-01T00:00:00Z&limit=20" \
+  -H "Authorization: Bearer dk_live_..."
+```
+
+---
+
+#### GET /api/v1/applications
+
+List applications with pagination and optional filtering. Unlike `GET /api/v1/log-application`, this endpoint supports `offset`-based pagination and `company` substring search.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Notes |
+|---|---|---|---|
+| `status` | string | No | Filter by status. One of `applied`, `screen`, `interview`, `offer`, `rejected`, `withdrawn` |
+| `company` | string | No | Case-insensitive substring match on company name |
+| `limit` | integer | No | Max results per page. Default: `50`, max: `100` |
+| `offset` | integer | No | Pagination offset. Default: `0` |
+
+Results are ordered by `applied_at` descending.
+
+**Response (200):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "applications": [
+      {
+        "id": "uuid",
+        "company": "Acme Corp",
+        "title": "Engineering Manager",
+        "url": "https://jobs.acme.com/em-123",
+        "role_id": null,
+        "applied_at": "2026-04-26T15:00:00.000Z",
+        "status": "applied",
+        "score": 82,
+        "notes": null,
+        "cover_letter_draft": null,
+        "created_at": "2026-04-26T15:00:00.000Z",
+        "updated_at": "2026-04-26T15:00:00.000Z"
+      }
+    ],
+    "total": 14,
+    "limit": 50,
+    "offset": 0
+  }
+}
+```
+
+**Error codes:**
+
+| Code | Cause |
+|---|---|
+| `400` | Invalid `status` value |
+| `401` | Missing or invalid API key |
+| `500` | Database failure |
+
+**Example:**
+
+```bash
+curl "https://damilola.tech/api/v1/applications?status=interview&company=acme&limit=10&offset=0" \
+  -H "Authorization: Bearer dk_live_..."
+```
+
+---
+
+### Job Scoring
+
+#### POST /api/v1/score-job
+
+Score a job posting against Damilola's resume. Returns a readiness score, keyword analysis, gap analysis, and a cover letter recommendation.
+
+**Request Body:**
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `url` | string | Yes | HTTP/HTTPS URL of the job posting |
+| `title` | string | Yes | Job title |
+| `company` | string | Yes | Company name |
+| `job_content` | string | No | Pre-fetched job posting text. When provided the URL is not fetched. Max 200 KB |
+
+**Response (200):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "company": "Acme Corp",
+    "title": "Engineering Manager",
+    "url": "https://jobs.acme.com/em-123",
+    "currentScore": {
+      "total": 72,
+      "breakdown": {
+        "skills": 80,
+        "experience": 70,
+        "education": 75,
+        "keywords": 65
+      },
+      "matchedKeywords": ["distributed systems", "go", "kubernetes"],
+      "missingKeywords": ["rust", "embedded"],
+      "matchRate": 68.5,
+      "keywordDensity": 4.2
+    },
+    "maxPossibleScore": 91,
+    "gapAnalysis": "The resume covers most core competencies...",
+    "recommendation": "full_generation_recommended"
+  }
+}
+```
+
+`recommendation` values:
+
+| Value | Meaning |
+|---|---|
+| `full_generation_recommended` | Gap > 15 points — cover letter generation likely to add significant value |
+| `marginal_improvement` | Gap 5–15 points |
+| `strong_fit` | Gap < 5 points |
+
+When the job posting is client-side-rendered and text cannot be extracted, the response includes `"emptyShellFallback": true` and scoring is based on title, company, and URL slug keywords only.
+
+**Rate limit:** Shares the resume generator ceiling (see [Rate Limit Details](#rate-limit-details)).
+
+**Error codes:**
+
+| Code | Cause |
+|---|---|
+| `400` | Invalid JSON, invalid/non-HTTP URL, body > 256 KB, or `job_content` > 200 KB |
+| `401` | Missing or invalid API key |
+| `429` | Rate limited |
+| `500` | AI service error |
+
+**Example:**
+
+```bash
+curl -X POST https://damilola.tech/api/v1/score-job \
+  -H "Authorization: Bearer dk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://jobs.acme.com/em-123",
+    "title": "Engineering Manager",
+    "company": "Acme Corp"
+  }'
+```
+
+---
+
+### Cover Letter Generation
+
+#### POST /api/v1/generate-cover-letter
+
+Generate a targeted cover letter for a job posting. Accepts a URL or raw text; output is a Markdown document with YAML frontmatter.
+
+**Request Body:**
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `job_posting_url` | string | Conditional | URL of the job posting. Required if `job_posting_text` is omitted. Cannot supply both |
+| `job_posting_text` | string | Conditional | Raw job posting text. Required if `job_posting_url` is omitted. Cannot supply both |
+| `tone` | string | No | `confident` (default), `warm`, or `technical` |
+| `company` | string | No | Company name; used in frontmatter and output filename |
+| `role` | string | No | Role title; used in frontmatter and output filename |
+| `score_job_output` | string | No | JSON string from `POST /api/v1/score-job`. Provides fit context to the generator; recommended but not required |
+
+Body size limit: 50 KB. Timeout: 120 s.
+
+**Response (200):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "cover_letter_markdown": "---\ncompany: Acme Corp\nrole: Engineering Manager\n...\n---\n\nDear Hiring Team,\n...",
+    "metadata": {
+      "company": "Acme Corp",
+      "role": "Engineering Manager",
+      "generated_at": "2026-04-26T15:00:00.000Z",
+      "model": "claude-sonnet-4-6",
+      "input_source": "url",
+      "score_job_used": true,
+      "token_usage": {
+        "input": 4120,
+        "output": 612,
+        "cache_read": 3800
+      }
+    }
+  }
+}
+```
+
+**Error codes:**
+
+| Code | Cause |
+|---|---|
+| `400` | Missing or conflicting job posting input, invalid `tone`, body > 50 KB, or invalid JSON |
+| `401` | Missing or invalid API key; Anthropic API key invalid |
+| `429` | Rate limited |
+| `500` | Template unavailable, generation timed out, or AI service error |
+
+**Example (URL input):**
+
+```bash
+curl -X POST https://damilola.tech/api/v1/generate-cover-letter \
+  -H "Authorization: Bearer dk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "job_posting_url": "https://jobs.acme.com/em-123",
+    "tone": "confident",
+    "company": "Acme Corp",
+    "role": "Engineering Manager"
+  }'
+```
+
+**Example (text input with score context):**
+
+```bash
+curl -X POST https://damilola.tech/api/v1/generate-cover-letter \
+  -H "Authorization: Bearer dk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "job_posting_text": "We are looking for an Engineering Manager...",
+    "tone": "technical",
+    "score_job_output": "{\"currentScore\":{\"total\":72},...}"
+  }'
+```
+
+---
+
+### MCP Tools
+
+The damilola.tech MCP server exposes the following tools wrapping the V1 API.
+
+#### `generate_cover_letter`
+
+Generate a targeted cover letter for a job posting. Mirrors `POST /api/v1/generate-cover-letter`.
+
+**Arguments:**
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `job_posting_url` | string (URL) | Conditional | URL of the job posting |
+| `job_posting_text` | string | Conditional | Raw job posting text; use when URL fetch is blocked |
+| `score_job_output` | string | No | JSON output from `score_job` tool; recommended for best results |
+| `tone` | `confident` \| `warm` \| `technical` | No | Default: `confident` |
+| `company` | string | No | Company name for output filename |
+| `role` | string | No | Role title for output filename |
+
+**Return value:**
+
+Returns a text content block containing the JSON response from the API:
+
+```json
+{
+  "cover_letter_markdown": "...",
+  "metadata": {
+    "company": "...",
+    "role": "...",
+    "generated_at": "ISO-8601",
+    "model": "claude-sonnet-4-6",
+    "input_source": "url | text",
+    "score_job_used": true,
+    "token_usage": { "input": 0, "output": 0, "cache_read": 0 }
+  }
+}
+```
+
+On error, returns a text content block with the error message and `isError: true`.
+
+#### `score_job`
+
+Score a job posting against Damilola's resume. Mirrors `POST /api/v1/score-job`.
+
+**Arguments:**
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `url` | string (URL) | Yes | Job posting URL |
+| `title` | string | Yes | Job title |
+| `company` | string | Yes | Company name |
+
+**Return value:**
+
+Returns a text content block containing the JSON response from the API. Pass the full output as `score_job_output` to `generate_cover_letter` for best results.
+
+---
+
+### V1 Rate Limits
+
+V1 endpoints share the `resume-generator` rate limit bucket (key: `resume-generator`, sliding window):
+
+| Endpoint | Limit | Window | Per |
+|---|---|---|---|
+| `POST /api/v1/score-job` | 100 | 1 hour | IP |
+| `POST /api/v1/generate-cover-letter` | 100 | 1 hour | IP |
+| `POST /api/v1/log-application` | No limit | — | — |
+| `GET /api/v1/log-application` | No limit | — | — |
+| `GET /api/v1/applications` | No limit | — | — |
+
+---
 
 ## Related Documentation
 
