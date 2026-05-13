@@ -109,6 +109,11 @@ export const projectsData: Project[] = [
         url: "https://github.com/damilola-elegbede/alocubano.boulderfest",
         icon: "github",
       },
+      {
+        label: "Case Study",
+        url: "/projects/alcbf/case-study",
+        icon: "external",
+      },
     ],
     stats: {
       label: "Technical Achievements",
