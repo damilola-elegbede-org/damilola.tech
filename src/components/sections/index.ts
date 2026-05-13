@@ -5,3 +5,4 @@ export { FitAssessment } from './fit-assessment';
 export { Education } from './education';
 export { Projects } from './projects';
 export { Contact } from './contact';
+export { GitHubActivity } from './github-activity';
