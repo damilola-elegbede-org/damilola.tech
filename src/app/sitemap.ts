@@ -1,68 +1,54 @@
-import { MetadataRoute } from 'next';
+import type { MetadataRoute } from 'next';
 
 const BASE_URL = 'https://damilola.tech';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const now = new Date();
-
   return [
     {
       url: BASE_URL,
-      lastModified: now,
+      lastModified: new Date('2026-05-01'),
       changeFrequency: 'weekly',
       priority: 1.0,
     },
     {
-      url: `${BASE_URL}/portfolio`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.9,
-    },
-    {
       url: `${BASE_URL}/consulting`,
-      lastModified: now,
+      lastModified: new Date('2026-05-03'),
       changeFrequency: 'monthly',
       priority: 0.8,
     },
     {
       url: `${BASE_URL}/projects/cortex/case-study`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.8,
-    },
-    {
-      url: `${BASE_URL}/projects/forge-intel/case-study`,
-      lastModified: now,
+      lastModified: new Date('2026-05-01'),
       changeFrequency: 'monthly',
       priority: 0.8,
     },
     {
       url: `${BASE_URL}/projects/cortex/activity`,
-      lastModified: now,
+      lastModified: new Date('2026-05-01'),
       changeFrequency: 'daily',
       priority: 0.7,
     },
     {
       url: `${BASE_URL}/docs`,
-      lastModified: now,
+      lastModified: new Date('2026-01-27'),
       changeFrequency: 'monthly',
       priority: 0.6,
     },
     {
       url: `${BASE_URL}/docs/about`,
-      lastModified: now,
+      lastModified: new Date('2026-01-27'),
       changeFrequency: 'monthly',
       priority: 0.6,
     },
     {
       url: `${BASE_URL}/docs/ai-assistant`,
-      lastModified: now,
+      lastModified: new Date('2026-01-27'),
       changeFrequency: 'monthly',
       priority: 0.5,
     },
     {
       url: `${BASE_URL}/docs/privacy`,
-      lastModified: now,
+      lastModified: new Date('2026-01-27'),
       changeFrequency: 'yearly',
       priority: 0.3,
     },
