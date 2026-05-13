@@ -11,19 +11,19 @@ describe('SkillsAssessment', () => {
   it('renders expert skills card', () => {
     render(<SkillsAssessment />);
     expect(screen.getByRole('heading', { name: 'Expert' })).toBeInTheDocument();
-    expect(screen.getByText('Cross-Functional Leadership')).toBeInTheDocument();
+    expect(screen.getByText('Staff+ Cross-Team Technical Leadership')).toBeInTheDocument();
   });
 
   it('renders proficient skills card', () => {
     render(<SkillsAssessment />);
     expect(screen.getByRole('heading', { name: 'Proficient' })).toBeInTheDocument();
-    expect(screen.getByText('GCP')).toBeInTheDocument();
+    expect(screen.getByText('Terraform / Infrastructure as Code')).toBeInTheDocument();
   });
 
   it('renders familiar skills card', () => {
     render(<SkillsAssessment />);
     expect(screen.getByRole('heading', { name: 'Familiar' })).toBeInTheDocument();
-    expect(screen.getByText('AWS')).toBeInTheDocument();
+    expect(screen.getByText('SQL + Database Schema Design')).toBeInTheDocument();
   });
 
   it('has correct section id for navigation', () => {
