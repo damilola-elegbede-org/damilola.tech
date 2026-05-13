@@ -21,11 +21,17 @@ All `/api/admin/*` routes require authentication via JWT token stored in HTTP-on
 
 ## Rate Limiting
 
-All endpoints implement rate limiting. Rate limit headers are included in responses:
+All `/api/v1/*` routes are protected by global rate limiting enforced at the middleware layer before any endpoint handler runs.
 
-```http
-Retry-After: 300
-```
+| Field | Value |
+|-------|-------|
+| Scope | All `/api/v1/*` routes |
+| Limit | 100 requests per minute |
+| Per | IP address |
+| Algorithm | Fixed-window via Upstash Redis (`INCR` + `EXPIRE` pipeline) |
+| Fail-open | Yes — when Redis is unavailable, requests pass through |
+
+When the limit is exceeded, the server responds with HTTP `429`. The `Retry-After` header is always present on `429` responses and contains the number of seconds remaining until the current one-minute window resets.
 
 **Error Response (429):**
 
@@ -34,6 +40,16 @@ Retry-After: 300
   "error": "Too many requests. Please try again later."
 }
 ```
+
+**Response Headers:**
+
+```http
+Retry-After: <seconds until current window resets>
+```
+
+**Fail-Open Behavior:**
+
+If Upstash Redis is unreachable, the middleware skips rate limiting and the request passes through. Rate limiting is never a hard dependency — Redis unavailability does not block traffic.
 
 ## Public Endpoints
 
