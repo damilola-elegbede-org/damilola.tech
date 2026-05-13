@@ -1,0 +1,189 @@
+name: Lighthouse CI
+
+on:
+  deployment_status:
+
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: lighthouse-${{ github.event.deployment.id || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  lighthouse:
+    name: Lighthouse Score Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Mirror the e2e.yml pattern: only fire on successful non-Production deployments.
+    # Vercel names production environments "Production"; previews are "Preview – <project>".
+    if: |
+      github.event.deployment_status.state == 'success' &&
+      !startsWith(github.event.deployment_status.environment, 'Production')
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          # Check out the exact commit that was deployed so baseline.json reflects
+          # the PR branch, not main.
+          ref: ${{ github.event.deployment.sha }}
+
+      - name: Find associated PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.deployment.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          PR_NUM=$(gh api "repos/$REPO/commits/$SHA/pulls" \
+            --jq '.[0].number // empty' 2>/dev/null || true)
+          echo "number=$PR_NUM" >> "$GITHUB_OUTPUT"
+          if [[ -z "$PR_NUM" ]]; then
+            echo "::notice::No PR found for SHA $SHA — will skip PR comment (commit status still posted)"
+          fi
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Lighthouse
+        run: npm install -g lighthouse@12.6.0
+
+      - name: Run Lighthouse
+        id: lh
+        env:
+          TARGET_URL: ${{ github.event.deployment_status.target_url }}
+        run: |
+          lighthouse "$TARGET_URL" \
+            --output json \
+            --output-path lhr.json \
+            --chrome-flags="--headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage" \
+            --only-categories="performance,accessibility,seo" \
+            --quiet
+          echo "perf=$(jq '(.categories.performance.score * 100) | round' lhr.json)" >> "$GITHUB_OUTPUT"
+          echo "a11y=$(jq '(.categories.accessibility.score * 100) | round' lhr.json)" >> "$GITHUB_OUTPUT"
+          echo "seo=$(jq '(.categories.seo.score * 100) | round' lhr.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Gate, comment, and set commit status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LH_PERF: ${{ steps.lh.outputs.perf }}
+          LH_A11Y: ${{ steps.lh.outputs.a11y }}
+          LH_SEO: ${{ steps.lh.outputs.seo }}
+          AUDIT_URL: ${{ github.event.deployment_status.target_url }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.deployment.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 - << 'PYEOF'
+          import json, os, subprocess, sys
+
+          perf    = int(os.environ['LH_PERF'])
+          a11y    = int(os.environ['LH_A11Y'])
+          seo     = int(os.environ['LH_SEO'])
+          url     = os.environ['AUDIT_URL']
+          repo    = os.environ['REPO']
+          sha     = os.environ['SHA']
+          pr      = os.environ.get('PR_NUMBER', '').strip()
+          run_url = os.environ['RUN_URL']
+
+          def badge(d):
+              if d > 0:    return f'+{d} ✅'
+              if d < -10:  return f'{d} \U0001f534'
+              if d < 0:    return f'{d} ⚠️'
+              return f'±0 ✅'
+
+          BASELINE = '.lighthouse/baseline.json'
+          failed = False
+
+          if os.path.exists(BASELINE):
+              with open(BASELINE) as f:
+                  base = json.load(f)
+              bp, ba, bs = base['performance'], base['accessibility'], base['seo']
+              dp, da, ds = perf - bp, a11y - ba, seo - bs
+              failed = dp < -10 or da < -10 or ds < -10
+
+              heading = '❌ Lighthouse Gate — FAILED' if failed else '✅ Lighthouse Gate — PASSED'
+              note    = ('One or more scores dropped >10 points from the ENG-331 baseline.'
+                         if failed else 'All scores within 10 points of the ENG-331 baseline.')
+              body = (
+                  f'## {heading}\n'
+                  f'{note}\n\n'
+                  f'| Category | Score | Baseline | Delta |\n'
+                  f'|---|---|---|---|\n'
+                  f'| Performance | {perf} | {bp} | {badge(dp)} |\n'
+                  f'| Accessibility | {a11y} | {ba} | {badge(da)} |\n'
+                  f'| SEO | {seo} | {bs} | {badge(ds)} |\n\n'
+                  f'Audited: {url}\n'
+                  f'<!-- lighthouse-gate-marker -->'
+              )
+              status_state = 'failure' if failed else 'success'
+              status_desc  = ('Regression — score dropped >10 pts from baseline'
+                              if failed else
+                              f'Perf {perf} / A11y {a11y} / SEO {seo} — within threshold')
+          else:
+              body = (
+                  f'## \U0001f535 Lighthouse Scores — informational (no baseline)\n\n'
+                  f'No baseline at `.lighthouse/baseline.json`. Gate skipped; scores recorded for reference.\n'
+                  f'See ENG-331 to establish a baseline and enable hard-gating.\n\n'
+                  f'| Category | Score |\n'
+                  f'|---|---|\n'
+                  f'| Performance | {perf} |\n'
+                  f'| Accessibility | {a11y} |\n'
+                  f'| SEO | {seo} |\n\n'
+                  f'Audited: {url}\n'
+                  f'<!-- lighthouse-gate-marker -->'
+              )
+              status_state = 'success'
+              status_desc  = f'Perf {perf} / A11y {a11y} / SEO {seo} — no baseline (informational)'
+
+          def gh(*args):
+              subprocess.run(['gh'] + list(args), check=True, env=os.environ)
+
+          # Set commit status first — this is the branch-protection gate.
+          # Must succeed before we attempt the PR comment so a comment failure
+          # cannot leave the PR in an ambiguous (no-status) merge-able state.
+          gh('api', '--method', 'POST',
+             f'repos/{repo}/statuses/{sha}',
+             '-f', f'state={status_state}',
+             '-f', 'context=lighthouse',
+             '-f', f'description={status_desc[:140]}',
+             '-f', f'target_url={run_url}')
+
+          # Upsert PR comment — best-effort; a failure here must not swallow the status above.
+          if pr:
+              try:
+                  with open('/tmp/lh-payload.json', 'w') as f:
+                      json.dump({'body': body}, f)
+                  result = subprocess.run(
+                      ['gh', 'api', f'repos/{repo}/issues/{pr}/comments', '--jq',
+                       '[.[] | select(.body | contains("<!-- lighthouse-gate-marker -->"))] | .[0].id // empty'],
+                      capture_output=True, text=True, env=os.environ
+                  )
+                  existing = result.stdout.strip()
+                  if existing:
+                      gh('api', '--method', 'PATCH',
+                         f'repos/{repo}/issues/comments/{existing}',
+                         '--input', '/tmp/lh-payload.json')
+                  else:
+                      gh('api', '--method', 'POST',
+                         f'repos/{repo}/issues/{pr}/comments',
+                         '--input', '/tmp/lh-payload.json')
+              except subprocess.CalledProcessError as e:
+                  print(f'::warning::PR comment failed ({e}); commit status was already set')
+
+          if failed:
+              print('::error::Lighthouse gate failed — see PR comment for score breakdown')
+              sys.exit(1)
+          PYEOF
+
+      - uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
+        if: always()
+        with:
+          name: lighthouse-report
+          path: lhr.json
+          retention-days: 7
