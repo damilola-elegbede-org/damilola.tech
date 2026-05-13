@@ -38,6 +38,27 @@ export const metadata: Metadata = {
   },
 };
 
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Person',
+      name: 'Damilola Elegbede',
+      jobTitle: 'Distinguished Engineer',
+      url: 'https://damilola.tech',
+      sameAs: [
+        'https://linkedin.com/in/damilola-elegbede',
+        'https://github.com/damilola-elegbede',
+      ],
+    },
+    {
+      '@type': 'WebSite',
+      name: 'Damilola Elegbede',
+      url: 'https://damilola.tech',
+    },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -45,6 +66,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="scroll-smooth">
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      </head>
       <body
         className={`${GeistSans.variable} ${GeistMono.variable} font-sans antialiased`}
       >
