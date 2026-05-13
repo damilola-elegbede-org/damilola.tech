@@ -555,6 +555,7 @@ curl -X POST \
 |--------|------|-----------|
 | 400 | `VALIDATION_ERROR` | Missing `company` or `title`, invalid `status`, `score` out of 0–100 range, invalid `applied_at` format |
 | 401 | `UNAUTHORIZED` | Missing or invalid API key |
+| 429 | `RATE_LIMITED` | IP rate limit exceeded (100 req/min); see `Retry-After` header |
 | 500 | `INTERNAL_ERROR` | Storage failure |
 
 ---
@@ -617,6 +618,7 @@ curl -H "Authorization: Bearer YOUR_API_KEY" \
 |--------|------|-----------|
 | 400 | `VALIDATION_ERROR` | Invalid `status`/`stage` value, invalid `since` format |
 | 401 | `UNAUTHORIZED` | Missing or invalid API key |
+| 429 | `RATE_LIMITED` | IP rate limit exceeded (100 req/min); see `Retry-After` header |
 
 ---
 
@@ -677,6 +679,7 @@ curl -H "Authorization: Bearer YOUR_API_KEY" \
 |--------|------|-----------|
 | 400 | `VALIDATION_ERROR` | Invalid `status` value |
 | 401 | `UNAUTHORIZED` | Missing or invalid API key |
+| 429 | `RATE_LIMITED` | IP rate limit exceeded (100 req/min); see `Retry-After` header |
 
 ---
 
