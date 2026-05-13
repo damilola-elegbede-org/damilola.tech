@@ -200,7 +200,7 @@ async function tryLocalContentDirs(filename: string): Promise<string | null> {
     const path = await import('path');
 
     for (const dir of CONTENT_DIRS) {
-      const localPath = path.join(process.cwd(), dir, filename);
+      const localPath = path.join(/*turbopackIgnore: true*/ process.cwd(), dir, filename);
       try {
         const content = await fs.readFile(localPath, 'utf-8');
         console.log(`Using local ${filename} from ${dir}`);

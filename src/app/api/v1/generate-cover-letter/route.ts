@@ -72,7 +72,7 @@ async function getCoverLetterSystemPrompt(): Promise<string> {
   try {
     const fs = await import('fs/promises');
     const path = await import('path');
-    const localPath = path.join(process.cwd(), 'career-data', 'templates', 'cover-letter.md');
+    const localPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'career-data', 'templates', 'cover-letter.md');
     return await fs.readFile(localPath, 'utf-8');
   } catch {
     throw new Error('Cover letter template not found in blob or locally.');
@@ -99,15 +99,15 @@ async function getSharedContext(): Promise<{
       const path = await import('path');
 
       if (!results.resume) {
-        const p = path.join(process.cwd(), 'career-data', 'data', 'resume-full.json');
+        const p = path.join(/*turbopackIgnore: true*/ process.cwd(), 'career-data', 'data', 'resume-full.json');
         results.resume = await fs.readFile(p, 'utf-8').catch(() => '');
       }
       if (!results.starStories) {
-        const p = path.join(process.cwd(), 'career-data', 'data', 'star-stories.json');
+        const p = path.join(/*turbopackIgnore: true*/ process.cwd(), 'career-data', 'data', 'star-stories.json');
         results.starStories = await fs.readFile(p, 'utf-8').catch(() => '');
       }
       if (!results.leadershipPhilosophy) {
-        const p = path.join(process.cwd(), 'career-data', 'context', 'leadership-philosophy.md');
+        const p = path.join(/*turbopackIgnore: true*/ process.cwd(), 'career-data', 'context', 'leadership-philosophy.md');
         results.leadershipPhilosophy = await fs.readFile(p, 'utf-8').catch(() => '');
       }
     } catch {
