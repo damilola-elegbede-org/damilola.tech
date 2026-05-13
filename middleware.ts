@@ -45,7 +45,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
       return NextResponse.next();  // fail open on Redis error
     }
 
-    const [[, incr]] = (await res.json()) as [[string, number], [string, number]];
+    const [{ result: incr }] = (await res.json()) as [{ result: number }, { result: number }];
     count = incr;
   } catch {
     return NextResponse.next();  // fail open on network error

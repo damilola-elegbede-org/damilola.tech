@@ -16,7 +16,7 @@ function makeRequest(path = '/api/v1/score-job', ip?: string): NextRequest {
 function stubRedisCount(count: number): void {
   mockFetch.mockResolvedValueOnce({
     ok: true,
-    json: async () => [[null, count], [null, 1]],
+    json: async () => [{ result: count }, { result: 1 }],
   });
 }
 
