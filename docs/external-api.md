@@ -386,6 +386,7 @@ curl -o elegbede-resume.pdf https://damilola.tech/api/v1/resume.pdf
 
 | Status | Code | Condition |
 |--------|------|-----------|
+| 429 | `RATE_LIMITED` | IP rate limit exceeded (100 req/min); see `Retry-After` header |
 | 500 | `INTERNAL_ERROR` | PDF rendering failed (server-side error) |
 
 ```json
@@ -874,7 +875,35 @@ Score a job posting against Damilola's resume for fit and readiness. Mirrors `PO
 
 ## Rate Limits
 
-API key access is not rate limited. However, the underlying AI endpoints are subject to Anthropic's rate limits. If you encounter 429 responses, check the `Retry-After` header.
+All `/api/v1/*` routes — including API-key-authenticated endpoints — are subject to global rate limiting enforced at the middleware layer before any endpoint handler runs.
+
+| Field | Value |
+|-------|-------|
+| Scope | All `/api/v1/*` routes |
+| Limit | 100 requests per minute |
+| Per | IP address |
+| Algorithm | Fixed-window via Upstash Redis (`INCR` + `EXPIRE` pipeline) |
+| Fail-open | Yes — when Redis is unavailable, requests pass through |
+
+When the limit is exceeded, the server responds with HTTP `429`. The `Retry-After` header is always present on `429` responses and contains the number of seconds remaining until the current one-minute window resets.
+
+**Error Response (429):**
+
+```json
+{
+  "error": "Too many requests. Please try again later."
+}
+```
+
+**Response Headers:**
+
+```http
+Retry-After: <seconds until current window resets>
+```
+
+**Fail-Open Behavior:**
+
+If Upstash Redis is unreachable, the middleware skips rate limiting and the request passes through. Rate limiting is never a hard dependency — Redis unavailability does not block traffic.
 
 ## Security Best Practices
 
