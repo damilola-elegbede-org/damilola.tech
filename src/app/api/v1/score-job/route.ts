@@ -90,7 +90,13 @@ export async function POST(req: Request) {
       return Errors.validationError('Request body must be a JSON object.');
     }
 
-    const { url, title, company, job_content: jobContent } = body as Record<string, unknown>;
+    const { url, title, company, job_content: jobContent, mode } = body as Record<string, unknown>;
+
+    if (mode !== undefined && mode !== null && mode !== 'interview-prep') {
+      return Errors.badRequest('Invalid mode. Accepted values: "interview-prep".');
+    }
+    const interviewPrepMode = mode === 'interview-prep';
+
     const normalizedUrl = typeof url === 'string' ? url.trim() : url;
     const normalizedTitle = typeof title === 'string' ? title.trim() : title;
     const normalizedCompany = typeof company === 'string' ? company.trim() : company;
@@ -138,9 +144,14 @@ export async function POST(req: Request) {
     const { readinessScore } = buildScoringInput(scoringText);
     const currentScore = buildScorePayload(readinessScore);
 
+    const basePrompt = buildGapAnalysisPrompt(currentScore);
+    const userContent = interviewPrepMode
+      ? `${basePrompt}\n\nAdditionally, return exactly 5 "interviewPrepQuestions" in the JSON. Each must use behavioral framing — start with "Tell me about a time..." or "How would you approach...". Base questions on the top gap areas identified above.\n\nUpdated JSON schema: {"gapAnalysis":"...","maxPossibleScore":0-100,"recommendation":"...","interviewPrepQuestions":["Q1","Q2","Q3","Q4","Q5"]}\n\n<job_description>${xmlEscape(scoringText)}</job_description>`
+      : `${basePrompt}\n\n<job_description>${xmlEscape(scoringText)}</job_description>`;
+
     const message = await scoringClient.messages.create({
       model: 'claude-opus-4-6',
-      max_tokens: 1200,
+      max_tokens: interviewPrepMode ? 2000 : 1200,
       temperature: 0,
       system: [
         {
@@ -152,7 +163,7 @@ export async function POST(req: Request) {
       messages: [
         {
           role: 'user',
-          content: `${buildGapAnalysisPrompt(currentScore)}\n\n<job_description>${xmlEscape(resolvedInput.text)}</job_description>`,
+          content: userContent,
         },
       ],
     });
@@ -161,6 +172,14 @@ export async function POST(req: Request) {
     const parsed = parseJsonResponse(responseText);
 
     const gapAnalysis = typeof parsed.gapAnalysis === 'string' ? parsed.gapAnalysis : '';
+    const _rawPrepQuestions = interviewPrepMode && Array.isArray(parsed.interviewPrepQuestions)
+      ? (parsed.interviewPrepQuestions as unknown[])
+          .filter((q): q is string => typeof q === 'string')
+          .map((q) => q.trim())
+          .filter((q) => q.length > 0)
+          .slice(0, 5)
+      : undefined;
+    const interviewPrepQuestions = _rawPrepQuestions?.length === 5 ? _rawPrepQuestions : undefined;
     const parsedMaxScore = sanitizeScoreValue(parsed.maxPossibleScore, 0, 100);
     const maxPossibleScore = Math.max(currentScore.total, parsedMaxScore);
     const gap = maxPossibleScore - currentScore.total;
@@ -194,6 +213,7 @@ export async function POST(req: Request) {
       gapAnalysis,
       recommendation,
       ...(resolvedInput.isEmptyShell ? { emptyShellFallback: true } : {}),
+      ...(interviewPrepQuestions ? { interviewPrepQuestions } : {}),
     });
   } catch (error) {
     if (error instanceof JobDescriptionInputError) {

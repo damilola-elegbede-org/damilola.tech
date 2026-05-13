@@ -358,4 +358,117 @@ describe('POST /api/v1/score-job', () => {
       expect(response.status).toBe(500);
     });
   });
+
+  describe('interview-prep mode', () => {
+    const prepQuestions = [
+      'Tell me about a time you designed a scalable distributed system.',
+      'How would you approach leading a team through a major architectural migration?',
+      'Tell me about a time you had to balance technical debt against feature velocity.',
+      'How would you approach mentoring engineers on Kubernetes-based infrastructure?',
+      'Tell me about a time you drove cross-functional alignment on a technical decision.',
+    ];
+
+    beforeEach(() => {
+      mockParseJsonResponse.mockReturnValue({
+        gapAnalysis: 'Strong fit.',
+        maxPossibleScore: 88,
+        recommendation: 'marginal_improvement',
+        interviewPrepQuestions: prepQuestions,
+      });
+    });
+
+    it('returns interviewPrepQuestions with exactly 5 items when mode=interview-prep', async () => {
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest({ ...validBody, mode: 'interview-prep' }));
+      const data = await response.json() as { success: boolean; data: Record<string, unknown> };
+
+      expect(response.status).toBe(200);
+      expect(data.success).toBe(true);
+      expect(Array.isArray(data.data.interviewPrepQuestions)).toBe(true);
+      expect((data.data.interviewPrepQuestions as string[]).length).toBe(5);
+    });
+
+    it('response does not include interviewPrepQuestions when mode is absent', async () => {
+      mockParseJsonResponse.mockReturnValue({
+        gapAnalysis: 'Strong fit.',
+        maxPossibleScore: 88,
+        recommendation: 'marginal_improvement',
+      });
+
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest(validBody));
+      const data = await response.json() as { success: boolean; data: Record<string, unknown> };
+
+      expect(response.status).toBe(200);
+      expect(data.data.interviewPrepQuestions).toBeUndefined();
+    });
+
+    it('response does not include interviewPrepQuestions when mode is null', async () => {
+      mockParseJsonResponse.mockReturnValue({
+        gapAnalysis: 'Strong fit.',
+        maxPossibleScore: 88,
+        recommendation: 'marginal_improvement',
+      });
+
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest({ ...validBody, mode: null }));
+      const data = await response.json() as { success: boolean; data: Record<string, unknown> };
+
+      expect(response.status).toBe(200);
+      expect(data.data.interviewPrepQuestions).toBeUndefined();
+    });
+
+    it('returns 400 with Invalid mode error when mode is an unrecognized string', async () => {
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest({ ...validBody, mode: 'invalid-mode' }));
+      const data = await response.json() as { error: { message: string } };
+
+      expect(response.status).toBe(400);
+      expect(data.error.message).toContain('Invalid mode');
+    });
+
+    it('questions use behavioral framing (Tell me about or How would you)', async () => {
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest({ ...validBody, mode: 'interview-prep' }));
+      const data = await response.json() as { data: { interviewPrepQuestions: string[] } };
+
+      const questions = data.data.interviewPrepQuestions;
+      const allBehavioral = questions.every(
+        (q) => q.startsWith('Tell me about') || q.startsWith('How would you')
+      );
+      expect(allBehavioral).toBe(true);
+    });
+
+    it('omits interviewPrepQuestions when AI returns mixed-type array (strings and numbers)', async () => {
+      mockParseJsonResponse.mockReturnValue({
+        gapAnalysis: 'Strong fit.',
+        maxPossibleScore: 88,
+        recommendation: 'marginal_improvement',
+        interviewPrepQuestions: ['Q1', 2, 'Q3', 4, 'Q5'],
+      });
+
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest({ ...validBody, mode: 'interview-prep' }));
+      const data = await response.json() as { success: boolean; data: Record<string, unknown> };
+
+      expect(response.status).toBe(200);
+      expect(data.data.interviewPrepQuestions).toBeUndefined();
+    });
+
+    it('omits interviewPrepQuestions when AI returns fewer than 5 items', async () => {
+      mockParseJsonResponse.mockReturnValue({
+        gapAnalysis: 'Strong fit.',
+        maxPossibleScore: 88,
+        recommendation: 'marginal_improvement',
+        interviewPrepQuestions: ['Q1', 'Q2', 'Q3'],
+      });
+
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest({ ...validBody, mode: 'interview-prep' }));
+      const data = await response.json() as { success: boolean; data: Record<string, unknown> };
+
+      expect(response.status).toBe(200);
+      expect(data.data.interviewPrepQuestions).toBeUndefined();
+    });
+  });
 });
