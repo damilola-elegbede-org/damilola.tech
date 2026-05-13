@@ -2,27 +2,28 @@ import type { ResumeData, SuggestedQuestion } from "@/types";
 
 export const resumeData: ResumeData = {
   name: "Damilola Elegbede",
-  title: "Sr. Engineering Manager",
+  title: "Distinguished Engineer",
   tagline:
-    "I build engineering organizations that deliver results, retain top talent, and develop leaders",
+    "I architect systems for org-scale impact — AI agent infrastructure, cloud platforms, and distributed foundations that compound engineering velocity across organizations",
   brandingStatement:
-    "Strategic engineering leader with 15+ years scaling mission-critical infrastructure at Verily Life Sciences and Qualcomm. Designed a cloud transformation supporting 30+ production systems, enabling flagship product launches (L'Oréal LDP, T1D). Expert at building high-performance teams, driving GCP/AWS migrations, and establishing platform engineering practices that improve developer velocity and system reliability.",
+    "Distinguished Engineer with 15+ years designing mission-critical systems at Verily Life Sciences and Qualcomm. Architected a multi-cloud transformation (GCP/AWS) supporting 30+ production systems, built the Cortex AI agent fleet orchestrating multi-agent workflows at scale, and established platform engineering practices adopted org-wide. Deep IC expertise in system design, AI infrastructure, and architectural influence across engineering organizations.",
   email: "damilola.elegbede@gmail.com",
   linkedin: "https://linkedin.com/in/damilola-elegbede/",
   github: "https://github.com/damilola-elegbede",
   location: "Boulder, CO",
   openToRoles: [
-    "Engineering Manager",
-    "Senior Engineering Manager",
+    "Distinguished Engineer",
+    "Staff Engineer",
+    "Principal Engineer",
     "Director of Engineering",
   ],
   experienceTags: [
-    "Engineering Management",
-    "Team Leadership",
-    "Cross-functional Leadership",
-    "Strategic Planning",
-    "Stakeholder Management",
-    "People Management",
+    "AI Infrastructure",
+    "System Architecture & Design",
+    "Platform Engineering",
+    "Cloud Transformation (GCP/AWS)",
+    "Multi-Agent Orchestration",
+    "15+ Years Engineering",
     "MBA + MS CS",
   ],
   experiences: [

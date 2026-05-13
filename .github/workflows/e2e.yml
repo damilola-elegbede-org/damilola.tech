@@ -43,9 +43,6 @@ jobs:
       - run: npx playwright install --with-deps ${{ matrix.project == 'mobile-chrome' && 'chromium' || matrix.project == 'mobile-safari' && 'webkit' || matrix.project }}
       - run: npx playwright test --project=${{ matrix.project }}
         env:
-          # For deployment_status runs we target the deployed URL.
-          # For workflow_dispatch there is no deployment target_url; leaving this empty
-          # allows playwright.config.ts to start the local webServer instead.
           PLAYWRIGHT_BASE_URL: ${{ github.event.deployment_status.target_url }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
           ADMIN_PASSWORD_PREVIEW: ${{ steps.env.outputs.is_production == 'true' && secrets.ADMIN_PASSWORD_PRODUCTION || secrets.ADMIN_PASSWORD_PREVIEW }}
@@ -57,4 +54,3 @@ jobs:
           name: playwright-report-${{ matrix.project }}
           path: playwright-report/
           retention-days: 7
-
