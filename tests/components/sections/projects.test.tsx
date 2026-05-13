@@ -52,8 +52,8 @@ describe('Projects', () => {
     expect(screen.getByText('JavaScript')).toBeInTheDocument();
     expect(screen.getAllByText('Next.js')).toHaveLength(2);
     expect(screen.getByText('Stripe')).toBeInTheDocument();
-    // Claude API appears in 3 projects (cortex, damilola.tech, and Pipedream)
-    expect(screen.getAllByText('Claude API')).toHaveLength(3);
+    // Claude API appears in 4 projects (forge-intel, cortex, damilola.tech, and Pipedream)
+    expect(screen.getAllByText('Claude API')).toHaveLength(4);
   });
 
   it('renders project links', () => {

@@ -2,6 +2,73 @@ import type { Project } from "@/types";
 
 export const projectsData: Project[] = [
   {
+    id: "forge-intel",
+    name: "Forge Intel",
+    subtitle: "Job intelligence pipeline with AI scoring and Telegram alerts",
+    description:
+      "Weekly job scraper targeting Anthropic, Netflix, Nvidia, Airbnb, and Vercel — bypasses ATS auth walls (Workday, Greenhouse, Ashby) with a multi-strategy fetch layer, scores each posting against resume via Claude API, and delivers instant Telegram DMs for high-fit matches.",
+    techStack: [
+      "Node.js",
+      "SQLite",
+      "Playwright",
+      "Claude API",
+      "Telegram Bot API",
+      "GitHub Actions",
+      "launchd",
+    ],
+    links: [
+      {
+        label: "Case Study",
+        url: "/projects/forge-intel/case-study",
+        icon: "external",
+      },
+    ],
+    stats: {
+      label: "System Metrics",
+      items: [
+        "5 target companies monitored: Anthropic, Netflix, Nvidia, Airbnb, Vercel",
+        "3 ATS bypass strategies: plain HTTP, SSR heuristic, Playwright headless",
+        "< 60s alert latency from scrape run to Telegram DM",
+      ],
+    },
+    highlights: [
+      "Multi-strategy ATS bypass: plain HTTP → SSR empty-shell heuristic → Playwright headless",
+      "job_content bypass mode decouples scraping from scoring — works even when fetch fails",
+      "SQLite hash-key idempotency: re-runs skip already-scored jobs, auto-detect new postings",
+      "failure_mode taxonomy in error responses drives strategy selection and debugging",
+      "Integrated with damilola.tech score_job MCP for consistent 0–100 resume fit scoring",
+    ],
+    categories: [
+      {
+        title: "Data Acquisition",
+        items: [
+          "Plain HTTP fetch with User-Agent rotation for static job pages",
+          "Mixed-SSR heuristic: detects Ashby/Workday empty shells by body content size",
+          "Playwright headless fallback: full JS execution for SPA-rendered job boards",
+          "job_content bypass: accepts raw JD text when URL fetch fails auth walls",
+        ],
+      },
+      {
+        title: "Scoring Pipeline",
+        items: [
+          "Claude API via damilola.tech /api/v1/score-job endpoint",
+          "0–100 fit score against structured resume data",
+          "Gap analysis: top 3 fit bullets + top 3 gap bullets per posting",
+          "failure_mode field in error responses (auth_wall, empty_shell, timeout, parse_error)",
+        ],
+      },
+      {
+        title: "Persistence & Alerting",
+        items: [
+          "SQLite with hash-keyed rows — idempotent re-runs, automatic new-posting detection",
+          "Telegram Bot API: instant DM when score exceeds threshold",
+          "Score history stored for trend analysis and company-level benchmarking",
+          "Audit log of all fetch attempts with strategy used and failure mode if applicable",
+        ],
+      },
+    ],
+  },
+  {
     id: "cortex-agent-fleet",
     name: "Cortex Agent Fleet",
     subtitle: "Multi-agent AI system with autonomous task orchestration",

@@ -361,6 +361,7 @@ describe('projects-data - Content Quality', () => {
 
   it('projects are in expected order', () => {
     const expectedOrder = [
+      'forge-intel',
       'cortex-agent-fleet',
       'alo-cubano',
       'damilola-tech',
