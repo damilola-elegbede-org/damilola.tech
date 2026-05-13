@@ -1,5 +1,16 @@
 import type { NextConfig } from "next";
 
+const CSP_DIRECTIVES = [
+  "default-src 'self'",
+  "script-src 'self' https://vercel.live",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data:",
+  "font-src 'self' https://fonts.gstatic.com",
+  "connect-src 'self'",
+  "frame-ancestors 'none'",
+  "upgrade-insecure-requests",
+].join("; ");
+
 const nextConfig: NextConfig = {
   async headers() {
     return [
@@ -11,6 +22,7 @@ const nextConfig: NextConfig = {
           { key: 'X-XSS-Protection', value: '1; mode=block' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+          { key: 'Content-Security-Policy-Report-Only', value: CSP_DIRECTIVES },
         ],
       },
       {
