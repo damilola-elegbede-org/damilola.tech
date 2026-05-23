@@ -48,6 +48,8 @@ Comprehensive documentation for the damilola.tech personal career landing page a
 - [SSRF Protection](./api-documentation.md#ssrf-protection) - URL fetching security
 - [Input Validation](./api-documentation.md#input-validation) - Request sanitization
 
+All `/api/` and `/admin/` routes are intentionally excluded from search engine crawlers via `src/app/robots.ts` — the sitemap publishes only public routes.
+
 ## Development
 
 ### Setup
