@@ -72,7 +72,6 @@ All responses follow a consistent JSON structure:
 | `NOT_FOUND` | 404 | Resource not found |
 | `BAD_REQUEST` | 400 | Invalid request parameters |
 | `VALIDATION_ERROR` | 400 | Request validation failed |
-| `RATE_LIMITED` | 429 | Too many requests |
 | `INTERNAL_ERROR` | 500 | Server error |
 
 ## Endpoints
@@ -386,8 +385,16 @@ curl -o elegbede-resume.pdf https://damilola.tech/api/v1/resume.pdf
 
 | Status | Code | Condition |
 |--------|------|-----------|
-| 429 | `RATE_LIMITED` | IP rate limit exceeded (100 req/min); see `Retry-After` header |
+| 429 | — | IP rate limit exceeded (100 req/min); see `Retry-After` header |
 | 500 | `INTERNAL_ERROR` | PDF rendering failed (server-side error) |
+
+**429 response body** (from rate-limit middleware — flat envelope, no `code` field):
+
+```json
+{ "error": "Too many requests. Please try again later." }
+```
+
+**500 response body:**
 
 ```json
 {
