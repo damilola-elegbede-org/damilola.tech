@@ -72,6 +72,7 @@ All responses follow a consistent JSON structure:
 | `NOT_FOUND` | 404 | Resource not found |
 | `BAD_REQUEST` | 400 | Invalid request parameters |
 | `VALIDATION_ERROR` | 400 | Request validation failed |
+| `RATE_LIMITED` | 429 | Route-level rate limit exceeded |
 | `INTERNAL_ERROR` | 500 | Server error |
 
 ## Endpoints
