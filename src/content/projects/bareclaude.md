@@ -169,7 +169,7 @@ Each agent has a `launchd/` directory with plists carrying the `bareclaude.<agen
 
 **Why launchd and not Kubernetes or Docker?**
 
-The fleet lives on a single Mac Mini that's already the principal workstation. The marginal cost of a launchd plist is near zero; the overhead of a container runtime for 82 scheduled jobs would be substantial for no resilience gain. launchd gives `KeepAlive`, retry-on-failure, start intervals, and integration with TCC keychain permissions — which was non-negotiable because agents need macOS keychain access for certain credential operations.
+The fleet lives on a single Mac Mini that's already the principal workstation. The marginal cost of a launchd plist is near zero; the overhead of a container runtime for 111 scheduled jobs would be substantial for no resilience gain. launchd gives `KeepAlive`, retry-on-failure, start intervals, and integration with TCC keychain permissions — which was non-negotiable because agents need macOS keychain access for certain credential operations.
 
 **Agent lifecycle:** agents don't run as long-lived processes. They run as tmux daemon sessions that the launchd crons dispatch into via `tmux send-keys`. This means:
 1. Each cron fire is isolated — a crashed session doesn't affect other running agents
