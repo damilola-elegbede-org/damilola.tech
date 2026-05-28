@@ -119,7 +119,7 @@ The SSE `hello` event on every connection carries a `startedAt` timestamp — lo
 
 ### Webhook Infrastructure
 
-All inbound webhooks route through a dedicated receiver process (`bareclaude.webhook-receiver` on `127.0.0.1:4001`). GitHub, Linear, and Slack webhooks arrive at Tailscale Funnel public endpoints (`*.tail873377.ts.net:8443/hooks/{github,linear,slack}`), get forwarded to the receiver, and are demuxed by event type and `api_app_id` (for Slack) before being dispatched to the appropriate agent's inbox file.
+All inbound webhooks route through a dedicated receiver process (`bareclaude.webhook-receiver` on `127.0.0.1:4001`). GitHub, Linear, and Slack webhooks arrive at Tailscale Funnel public endpoints (`*.tail<id>.ts.net:8443/hooks/{github,linear,slack}`), get forwarded to the receiver, and are demuxed by event type and `api_app_id` (for Slack) before being dispatched to the appropriate agent's inbox file.
 
 The receiver is a separate process from Mission Control, fault-isolated by design: a crash in the dashboard doesn't take down webhook processing, and vice versa.
 
