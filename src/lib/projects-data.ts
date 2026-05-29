@@ -206,7 +206,7 @@ export const projectsData: Project[] = [
         icon: "github",
       },
       {
-        label: "Rate Limiting Case Study",
+        label: "Case Study",
         url: "/projects/rate-limiting",
         icon: "external",
       },
