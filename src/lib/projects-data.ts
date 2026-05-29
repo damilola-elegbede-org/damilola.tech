@@ -205,6 +205,11 @@ export const projectsData: Project[] = [
         url: "https://github.com/damilola-elegbede/damilola.tech",
         icon: "github",
       },
+      {
+        label: "Rate Limiting Case Study",
+        url: "/projects/rate-limiting",
+        icon: "external",
+      },
     ],
     stats: {
       label: "Technical Metrics",
