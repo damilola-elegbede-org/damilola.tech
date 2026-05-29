@@ -4,21 +4,13 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Production API Rate Limiting — Case Study | Damilola Elegbede",
   description:
-    "How I built production-grade API rate limiting with Upstash Redis sliding-window algorithm, fail-open design, and per-IP enforcement at the Next.js edge middleware layer.",
+    "How I built production API rate limiting with a fixed-window counter via Upstash Redis, fail-open design, and per-IP enforcement at the Next.js edge middleware layer.",
   openGraph: {
     title: "Production API Rate Limiting — Case Study | Damilola Elegbede",
     description:
-      "Sliding-window rate limiting via Upstash Redis at the Next.js edge — 100 req/min per IP, fail-open under Redis failure, 9-test suite covering boundary and proxy-chain cases.",
+      "Fixed-window rate limiting via Upstash Redis at the Next.js edge — 100 req/min per IP, fail-open under Redis failure, 9-test suite covering boundary and proxy-chain cases.",
     type: "article",
     url: "https://damilola.tech/projects/rate-limiting",
-    images: [
-      {
-        url: "https://damilola.tech/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "Production API Rate Limiting Case Study",
-      },
-    ],
   },
 };
 
@@ -84,7 +76,7 @@ export default function RateLimitingCaseStudy() {
           Production API Rate Limiting
         </h1>
         <p className="text-lg text-[var(--color-text-muted)]">
-          Sliding-window rate limiting at the Next.js edge layer using Upstash Redis — per-IP
+          Fixed-window rate limiting at the Next.js edge layer using Upstash Redis — per-IP
           enforcement with a deliberate fail-open design that keeps the site available when
           Redis is unreachable.
         </p>
@@ -119,7 +111,7 @@ export default function RateLimitingCaseStudy() {
 
       <Section title="Architecture">
         <h3 className="mb-3 text-lg font-semibold text-[var(--color-text)]">
-          Sliding-Window via Time-Bucketed Keys
+          Fixed-Window Counter with Time-Bucketed Keys
         </h3>
         <p className="mb-4 text-[var(--color-text-muted)]">
           The implementation uses a fixed-window approximation that behaves like a sliding
@@ -134,7 +126,7 @@ const key = \`ratelimit:api:\${ip}:\${windowId}\`;`}</CodeBlock>
           A single Upstash pipeline call performs{" "}
           <code className="rounded bg-[var(--color-card)] px-1 text-xs">INCR</code> +{" "}
           <code className="rounded bg-[var(--color-card)] px-1 text-xs">EXPIRE</code>{" "}
-          atomically, keeping the rate-check to a single round trip.
+          in a single round trip.
         </p>
 
         <h3 className="mb-3 text-lg font-semibold text-[var(--color-text)]">
@@ -289,7 +281,7 @@ export const config = { matcher: '/api/v1/:path*' };`}</CodeBlock>
           <Bullet>
             <div>
               <strong className="text-[var(--color-text)]">
-                Pipeline for atomic INCR + EXPIRE
+                Pipeline for single-round-trip INCR + EXPIRE
               </strong>
               <p className="mt-1">
                 Using Upstash&apos;s{" "}
