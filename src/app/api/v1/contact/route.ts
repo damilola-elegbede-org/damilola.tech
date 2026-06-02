@@ -91,6 +91,15 @@ export async function POST(req: Request) {
     return Errors.validationError(validation.error);
   }
 
+  // Log submission so it surfaces in Vercel function logs — the only delivery path until Resend is wired up
+  console.log(JSON.stringify({
+    event: "contact_submission",
+    ts: new Date().toISOString(),
+    name: validation.data.name,
+    email: validation.data.email,
+    company: validation.data.company ?? null,
+  }));
+
   return Response.json(
     {
       success: true,

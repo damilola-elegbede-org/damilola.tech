@@ -25,6 +25,7 @@ const validBody = {
 describe('POST /api/v1/contact', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
   });
 
   it('returns 201 for a valid submission', async () => {
@@ -34,6 +35,22 @@ describe('POST /api/v1/contact', () => {
     expect(json.success).toBe(true);
     expect(typeof json.data.confirmation).toBe('string');
     expect(json.data.confirmation.length).toBeGreaterThan(0);
+  });
+
+  it('logs a contact_submission event for a valid submission', async () => {
+    await POST(makeRequest(validBody));
+    expect(console.log).toHaveBeenCalledOnce();
+    const logged = JSON.parse(vi.mocked(console.log).mock.calls[0][0] as string);
+    expect(logged.event).toBe('contact_submission');
+    expect(logged.name).toBe('Alice Tester');
+    expect(logged.email).toBe('alice@example.com');
+    expect(logged.company).toBe('Acme Inc');
+    expect(typeof logged.ts).toBe('string');
+  });
+
+  it('does not log when validation fails', async () => {
+    await POST(makeRequest({ ...validBody, name: '' }));
+    expect(console.log).not.toHaveBeenCalled();
   });
 
   it('returns 201 without exposing submission contents', async () => {
