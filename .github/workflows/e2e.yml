@@ -39,7 +39,8 @@ jobs:
           key: npm-v2-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
             npm-v2-${{ runner.os }}-
-      - run: npm ci
+      - name: Install dependencies
+        run: npm ci || (echo "::warning::npm ci failed on first attempt — retrying" && npm ci)
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
