@@ -250,7 +250,11 @@ Submit a contact inquiry from the consulting page.
 
 ```json
 {
-  "error": "`email` must be a valid email address."
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "`email` must be a valid email address."
+  }
 }
 ```
 
