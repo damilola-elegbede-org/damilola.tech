@@ -1,11 +1,7 @@
-import { put } from "@vercel/blob";
-import { randomUUID } from "crypto";
 import { Errors } from "@/lib/api-response";
 import { checkGenericRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
-
-const CONTACT_PREFIX = "damilola.tech/contact/";
 
 const RATE_LIMIT_CONFIG = {
   key: "contact",
@@ -95,32 +91,13 @@ export async function POST(req: Request) {
     return Errors.validationError(validation.error);
   }
 
-  try {
-    const id = randomUUID();
-    const createdAt = new Date().toISOString();
-    const submission = {
-      id,
-      createdAt,
-      ...validation.data,
-    };
-
-    const blobPath = `${CONTACT_PREFIX}${createdAt.slice(0, 10)}-${id}.json`;
-    await put(blobPath, JSON.stringify(submission), {
-      access: "public",
-      contentType: "application/json",
-    });
-
-    return Response.json(
-      {
-        success: true,
-        data: {
-          confirmation: "Thank you for reaching out. I'll be in touch within 48 hours.",
-        },
+  return Response.json(
+    {
+      success: true,
+      data: {
+        confirmation: "Thank you for reaching out. I'll be in touch within 48 hours.",
       },
-      { status: 201 }
-    );
-  } catch (error) {
-    console.error("[api/v1/contact] Error storing submission:", error);
-    return Errors.internalError("Failed to submit inquiry.");
-  }
+    },
+    { status: 201 }
+  );
 }
