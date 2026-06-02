@@ -17,8 +17,9 @@ test.describe('Admin Dashboard', () => {
       page.getByRole('button', { name: 'Sign In' }).click(),
     ]);
 
-    // Wait for dashboard to finish loading (spinner disappears, heading appears)
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 15000 });
+    // Wait for dashboard to finish loading — stats API makes multiple Blob calls
+    // and can cold-start on Vercel preview; 30s covers worst-case latency.
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 30000 });
   });
 
   test('displays dashboard heading', async ({ page }) => {
