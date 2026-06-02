@@ -23,6 +23,7 @@ export function ConsultingContactForm() {
       email: (form.elements.namedItem('email') as HTMLInputElement).value,
       company: (form.elements.namedItem('company') as HTMLInputElement).value || undefined,
       message: (form.elements.namedItem('message') as HTMLTextAreaElement).value,
+      website: (form.elements.namedItem('website') as HTMLInputElement).value,
     };
 
     try {
