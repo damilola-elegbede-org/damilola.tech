@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { ConsultingCtaButton } from "@/components/consulting/ConsultingCtaButton";
+import { ConsultingContactForm } from "@/components/consulting/ConsultingContactForm";
 
 export const metadata: Metadata = {
   title: "Fractional VPE & Engineering Leadership | Damilola Elegbede",
@@ -178,12 +180,9 @@ export default function ConsultingPage() {
         </p>
 
         <div className="flex flex-wrap items-center gap-4">
-          <a
-            href="#contact"
-            className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
-          >
+          <ConsultingCtaButton className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]">
             Work with me
-          </a>
+          </ConsultingCtaButton>
           <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-2 text-sm text-[var(--color-text-muted)]">
             <span
               className="inline-block h-2 w-2 rounded-full bg-[var(--color-available)]"
@@ -315,12 +314,7 @@ export default function ConsultingPage() {
           Send a short note — what you&apos;re building, where you&apos;re
           stuck, and what you need. I respond within 48 hours.
         </p>
-        <a
-          href="mailto:damilola.elegbede@gmail.com?subject=Fractional%20VPE%20Inquiry"
-          className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
-        >
-          damilola.elegbede@gmail.com
-        </a>
+        <ConsultingContactForm />
       </section>
 
       {/* Footer link */}

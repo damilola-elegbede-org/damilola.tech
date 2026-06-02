@@ -38,6 +38,8 @@ const VALID_EVENT_TYPES: AuditEventType[] = [
   'fit_assessment_completed',
   'fit_assessment_download',
   'external_link_click',
+  'consulting_cta_click',
+  'consulting_form_submit',
 ];
 
 interface EventInput {
