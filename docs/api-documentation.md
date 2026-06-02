@@ -548,6 +548,8 @@ Retrieve audit events.
 - `chat_message` - Chat interaction
 - `fit_assessment` - Fit assessment request
 - `resume_generation` - Resume generation
+- `consulting_cta_click` - Hero CTA button click on `/consulting`
+- `consulting_form_submit` - Successful contact form submission on `/consulting`
 
 **Authentication:** Required
 
