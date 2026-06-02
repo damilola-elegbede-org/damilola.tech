@@ -45,6 +45,7 @@ describe('POST /api/v1/contact', () => {
     expect(logged.name).toBe('Alice Tester');
     expect(logged.email).toBe('alice@example.com');
     expect(logged.company).toBe('Acme Inc');
+    expect(logged.message).toBe('Hello, I would like to discuss a fractional engagement.');
     expect(typeof logged.ts).toBe('string');
   });
 

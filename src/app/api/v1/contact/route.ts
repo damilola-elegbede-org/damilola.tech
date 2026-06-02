@@ -53,8 +53,8 @@ function validateBody(body: unknown):
   if (typeof b.message !== "string" || b.message.trim().length === 0) {
     return { valid: false, error: "`message` is required." };
   }
-  if (b.message.length > 2000) {
-    return { valid: false, error: "`message` must be 2000 characters or fewer." };
+  if (b.message.length > 10000) {
+    return { valid: false, error: "`message` must be 10,000 characters or fewer." };
   }
 
   return {
@@ -98,6 +98,7 @@ export async function POST(req: Request) {
     name: validation.data.name,
     email: validation.data.email,
     company: validation.data.company ?? null,
+    message: validation.data.message,
   }));
 
   return Response.json(

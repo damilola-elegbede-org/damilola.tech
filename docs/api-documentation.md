@@ -232,7 +232,7 @@ Submit a contact inquiry from the consulting page.
 | `name` | string | Yes | ≤ 100 characters |
 | `email` | string | Yes | Valid email address, ≤ 200 characters |
 | `company` | string | No | ≤ 100 characters |
-| `message` | string | Yes | ≤ 2000 characters |
+| `message` | string | Yes | ≤ 10,000 characters |
 | `website` | string | No | Honeypot — must be empty; populated value silently rejected |
 
 **Response (201 Created):**
