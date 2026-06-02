@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { ContactForm } from "@/components/consulting/ContactForm";
 
 export const metadata: Metadata = {
   title: "Fractional Engineering Leadership | Damilola Elegbede",
@@ -217,25 +218,22 @@ export default function ConsultingPage() {
 
       {/* CTA */}
       <section
-        className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-alt)] p-8 text-center"
+        className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-alt)] p-8"
         aria-label="Contact"
       >
-        <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-[var(--color-accent)]">
-          Get in touch
-        </p>
-        <h2 className="mb-3 text-2xl font-semibold text-[var(--color-text)]">
-          Let&apos;s talk about your team
-        </h2>
-        <p className="mx-auto mb-6 max-w-sm text-sm text-[var(--color-text-muted)]">
-          Send a short note — what you&apos;re building, where you&apos;re
-          stuck, and what you need. I respond within 48 hours.
-        </p>
-        <a
-          href="mailto:damilola.elegbede@gmail.com?subject=Fractional%20VPE%20Inquiry"
-          className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
-        >
-          damilola.elegbede@gmail.com
-        </a>
+        <div className="mb-6 text-center">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-[var(--color-accent)]">
+            Get in touch
+          </p>
+          <h2 className="mb-3 text-2xl font-semibold text-[var(--color-text)]">
+            Let&apos;s talk about your team
+          </h2>
+          <p className="mx-auto max-w-sm text-sm text-[var(--color-text-muted)]">
+            Send a short note — what you&apos;re building, where you&apos;re
+            stuck, and what you need. I respond within 48 hours.
+          </p>
+        </div>
+        <ContactForm />
       </section>
 
       {/* Footer link */}
