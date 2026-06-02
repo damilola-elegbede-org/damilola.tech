@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Admin Dashboard', () => {
+  // Serial mode prevents concurrent stats fetches that exhaust the Vercel Blob API
+  // (stats endpoint makes ~200 Blob calls; 7 parallel tests = 1400 concurrent calls)
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
     // Skip if no password configured
     const password = process.env.ADMIN_PASSWORD_PREVIEW;
@@ -17,6 +21,8 @@ test.describe('Admin Dashboard', () => {
       page.getByRole('button', { name: 'Sign In' }).click(),
     ]);
 
+    // Wait for stats API (many Vercel Blob calls) to complete before asserting heading
+    await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
     // Wait for dashboard to finish loading (spinner disappears, heading appears)
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 15000 });
   });
