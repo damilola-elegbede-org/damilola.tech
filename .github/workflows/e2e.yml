@@ -32,8 +32,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-      - run: npm ci || (echo "::warning::npm ci failed on first attempt — retrying" && npm ci)
+      - name: Cache npm packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-v2-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            npm-v2-${{ runner.os }}-
+      - run: npm ci
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
