@@ -6,6 +6,10 @@ vi.mock('@/lib/rate-limit', () => ({
   getClientIp: vi.fn().mockReturnValue('127.0.0.1'),
 }));
 
+vi.mock('@/lib/telegram', () => ({
+  sendLeadNotification: vi.fn().mockResolvedValue(undefined),
+}));
+
 function makeRequest(body: unknown): Request {
   return new Request('http://localhost/api/v1/contact', {
     method: 'POST',
@@ -134,5 +138,24 @@ describe('POST /api/v1/contact', () => {
     vi.mocked(checkGenericRateLimit).mockResolvedValueOnce({ limited: true, remaining: 0, retryAfter: 300 });
     const res = await POST(makeRequest(validBody));
     expect(res.status).toBe(429);
+  });
+
+  it('calls sendLeadNotification with correct fields on success', async () => {
+    const { sendLeadNotification } = await import('@/lib/telegram');
+    await POST(makeRequest(validBody));
+    expect(sendLeadNotification).toHaveBeenCalledOnce();
+    expect(vi.mocked(sendLeadNotification).mock.calls[0][0]).toMatchObject({
+      name: 'Alice Tester',
+      email: 'alice@example.com',
+      company: 'Acme Inc',
+      message: 'Hello, I would like to discuss a fractional engagement.',
+    });
+  });
+
+  it('returns 201 even when sendLeadNotification rejects', async () => {
+    const { sendLeadNotification } = await import('@/lib/telegram');
+    vi.mocked(sendLeadNotification).mockRejectedValueOnce(new Error('Telegram down'));
+    const res = await POST(makeRequest(validBody));
+    expect(res.status).toBe(201);
   });
 });
