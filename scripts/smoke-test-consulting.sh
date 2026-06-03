@@ -113,7 +113,7 @@ check_api() {
   local label="$1" url="$2" payload="$3" expected_status="$4"
   local response body status
   response=$(post_json "$url" "$payload")
-  body=$(echo "$response" | head -n -1)
+  body=$(echo "$response" | sed '$d')
   status=$(echo "$response" | tail -n 1)
   LAST_CHECK_API_BODY="$body"
   if [[ "$status" == "$expected_status" ]]; then
