@@ -1,5 +1,6 @@
 import { Errors } from "@/lib/api-response";
 import { checkGenericRateLimit, getClientIp } from "@/lib/rate-limit";
+import { sendLeadNotification } from "@/lib/telegram";
 
 export const runtime = "nodejs";
 
@@ -91,7 +92,6 @@ export async function POST(req: Request) {
     return Errors.validationError(validation.error);
   }
 
-  // Log submission so it surfaces in Vercel function logs — the only delivery path until Resend is wired up
   console.log(JSON.stringify({
     event: "contact_submission",
     ts: new Date().toISOString(),
@@ -100,6 +100,10 @@ export async function POST(req: Request) {
     company: validation.data.company ?? null,
     message: validation.data.message,
   }));
+
+  void sendLeadNotification(validation.data).catch((err) => {
+    console.error(JSON.stringify({ event: "contact_telegram_error", error: String(err) }));
+  });
 
   return Response.json(
     {
