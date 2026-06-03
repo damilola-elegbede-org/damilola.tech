@@ -39,9 +39,9 @@ test.describe('/consulting page – smoke test (ENG-502)', () => {
   test('engagement model shows Discovery / Findings / Engagement steps', async ({ page }) => {
     await page.goto('/consulting');
     await expect(page.getByRole('heading', { name: 'How it works' })).toBeVisible();
-    await expect(page.getByText('Discovery')).toBeVisible();
-    await expect(page.getByText('Findings')).toBeVisible();
-    await expect(page.getByText('Engagement')).toBeVisible();
+    await expect(page.getByText('Discovery', { exact: true })).toBeVisible();
+    await expect(page.getByText('Findings', { exact: true })).toBeVisible();
+    await expect(page.getByText('Engagement', { exact: true })).toBeVisible();
   });
 
   test('three service cards are visible', async ({ page }) => {
