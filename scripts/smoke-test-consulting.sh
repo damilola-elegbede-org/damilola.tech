@@ -5,12 +5,16 @@
 # main and the production (or preview) deployment must be live before running.
 #
 # Usage:
-#   ./scripts/smoke-test-consulting.sh [BASE_URL] [VERCEL_BYPASS_SECRET]
+#   ./scripts/smoke-test-consulting.sh [BASE_URL]
 #
 # Examples:
 #   ./scripts/smoke-test-consulting.sh
 #   ./scripts/smoke-test-consulting.sh https://damilola.tech
-#   ./scripts/smoke-test-consulting.sh https://preview-abc.vercel.app <bypass-secret>
+#   BYPASS=<secret> ./scripts/smoke-test-consulting.sh https://preview-abc.vercel.app
+#
+# The Vercel deployment-protection bypass secret is read from the BYPASS env var
+# (not a positional arg) to keep it out of the process table and shell history.
+# In CI: env BYPASS=${{ secrets.VERCEL_BYPASS }} ./scripts/smoke-test-consulting.sh
 #
 # NOTE: The valid API submission test will fire a real POST /api/v1/contact and
 # send a Telegram notification to D. This is intentional — it's an end-to-end
@@ -19,7 +23,7 @@
 set -euo pipefail
 
 BASE_URL="${1:-https://damilola.tech}"
-BYPASS="${2:-}"
+BYPASS="${BYPASS:-}"
 BASE_URL="${BASE_URL%/}"
 
 RED='\033[0;31m'
