@@ -36,6 +36,7 @@
     "@upstash/redis": "^1.36.1",
     "@vercel/analytics": "^2.0.1",
     "@vercel/blob": "^2.0.0",
+    "@vercel/functions": "^3.6.1",
     "@vercel/speed-insights": "^2.0.0",
     "ai": "^6.0.39",
     "clsx": "^2.1.1",
