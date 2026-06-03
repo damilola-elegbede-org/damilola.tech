@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Contact form on `/consulting` replacing the mailto CTA — validates name, email, optional company, and message fields with rate limiting (5 req / 5 min per IP) and honeypot spam protection
 - `POST /api/v1/contact` endpoint — accepts JSON contact submissions and returns a confirmation message
 - `/projects/rate-limiting` case study page documenting the middleware-level rate limiting architecture
+- `POST /api/v1/contact` now sends a Telegram lead notification to the site owner on successful submission (`TELEGRAM_BOT_TOKEN` + `TELEGRAM_NOTIFY_CHAT_ID`). Notification is fire-and-forget — form still returns 201 if Telegram is unreachable or either env var is absent
 
 ### API Reference
 
