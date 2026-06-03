@@ -35,6 +35,7 @@ NC='\033[0m'
 PASS=0
 FAIL=0
 ERRORS=()
+LAST_CHECK_API_BODY=""
 
 pass() {
   echo -e "  ${GREEN}✓${NC} $1"
@@ -114,6 +115,7 @@ check_api() {
   response=$(post_json "$url" "$payload")
   body=$(echo "$response" | head -n -1)
   status=$(echo "$response" | tail -n 1)
+  LAST_CHECK_API_BODY="$body"
   if [[ "$status" == "$expected_status" ]]; then
     pass "$label ($expected_status)"
   else
@@ -149,7 +151,7 @@ check_contains '"How it works" section' "$BASE_URL/consulting" "How it works"
 check_contains "Advisory service card" "$BASE_URL/consulting" "Strategic Engineering Guidance"
 check_contains "Architecture Review service card" "$BASE_URL/consulting" "System Design Assessment"
 check_contains "Team Building service card" "$BASE_URL/consulting" "Hiring &amp; Org Design"
-check_contains "CTA section headline" "$BASE_URL/consulting" "Let"
+check_contains "CTA section headline" "$BASE_URL/consulting" "Let's talk about your team"
 check_contains "contact form name field" "$BASE_URL/consulting" "contact-name"
 check_contains "contact form email field" "$BASE_URL/consulting" "contact-email"
 check_contains "contact form message field" "$BASE_URL/consulting" "contact-message"
@@ -170,11 +172,17 @@ check_not_contains "/consulting not blocked in robots.txt" "$BASE_URL/robots.txt
 section "4. POST /api/v1/contact contract"
 
 # NOTE: The valid submission below fires a real Telegram notification.
+# The body-shape check immediately after reuses its captured response — no second request.
 check_api \
   "valid payload → 201" \
   "$BASE_URL/api/v1/contact" \
   '{"name":"Remy Smoke Test","email":"remy+smoke-eng502@test.invalid","message":"[ENG-502 smoke test — ignore]"}' \
   "201"
+if echo "$LAST_CHECK_API_BODY" | grep -q '"success":true' && ! echo "$LAST_CHECK_API_BODY" | grep -q '"name":'; then
+  pass "201 body: success=true and no submission contents leaked"
+else
+  fail "201 body shape unexpected: $LAST_CHECK_API_BODY"
+fi
 
 check_api \
   "missing name → 400" \
@@ -199,15 +207,6 @@ check_api \
   "$BASE_URL/api/v1/contact" \
   '{"name":"Bot","email":"bot@spam.com","message":"spam","website":"http://spam.com"}' \
   "400"
-
-# Confirm 201 response body contains confirmation but not submission contents.
-raw=$(post_json "$BASE_URL/api/v1/contact" '{"name":"Remy Check","email":"remy+check@test.invalid","message":"[ENG-502 response-shape check]"}')
-body=$(echo "$raw" | head -n -1)
-if echo "$body" | grep -q '"success":true' && ! echo "$body" | grep -q '"name"'; then
-  pass "201 body: success=true and no submission contents leaked"
-else
-  fail "201 body shape unexpected: $body"
-fi
 
 # ── 5. Rate-limiting case study ─────────────────────────────────────────────
 
