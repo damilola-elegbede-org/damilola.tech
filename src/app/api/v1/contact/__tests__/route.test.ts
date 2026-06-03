@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST } from '../route';
 
+vi.mock('@vercel/functions', () => ({
+  waitUntil: vi.fn(),
+}));
+
 vi.mock('@/lib/rate-limit', () => ({
   checkGenericRateLimit: vi.fn().mockResolvedValue({ limited: false, remaining: 4 }),
   getClientIp: vi.fn().mockReturnValue('127.0.0.1'),
@@ -30,6 +34,7 @@ describe('POST /api/v1/contact', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   it('returns 201 for a valid submission', async () => {

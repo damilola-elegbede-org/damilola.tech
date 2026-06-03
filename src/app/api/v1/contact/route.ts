@@ -1,3 +1,4 @@
+import { waitUntil } from "@vercel/functions";
 import { Errors } from "@/lib/api-response";
 import { checkGenericRateLimit, getClientIp } from "@/lib/rate-limit";
 import { sendLeadNotification } from "@/lib/telegram";
@@ -101,9 +102,11 @@ export async function POST(req: Request) {
     message: validation.data.message,
   }));
 
-  void sendLeadNotification(validation.data).catch((err) => {
-    console.error(JSON.stringify({ event: "contact_telegram_error", error: String(err) }));
-  });
+  waitUntil(
+    sendLeadNotification(validation.data).catch((err) => {
+      console.error(JSON.stringify({ event: "contact_telegram_error", error: String(err) }));
+    })
+  );
 
   return Response.json(
     {
