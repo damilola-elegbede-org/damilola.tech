@@ -2,7 +2,7 @@ import { fetchBlob } from '@/lib/blob';
 
 // Use Node.js runtime (not edge) to allow local file fallback in development
 export const runtime = 'nodejs';
-// Resume PDF generator needs time for Blob fetch on cold start
+// Cold-start Blob fetch can exceed the default 10s limit
 export const maxDuration = 30;
 
 /**
