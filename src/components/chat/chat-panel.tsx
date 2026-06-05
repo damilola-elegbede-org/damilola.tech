@@ -420,6 +420,7 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
                   {suggestedQuestions.map((q) => (
                     <button
                       key={q.label}
+                      data-testid="suggestion-chip"
                       onClick={() => handleSuggestedQuestion(q.question)}
                       className="rounded-full border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
                     >

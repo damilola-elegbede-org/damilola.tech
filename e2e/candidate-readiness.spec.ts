@@ -79,7 +79,7 @@ test.describe('candidate-readiness smoke (ENG-480)', () => {
     await page.goto('/');
     await page.getByLabel('Open chat').click();
     const panel = page.getByRole('dialog', { name: /chat/i });
-    const suggestions = panel.getByRole('button').filter({ hasText: /./u });
+    const suggestions = panel.getByTestId('suggestion-chip');
     await expect(suggestions.first()).toBeVisible();
     expect(await suggestions.count()).toBeGreaterThan(0);
   });
