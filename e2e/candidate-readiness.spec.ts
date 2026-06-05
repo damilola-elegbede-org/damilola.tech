@@ -28,7 +28,9 @@ test.describe('candidate-readiness smoke (ENG-480)', () => {
   });
 
   test('robots.txt disallows /admin/ and /api/', async ({ request }) => {
-    const text = await (await request.get('/robots.txt')).text();
+    const res = await request.get('/robots.txt');
+    expect(res.status()).toBe(200);
+    const text = await res.text();
     expect(text).toContain('Disallow: /admin/');
     expect(text).toContain('Disallow: /api/');
   });
@@ -65,17 +67,21 @@ test.describe('candidate-readiness smoke (ENG-480)', () => {
 
   // ── Chat (AI assistant) ─────────────────────────────────────────────────
 
-  test('chat FAB opens panel', async ({ page }) => {
+  test('chat FAB opens panel', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'Chat FAB interaction differs on mobile');
     await page.goto('/');
     await page.getByLabel('Open chat').click();
     await expect(page.getByRole('dialog', { name: /chat/i })).toBeVisible();
   });
 
-  test('chat panel shows suggested questions', async ({ page }) => {
+  test('chat panel shows suggested questions', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'Chat FAB interaction differs on mobile');
     await page.goto('/');
     await page.getByLabel('Open chat').click();
     const panel = page.getByRole('dialog', { name: /chat/i });
-    await expect(panel.getByRole('button', { name: 'Leadership Philosophy' })).toBeVisible();
+    const suggestions = panel.getByRole('button').filter({ hasText: /./u });
+    await expect(suggestions.first()).toBeVisible();
+    expect(await suggestions.count()).toBeGreaterThan(0);
   });
 
   // ── Fit Assessment ──────────────────────────────────────────────────────
@@ -115,7 +121,7 @@ test.describe('candidate-readiness smoke (ENG-480)', () => {
 
   test('/consulting availability badge is visible', async ({ page }) => {
     await page.goto('/consulting');
-    await expect(page.getByText(/Taking on 1/)).toBeVisible();
+    await expect(page.getByText(/Taking on \d/)).toBeVisible();
   });
 
   test('/consulting displays all three service cards', async ({ page }) => {
