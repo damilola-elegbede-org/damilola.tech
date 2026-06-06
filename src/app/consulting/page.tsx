@@ -2,20 +2,33 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Fractional VPE & Engineering Leadership | Damilola Elegbede",
+  title: "Fractional Engineering Leadership | Damilola Elegbede",
   description:
-    "Fractional VP Engineering advisory for Seed–Series B startups. 2–5 hrs/week of hands-on engineering leadership: architecture reviews, team building, and DevEx strategy from a 15-year practitioner.",
+    "Fractional VP Engineering for Seed–Series B startups. Architecture reviews, team building, and DevEx strategy — 15 years at Verily & Qualcomm.",
+  keywords: [
+    "Fractional VP Engineering",
+    "Fractional Engineering Leadership",
+    "Engineering Manager",
+    "Startup CTO",
+    "Technical Leadership",
+    "DevEx Strategy",
+    "Architecture Review",
+  ],
+  alternates: {
+    canonical: "https://damilola.tech/consulting",
+  },
   openGraph: {
-    title: "Fractional VPE & Engineering Leadership | Damilola Elegbede",
+    title: "Fractional Engineering Leadership | Damilola Elegbede",
     description:
-      "Fractional VP Engineering advisory for Seed–Series B startups. Architecture reviews, team building, and DevEx strategy.",
+      "Fractional VP Engineering for Seed–Series B startups. Architecture reviews, team building, and DevEx strategy.",
     type: "website",
+    url: "https://damilola.tech/consulting",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Fractional VPE & Engineering Leadership | Damilola Elegbede",
+    title: "Fractional Engineering Leadership | Damilola Elegbede",
     description:
-      "Fractional VP Engineering advisory for Seed–Series B startups. Architecture reviews, team building, and DevEx strategy.",
+      "Fractional VP Engineering for Seed–Series B startups. Architecture reviews, team building, and DevEx strategy.",
   },
 };
 
