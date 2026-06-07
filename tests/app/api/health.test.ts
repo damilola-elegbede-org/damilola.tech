@@ -51,4 +51,16 @@ describe('health API route', () => {
 
     expect(routeModule.runtime).toBe('nodejs');
   });
+
+  it('returns deployed commit SHA when VERCEL_GIT_COMMIT_SHA is set', async () => {
+    process.env.VERCEL_GIT_COMMIT_SHA = 'abc123';
+
+    const { GET } = await import('@/app/api/health/route');
+
+    const response = await GET();
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.version).toBe('abc123');
+  });
 });

@@ -15,13 +15,14 @@ type HealthResponse = {
 };
 
 export async function GET(): Promise<NextResponse<HealthResponse>> {
+  const version = process.env.VERCEL_GIT_COMMIT_SHA ?? 'dev';
   try {
     const response: HealthResponse = {
       status: 'ok',
       website: 'up',
       timestamp: new Date().toISOString(),
       environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? 'development',
-      version: process.env.VERCEL_GIT_COMMIT_SHA ?? 'dev',
+      version,
       checks: {
         app: 'ok',
       },
@@ -41,7 +42,7 @@ export async function GET(): Promise<NextResponse<HealthResponse>> {
         website: 'down',
         timestamp: new Date().toISOString(),
         environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? 'development',
-        version: process.env.VERCEL_GIT_COMMIT_SHA ?? 'dev',
+        version,
         checks: {
           app: 'error',
         },
