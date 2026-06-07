@@ -29,6 +29,7 @@ describe('health API route', () => {
       website: 'up',
       timestamp: '2026-03-11T12:00:00.000Z',
       environment: 'production',
+      version: 'dev',
       checks: {
         app: 'ok',
       },
