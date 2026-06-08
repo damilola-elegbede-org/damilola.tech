@@ -80,14 +80,27 @@ test.describe('POST /api/v1/contact', () => {
     expect(body.success).toBe(true);
   });
 
-  test('honeypot website field filled returns 400', async ({ request }) => {
+  test('missing email field returns 400 VALIDATION_ERROR', async ({ request }) => {
+    const { email: _email, ...noEmail } = VALID_PAYLOAD;
+    const response = await request.post('/api/v1/contact', { data: noEmail });
+
+    expect(response.status()).toBe(400);
+    const body = await response.json() as { success: boolean; error: { code: string } };
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  // Honeypot: the spec treats a filled website field as a validation failure.
+  // VALIDATION_ERROR is the expected code (consistent with all other 400 paths).
+  test('honeypot website field filled returns 400 VALIDATION_ERROR', async ({ request }) => {
     const response = await request.post('/api/v1/contact', {
       data: { ...VALID_PAYLOAD, website: 'http://spam.example.com' },
     });
 
     expect(response.status()).toBe(400);
-    const body = await response.json() as { success: boolean };
+    const body = await response.json() as { success: boolean; error: { code: string } };
     expect(body.success).toBe(false);
+    expect(body.error.code).toBe('VALIDATION_ERROR');
   });
 
   test('invalid JSON body returns 400', async ({ request }) => {
@@ -100,4 +113,35 @@ test.describe('POST /api/v1/contact', () => {
     const body = await response.json() as { success: boolean };
     expect(body.success).toBe(false);
   });
+
+  // Email header injection: a CRLF-embedded email value must not pass validation.
+  // Without sanitizing newline characters the email field becomes an injection vector
+  // for Bcc/Cc header smuggling in any downstream mailer.
+  test('CRLF-embedded email returns 400 VALIDATION_ERROR', async ({ request }) => {
+    const response = await request.post('/api/v1/contact', {
+      data: { ...VALID_PAYLOAD, email: 'alice@example.com\r\nBcc:victim@example.com' },
+    });
+
+    expect(response.status()).toBe(400);
+    const body = await response.json() as { success: boolean; error: { code: string } };
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  // Oversized payload: an excessively large message field must be rejected.
+  // Without a length cap the endpoint is open to payload-flooding.
+  test('oversized message field returns 400', async ({ request }) => {
+    const response = await request.post('/api/v1/contact', {
+      data: { ...VALID_PAYLOAD, message: 'A'.repeat(10_001) },
+    });
+
+    expect([400, 413]).toContain(response.status());
+    const body = await response.json() as { success: boolean };
+    expect(body.success).toBe(false);
+  });
+
+  // Rate limiting (per-IP, 100 req/60 s window) is covered at the unit level in
+  // tests/middleware.test.ts. An E2E test would require 101+ live requests and a
+  // configured Redis instance; the unit tests already verify 429 shape, Retry-After
+  // header, fail-open behaviour, and boundary conditions.
 });
