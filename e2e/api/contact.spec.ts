@@ -140,8 +140,21 @@ test.describe('POST /api/v1/contact', () => {
     expect(body.success).toBe(false);
   });
 
-  // Rate limiting (per-IP, 100 req/60 s window) is covered at the unit level in
-  // tests/middleware.test.ts. An E2E test would require 101+ live requests and a
-  // configured Redis instance; the unit tests already verify 429 shape, Retry-After
-  // header, fail-open behaviour, and boundary conditions.
+  // Rate limiting: endpoint enforces 5 req / 5 min per IP.
+  // Placed last so the quota consumption doesn't affect earlier tests.
+  test('repeated rapid submissions trigger 429 RATE_LIMITED', async ({ request }) => {
+    const OVER_LIMIT = 6;
+    let rateLimited = false;
+    for (let i = 0; i < OVER_LIMIT; i++) {
+      const response = await request.post('/api/v1/contact', { data: VALID_PAYLOAD });
+      if (response.status() === 429) {
+        rateLimited = true;
+        const body = await response.json() as { success: boolean; error: { code: string } };
+        expect(body.success).toBe(false);
+        expect(body.error.code).toBe('RATE_LIMITED');
+        break;
+      }
+    }
+    expect(rateLimited).toBe(true);
+  });
 });
