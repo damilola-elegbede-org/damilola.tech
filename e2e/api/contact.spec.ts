@@ -7,6 +7,25 @@ const VALID_PAYLOAD = {
   message: 'I would like to discuss a fractional engagement for my engineering team.',
 };
 
+// Rate-limit context for this suite — two limiters apply to POST /api/v1/contact:
+//
+// 1. Global middleware (middleware.ts): 100 req / 60 s per IP, incremented before the
+//    route handler runs. This suite sends at most 17 requests total; this limit is not
+//    exhausted.
+//
+// 2. Contact-specific limit (implemented in #177): 5 req / 300 s per IP, applied at the
+//    route-handler level before body parsing and validation. This matches the existing
+//    pattern in src/app/api/v1/score-resume/route.ts where checkGenericRateLimit is called
+//    before req.json(). Every request — including those that return 400 — counts toward
+//    the quota.
+//
+//    Impact: only the first 5 tests in file order can receive their expected status codes
+//    in a production-like environment with the contact-specific rate limit active. Tests 6+
+//    will receive 429 once the quota is spent. The two 201-path tests are ordered first
+//    (slots 1 and 2) so the happy paths are verified before quota exhaustion.
+//
+//    CI assumption: this suite starts from a fresh 300 s window. Do not re-run within the
+//    same 5-minute window from the same IP.
 test.describe('POST /api/v1/contact', () => {
   test('valid payload returns 201 with confirmation message', async ({ request }) => {
     const response = await request.post('/api/v1/contact', {
@@ -21,6 +40,19 @@ test.describe('POST /api/v1/contact', () => {
     // Response must not echo back PII
     expect(body.data).not.toHaveProperty('name');
     expect(body.data).not.toHaveProperty('email');
+  });
+
+  // Slot 2: second 201 path — placed before the 400 tests so both happy paths are
+  // verified within the first 5 requests (before the contact-specific quota is spent).
+  test('optional company field can be omitted', async ({ request }) => {
+    const { company: _company, ...noCompany } = VALID_PAYLOAD;
+    const response = await request.post('/api/v1/contact', {
+      data: noCompany,
+    });
+
+    expect(response.status()).toBe(201);
+    const body = await response.json() as { success: boolean; data: { confirmation: string } };
+    expect(body.success).toBe(true);
   });
 
   test('missing name field returns 400 VALIDATION_ERROR', async ({ request }) => {
@@ -67,17 +99,6 @@ test.describe('POST /api/v1/contact', () => {
     const body = await response.json() as { success: boolean; error: { code: string } };
     expect(body.success).toBe(false);
     expect(body.error.code).toBe('VALIDATION_ERROR');
-  });
-
-  test('optional company field can be omitted', async ({ request }) => {
-    const { company: _company, ...noCompany } = VALID_PAYLOAD;
-    const response = await request.post('/api/v1/contact', {
-      data: noCompany,
-    });
-
-    expect(response.status()).toBe(201);
-    const body = await response.json() as { success: boolean; data: { confirmation: string } };
-    expect(body.success).toBe(true);
   });
 
   test('missing email field returns 400 VALIDATION_ERROR', async ({ request }) => {
@@ -145,10 +166,11 @@ test.describe('POST /api/v1/contact', () => {
     }
   });
 
-  // Rate limiting: endpoint enforces 5 req / 5 min per IP.
-  // Placed last so the quota consumption doesn't affect earlier tests.
-  // IMPORTANT: This test exhausts the per-IP quota. Do not retry this suite within
-  // the 5-minute window — the earlier 201 tests will receive 429 if the quota is spent.
+  // Rate limiting: endpoint enforces 5 req / 300 s per IP (contact-specific limit, #177).
+  // Placed last. By this point the quota is already spent by the prior tests (the rate
+  // limiter counts all requests before validation), so the first request here will return
+  // 429 immediately. test.skip on retry prevents the spent quota from also poisoning a
+  // retry run of the earlier tests.
   test('repeated rapid submissions trigger 429 RATE_LIMITED', async ({ request }, testInfo) => {
     test.skip(testInfo.retry > 0, 'Rate-limit quota is spent; cannot retry within the 5-minute window');
     const OVER_LIMIT = 6;
