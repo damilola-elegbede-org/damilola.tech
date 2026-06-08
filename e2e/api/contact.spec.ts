@@ -110,8 +110,9 @@ test.describe('POST /api/v1/contact', () => {
     });
 
     expect(response.status()).toBe(400);
-    const body = await response.json() as { success: boolean };
+    const body = await response.json() as { success: boolean; error: { code: string } };
     expect(body.success).toBe(false);
+    expect(body.error.code).toBe('VALIDATION_ERROR');
   });
 
   // Email header injection: a CRLF-embedded email value must not pass validation.
@@ -136,13 +137,20 @@ test.describe('POST /api/v1/contact', () => {
     });
 
     expect([400, 413]).toContain(response.status());
-    const body = await response.json() as { success: boolean };
-    expect(body.success).toBe(false);
+    // 413 responses from Next.js body-size limits or nginx carry plain-text bodies, not JSON.
+    // Only assert the JSON shape when the route handler itself rejects with 400.
+    if (response.status() === 400) {
+      const body = await response.json() as { success: boolean };
+      expect(body.success).toBe(false);
+    }
   });
 
   // Rate limiting: endpoint enforces 5 req / 5 min per IP.
   // Placed last so the quota consumption doesn't affect earlier tests.
-  test('repeated rapid submissions trigger 429 RATE_LIMITED', async ({ request }) => {
+  // IMPORTANT: This test exhausts the per-IP quota. Do not retry this suite within
+  // the 5-minute window — the earlier 201 tests will receive 429 if the quota is spent.
+  test('repeated rapid submissions trigger 429 RATE_LIMITED', async ({ request }, testInfo) => {
+    test.skip(testInfo.retry > 0, 'Rate-limit quota is spent; cannot retry within the 5-minute window');
     const OVER_LIMIT = 6;
     let rateLimited = false;
     for (let i = 0; i < OVER_LIMIT; i++) {
