@@ -58,6 +58,10 @@ UPSTASH_REDIS_REST_TOKEN=your_token
 PLAYWRIGHT_BASE_URL=https://your-deployment.vercel.app
 VERCEL_AUTOMATION_BYPASS_SECRET=your_bypass_secret
 # For automated testing of deployed preview/production
+
+# Google Search Console verification token
+GOOGLE_SITE_VERIFICATION=your_verification_token
+# Enables <meta name="google-site-verification"> in page <head>
 ```
 
 ### Variable Security

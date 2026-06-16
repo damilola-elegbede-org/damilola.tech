@@ -4,6 +4,8 @@ import { GeistMono } from 'geist/font/mono';
 import { TrackingProvider } from '@/components/providers/TrackingProvider';
 import './globals.css';
 
+const googleVerificationToken = process.env.GOOGLE_SITE_VERIFICATION;
+
 export const metadata: Metadata = {
   title: 'Damilola Elegbede | Engineering Manager',
   description:
@@ -19,6 +21,9 @@ export const metadata: Metadata = {
     'Technical Leadership',
   ],
   authors: [{ name: 'Damilola Elegbede' }],
+  ...(googleVerificationToken && {
+    verification: { google: googleVerificationToken },
+  }),
   openGraph: {
     title: 'Damilola Elegbede | Engineering Manager',
     description:
