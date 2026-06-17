@@ -350,6 +350,55 @@ GET /api/v1/resume-generations
 GET /api/v1/resume-generations/{id}
 ```
 
+### Resume PDF
+
+Download the current base resume as a PDF.
+
+> **No authentication required.** This is the only `/api/v1/*` endpoint that is publicly accessible without an API key. All other endpoints require an `Authorization: Bearer` or `X-API-Key` header.
+
+```
+GET /api/v1/resume.pdf
+```
+
+**Response:**
+
+Returns a PDF binary stream.
+
+| Header | Value |
+|--------|-------|
+| `Content-Type` | `application/pdf` |
+| `Content-Disposition` | `attachment; filename="damilola-elegbede-resume.pdf"` |
+| `Cache-Control` | `no-store` |
+
+`Cache-Control: no-store` means the response is never cached — each request renders a fresh PDF from the current resume data.
+
+**Example:**
+
+```bash
+# Download to working directory
+curl -O https://damilola.tech/api/v1/resume.pdf
+
+# Download with a custom filename
+curl -o elegbede-resume.pdf https://damilola.tech/api/v1/resume.pdf
+```
+
+**Error Response:**
+
+| Status | Code | Condition |
+|--------|------|-----------|
+| 429 | `RATE_LIMITED` | IP rate limit exceeded (100 req/min); see `Retry-After` header |
+| 500 | `INTERNAL_ERROR` | PDF rendering failed (server-side error) |
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "PDF generation failed"
+  }
+}
+```
+
 ### Audit Log
 
 List audit events with filtering.
@@ -438,9 +487,426 @@ POST /api/v1/chat
 }
 ```
 
+
+### Job Application Tracking
+
+Log and query job applications in the career pipeline.
+
+#### POST /api/v1/log-application
+
+Log a new job application.
+
+**Authentication:** API key required
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `company` | string | Yes | Company name |
+| `title` | string | Yes | Job title |
+| `url` | string | No | URL to the job posting |
+| `role_id` | string | No | Identifier for matching role data |
+| `status` | string | No | Application status (default: `applied`) |
+| `score` | number | No | Compatibility score, 0–100 |
+| `notes` | string | No | Free-text notes |
+| `cover_letter_draft` | string | No | Cover letter draft text |
+| `applied_at` | string | No | ISO 8601 timestamp (default: current time) |
+
+**Status values:** `applied`, `screen`, `interview`, `offer`, `rejected`, `withdrawn`
+
+**Example:**
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "company": "Acme Corp",
+    "title": "Staff Engineer",
+    "url": "https://jobs.acme.com/staff-engineer",
+    "status": "applied"
+  }' \
+  https://damilola.tech/api/v1/log-application
+```
+
+**Response (201):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "company": "Acme Corp",
+    "title": "Staff Engineer",
+    "applied_at": "2026-04-28T12:00:00.000Z",
+    "status": "applied",
+    "score": null,
+    "url": "https://jobs.acme.com/staff-engineer",
+    "cover_letter_draft": null
+  }
+}
+```
+
+**Note:** The 201 response returns a subset of the stored record — `role_id`, `notes`, `created_at`, and `updated_at` are intentionally omitted. Use `GET /api/v1/log-application` or `GET /api/v1/applications` to retrieve the full record.
+
+**Error Responses:**
+
+| Status | Code | Condition |
+|--------|------|-----------|
+| 400 | `VALIDATION_ERROR` | Missing `company` or `title`, invalid `status`, `score` out of 0–100 range, invalid `applied_at` format |
+| 401 | `UNAUTHORIZED` | Missing or invalid API key |
+| 429 | `RATE_LIMITED` | IP rate limit exceeded (100 req/min); see `Retry-After` header |
+| 500 | `INTERNAL_ERROR` | Storage failure |
+
+---
+
+#### GET /api/v1/log-application
+
+List job applications with optional filters. The `stage` parameter is a pipeline-friendly alias for `status`. Use this endpoint when filtering by recency (`since`) or by pipeline stage. For company name search or offset-based pagination, use `GET /api/v1/applications` instead.
+
+**Authentication:** API key required
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `stage` | string | — | Filter by status (alias for `status`); takes precedence over `status` if both are provided |
+| `status` | string | — | Filter by status |
+| `since` | string | — | ISO 8601 timestamp; return only applications with `applied_at ≥ since` |
+| `limit` | number | 50 | Max results, 1–100 |
+
+**Example:**
+
+```bash
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+  "https://damilola.tech/api/v1/log-application?stage=interview&limit=20"
+```
+
+**Response (200):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "applications": [
+      {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "company": "Acme Corp",
+        "title": "Staff Engineer",
+        "url": "https://jobs.acme.com/staff-engineer",
+        "role_id": null,
+        "applied_at": "2026-04-28T12:00:00.000Z",
+        "status": "interview",
+        "score": 72,
+        "notes": null,
+        "cover_letter_draft": null,
+        "created_at": "2026-04-28T12:00:00.000Z",
+        "updated_at": "2026-04-28T12:00:00.000Z"
+      }
+    ],
+    "total": 1,
+    "limit": 20
+  }
+}
+```
+
+`total` is the full count of records matching the filters, before the `limit` is applied. If `total` exceeds `limit`, additional records exist but this endpoint has no pagination — results are silently truncated at the `limit` ceiling (max 100). Use `GET /api/v1/applications` with `offset` if you need to page through more than 100 records.
+
+**Error Responses:**
+
+| Status | Code | Condition |
+|--------|------|-----------|
+| 400 | `VALIDATION_ERROR` | Invalid `status`/`stage` value, invalid `since` format |
+| 401 | `UNAUTHORIZED` | Missing or invalid API key |
+| 429 | `RATE_LIMITED` | IP rate limit exceeded (100 req/min); see `Retry-After` header |
+
+---
+
+#### GET /api/v1/applications
+
+List job applications with pagination and company name filtering. Ordered by `applied_at` descending. Use this endpoint when you need company name search or need to page past 100 records. For recency filtering (`since`) or pipeline stage filtering with the `stage` alias, use `GET /api/v1/log-application` instead.
+
+**Authentication:** API key required
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `status` | string | — | Filter by application status |
+| `company` | string | — | Case-insensitive substring match on company name |
+| `limit` | number | 50 | Max results per page, 1–100 |
+| `offset` | number | 0 | Number of records to skip |
+
+**Example:**
+
+```bash
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+  "https://damilola.tech/api/v1/applications?status=applied&limit=10&offset=0"
+```
+
+**Response (200):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "applications": [
+      {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "company": "Acme Corp",
+        "title": "Staff Engineer",
+        "url": "https://jobs.acme.com/staff-engineer",
+        "role_id": null,
+        "applied_at": "2026-04-28T12:00:00.000Z",
+        "status": "applied",
+        "score": null,
+        "notes": null,
+        "cover_letter_draft": null,
+        "created_at": "2026-04-28T12:00:00.000Z",
+        "updated_at": "2026-04-28T12:00:00.000Z"
+      }
+    ],
+    "total": 14,
+    "limit": 10,
+    "offset": 0
+  }
+}
+```
+
+**Error Responses:**
+
+| Status | Code | Condition |
+|--------|------|-----------|
+| 400 | `VALIDATION_ERROR` | Invalid `status` value |
+| 401 | `UNAUTHORIZED` | Missing or invalid API key |
+| 429 | `RATE_LIMITED` | IP rate limit exceeded (100 req/min); see `Retry-After` header |
+
+---
+
+### Job Scoring & Cover Letters
+
+#### POST /api/v1/score-job
+
+Score a job posting against the stored resume and return a gap analysis. `url` is always required and is used for logging and metadata. Supply `job_content` to bypass the server-side URL fetch (useful when the page is client-side-rendered or behind auth). Use the output as `score_job_output` in `generate-cover-letter` for best fit context.
+
+**Authentication:** API key required
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `url` | string | Yes | URL of the job posting (http/https) |
+| `title` | string | Yes | Job title |
+| `company` | string | Yes | Company name |
+| `job_content` | string | No | Pre-fetched job description text (bypasses URL fetch; max 200KB) |
+
+**Example:**
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://jobs.acme.com/staff-engineer",
+    "title": "Staff Engineer",
+    "company": "Acme Corp"
+  }' \
+  https://damilola.tech/api/v1/score-job
+```
+
+**Response (200):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "company": "Acme Corp",
+    "title": "Staff Engineer",
+    "url": "https://jobs.acme.com/staff-engineer",
+    "currentScore": {
+      "total": 72,
+      "breakdown": {
+        "roleRelevance": 22,
+        "claritySkimmability": 21,
+        "businessImpact": 18,
+        "presentationQuality": 11
+      },
+      "matchedKeywords": ["TypeScript", "distributed systems", "team leadership"],
+      "missingKeywords": ["Kubernetes", "Go", "SRE"],
+      "matchRate": 68,
+      "keywordDensity": 3.2
+    },
+    "maxPossibleScore": 88,
+    "gapAnalysis": "The resume demonstrates strong alignment on TypeScript and team leadership...",
+    "recommendation": "full_generation_recommended"
+  }
+}
+```
+
+**`recommendation` values:**
+
+| Value | Meaning |
+|-------|---------|
+| `strong_fit` | Gap < 5 points — resume is likely strong as-is |
+| `marginal_improvement` | Gap 5–15 points — targeted tweaks recommended |
+| `full_generation_recommended` | Gap > 15 points — full resume generation advised |
+
+When the job posting URL returns a client-side-rendered page with no extractable content, scoring proceeds from title, company, and URL slug. The response includes `"emptyShellFallback": true` in that case.
+
+**Error Responses:**
+
+| Status | Code | Condition |
+|--------|------|-----------|
+| 400 | `BAD_REQUEST` | Invalid or unreachable URL, `job_content` exceeds 200KB |
+| 400 | `VALIDATION_ERROR` | Missing required fields, invalid types |
+| 401 | `UNAUTHORIZED` | Missing or invalid API key |
+| 429 | `RATE_LIMITED` | IP rate limit exceeded (100 req/min) or AI backend rate limit reached; see `Retry-After` header |
+| 500 | `INTERNAL_ERROR` | AI service error |
+
+---
+
+#### POST /api/v1/generate-cover-letter
+
+Generate a targeted cover letter using the stored resume, STAR stories, and leadership philosophy. Pass `score_job` output for best fit context. Generation may take up to 90 seconds.
+
+**Authentication:** API key required
+
+**Request Body:**
+
+Exactly one of `job_posting_url` or `job_posting_text` is required.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `job_posting_url` | string | One of | URL of the job posting |
+| `job_posting_text` | string | One of | Raw job posting text (use when URL fetch is blocked) |
+| `score_job_output` | string | No | JSON string from `POST /api/v1/score-job` (improves fit targeting) |
+| `tone` | string | No | `confident` (default), `warm`, or `technical` |
+| `company` | string | No | Company name (for output metadata) |
+| `role` | string | No | Role title (for output metadata) |
+
+**Example (URL input):**
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "job_posting_url": "https://jobs.acme.com/staff-engineer",
+    "tone": "confident",
+    "company": "Acme Corp",
+    "role": "Staff Engineer"
+  }' \
+  https://damilola.tech/api/v1/generate-cover-letter
+```
+
+**Response (200):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "cover_letter_markdown": "---\ncompany: Acme Corp\nrole: Staff Engineer\nscore_job_fit: 72\n---\n\nDear Hiring Manager...",
+    "metadata": {
+      "company": "Acme Corp",
+      "role": "Staff Engineer",
+      "generated_at": "2026-04-28T12:00:00.000Z",
+      "model": "claude-sonnet-4-6",
+      "input_source": "url",
+      "score_job_used": true,
+      "token_usage": {
+        "input": 8400,
+        "output": 620,
+        "cache_read": 7800
+      }
+    }
+  }
+}
+```
+
+The `cover_letter_markdown` field contains YAML frontmatter (`company`, `role`, `score_job_fit`) followed by the letter body in Markdown.
+
+**Note on `token_usage` key style:** This endpoint uses snake_case keys (`input`, `output`, `cache_read`) under `token_usage`, which differs from other endpoints that use camelCase under `usage` (e.g., `inputTokens`, `cacheReadTokens`). This is an implementation-level divergence; the fields map directly to Anthropic's `usage.input_tokens`, `usage.output_tokens`, and `usage.cache_read_input_tokens`.
+
+**Error Responses:**
+
+| Status | Code | Condition |
+|--------|------|-----------|
+| 400 | `BAD_REQUEST` | Both or neither of `job_posting_url`/`job_posting_text` provided, invalid URL |
+| 400 | `VALIDATION_ERROR` | Invalid `tone` value |
+| 401 | `UNAUTHORIZED` | Missing or invalid API key |
+| 429 | `RATE_LIMITED` | IP rate limit exceeded (100 req/min) or AI backend rate limit reached; see `Retry-After` header |
+| 500 | `INTERNAL_ERROR` | Template unavailable, AI error, generation timeout (>90s) |
+
+---
+
+## MCP Tools
+
+The `damilola.tech` MCP server exposes the following tools for use in Claude AI sessions. See `.mcp.json` in the repo root for server configuration.
+
+### `generate_cover_letter`
+
+Generate a targeted cover letter for a job posting. Uses `score_job` output for fit context when provided.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `job_posting_url` | string (URL) | One of | URL of the job posting |
+| `job_posting_text` | string | One of | Raw job posting text when URL fetch is blocked |
+| `score_job_output` | string | No | JSON output from the `score_job` tool (recommended) |
+| `tone` | `confident` \| `warm` \| `technical` | No | Tone of the letter (default: `confident`) |
+| `company` | string | No | Company name for output metadata |
+| `role` | string | No | Role title for output metadata |
+
+**Returns:** JSON object matching the `POST /api/v1/generate-cover-letter` response shape.
+
+---
+
+### `score_job`
+
+Score a job posting against Damilola's resume for fit and readiness. Mirrors `POST /api/v1/score-job`. Pass the full JSON output to `generate_cover_letter` as `score_job_output` for best results.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `url` | string (URL) | Yes | Job posting URL (http/https) |
+| `title` | string | Yes | Job title |
+| `company` | string | Yes | Company name |
+
+**Returns:** JSON object matching the `POST /api/v1/score-job` response shape. Pass the full stringified output as `score_job_output` to `generate_cover_letter` for fit-aware generation.
+
 ## Rate Limits
 
-API key access is not rate limited. However, the underlying AI endpoints are subject to Anthropic's rate limits. If you encounter 429 responses, check the `Retry-After` header.
+All `/api/v1/*` routes — including API-key-authenticated endpoints — are subject to global rate limiting enforced at the middleware layer before any endpoint handler runs.
+
+| Field | Value |
+|-------|-------|
+| Scope | All `/api/v1/*` routes |
+| Limit | 100 requests per minute |
+| Per | IP address |
+| Algorithm | Fixed-window via Upstash Redis (`INCR` + `EXPIRE` pipeline) |
+| Fail-open | Yes — when Redis is unavailable, requests pass through |
+
+When the limit is exceeded, the server responds with HTTP `429`. The `Retry-After` header is always present on `429` responses and contains the number of seconds remaining until the current one-minute window resets.
+
+**Error Response (429):**
+
+```json
+{
+  "error": "Too many requests. Please try again later."
+}
+```
+
+**Response Headers:**
+
+```http
+Retry-After: <seconds until current window resets>
+```
+
+**Fail-Open Behavior:**
+
+If Upstash Redis is unreachable, the middleware skips rate limiting and the request passes through. Rate limiting is never a hard dependency — Redis unavailability does not block traffic.
 
 ## Security Best Practices
 

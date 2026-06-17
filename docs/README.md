@@ -33,6 +33,11 @@ Comprehensive documentation for the damilola.tech personal career landing page a
 - [Public Endpoints](./api-documentation.md#public-endpoints) - Chat and fit assessment
 - [Admin Endpoints](./api-documentation.md#admin-endpoints) - Protected admin APIs
 - [Rate Limiting](./api-documentation.md#rate-limiting) - Request limits and quotas
+- [External API (v1)](./external-api.md) - REST API for external integrations (OpenClaw, MCP tools)
+- [Resume PDF](./external-api.md#resume-pdf) - Public unauthenticated PDF download endpoint
+- [Job Application Tracking](./external-api.md#job-application-tracking) - Log and query career pipeline entries
+- [Job Scoring & Cover Letters](./external-api.md#job-scoring--cover-letters) - Score jobs and generate cover letters
+- [MCP Tools](./external-api.md#mcp-tools) - `generate_cover_letter` and `score_job` tool reference
 
 ### Architecture
 
