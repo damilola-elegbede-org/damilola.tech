@@ -14,12 +14,6 @@ const CONTACT_RATE_LIMIT = {
 export async function POST(req: Request) {
   const ip = getClientIp(req);
 
-  // Rate limit applied before body parsing — every request (including 400s) counts.
-  const rateLimit = await checkGenericRateLimit(CONTACT_RATE_LIMIT, ip);
-  if (rateLimit.limited) {
-    return Errors.rateLimited(rateLimit.retryAfter ?? 300);
-  }
-
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -60,6 +54,13 @@ export async function POST(req: Request) {
 
   if (message.length > MAX_MESSAGE_LENGTH) {
     return Errors.validationError('Message is too long (max 10,000 characters).');
+  }
+
+  // Rate limit applied after validation — only valid-looking submissions consume quota.
+  // Invalid payloads (missing fields, bad format) are rejected above without burning slots.
+  const rateLimit = await checkGenericRateLimit(CONTACT_RATE_LIMIT, ip);
+  if (rateLimit.limited) {
+    return Errors.rateLimited(rateLimit.retryAfter ?? 300);
   }
 
   return Response.json(

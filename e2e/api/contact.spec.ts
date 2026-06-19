@@ -13,19 +13,10 @@ const VALID_PAYLOAD = {
 //    route handler runs. This suite sends at most 17 requests total; this limit is not
 //    exhausted.
 //
-// 2. Contact-specific limit (implemented in #177): 5 req / 300 s per IP, applied at the
-//    route-handler level before body parsing and validation. This matches the existing
-//    pattern in src/app/api/v1/score-resume/route.ts where checkGenericRateLimit is called
-//    before req.json(). Every request — including those that return 400 — counts toward
-//    the quota.
-//
-//    Impact: only the first 5 tests in file order can receive their expected status codes
-//    in a production-like environment with the contact-specific rate limit active. Tests 6+
-//    will receive 429 once the quota is spent. The two 201-path tests are ordered first
-//    (slots 1 and 2) so the happy paths are verified before quota exhaustion.
-//
-//    CI assumption: this suite starts from a fresh 300 s window. Do not re-run within the
-//    same 5-minute window from the same IP.
+// 2. Contact-specific limit: 5 req / 300 s per IP, applied at the route-handler level
+//    AFTER validation. Only valid-looking submissions (those that pass all field/format
+//    checks) consume quota; invalid payloads return 400 without burning a slot. The
+//    rate-limit test at the end exhausts the quota via repeated valid submissions.
 test.describe('POST /api/v1/contact', () => {
   test('valid payload returns 201 with confirmation message', async ({ request }) => {
     const response = await request.post('/api/v1/contact', {
