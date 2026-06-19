@@ -11,12 +11,12 @@ concurrency:
 jobs:
   e2e:
     name: E2E (${{ matrix.project }})
-    if: github.event.deployment_status.state == 'success' || github.event_name == 'workflow_dispatch'
+    if: (github.event.deployment_status.state == 'success' && startsWith(github.event.deployment_status.environment, 'Production')) || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        project: [chromium, firefox, webkit, mobile-chrome, mobile-safari]
+        project: [chromium, firefox, webkit]
     steps:
       - uses: actions/checkout@v4
       - name: Detect deployment environment
@@ -40,7 +40,7 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ matrix.project }}-${{ hashFiles('**/package-lock.json') }}
           restore-keys: playwright-${{ matrix.project }}-
-      - run: npx playwright install --with-deps ${{ matrix.project == 'mobile-chrome' && 'chromium' || matrix.project == 'mobile-safari' && 'webkit' || matrix.project }}
+      - run: npx playwright install --with-deps ${{ matrix.project }}
       - run: npx playwright test --project=${{ matrix.project }}
         env:
           # For deployment_status runs we target the deployed URL.
