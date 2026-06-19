@@ -6,7 +6,7 @@ test.describe('Consulting Page', () => {
   });
 
   test('should have correct page title', async ({ page }) => {
-    await expect(page).toHaveTitle(/Fractional VPE & Engineering Leadership/);
+    await expect(page).toHaveTitle(/Fractional Engineering Leadership/);
     await expect(page).toHaveTitle(/Damilola Elegbede/);
   });
 

@@ -109,7 +109,7 @@ test.describe('candidate-readiness smoke (ENG-480)', () => {
 
   test('/consulting has correct title', async ({ page }) => {
     await page.goto('/consulting');
-    await expect(page).toHaveTitle('Fractional VPE & Engineering Leadership | Damilola Elegbede');
+    await expect(page).toHaveTitle('Fractional Engineering Leadership | Damilola Elegbede');
   });
 
   test('/consulting hero h1 is visible', async ({ page }) => {

@@ -16,7 +16,7 @@ test.describe('/consulting page – smoke test (ENG-502)', () => {
 
   test('has correct page title', async ({ page }) => {
     await page.goto('/consulting');
-    await expect(page).toHaveTitle('Fractional VPE & Engineering Leadership | Damilola Elegbede');
+    await expect(page).toHaveTitle('Fractional Engineering Leadership | Damilola Elegbede');
   });
 
   test('hero h1 is visible', async ({ page }) => {
@@ -73,7 +73,7 @@ test.describe('/consulting page – smoke test (ENG-502)', () => {
   test('og:title meta tag is present', async ({ page }) => {
     await page.goto('/consulting');
     const ogTitle = page.locator('meta[property="og:title"]');
-    await expect(ogTitle).toHaveAttribute('content', /Fractional VPE/);
+    await expect(ogTitle).toHaveAttribute('content', /Fractional Engineering/);
   });
 
   test('twitter:card meta tag is set to summary_large_image', async ({ page }) => {
