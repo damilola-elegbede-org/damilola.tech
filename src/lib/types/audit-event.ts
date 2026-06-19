@@ -41,7 +41,9 @@ export type AuditEventType =
   | 'api_chats_detail'
   | 'api_audit_accessed'
   | 'api_mcp_request'
-  | 'api_cover_letter_generation';
+  | 'api_cover_letter_generation'
+  | 'consulting_cta_click'
+  | 'consulting_form_submit';
 
 export interface TrafficSource {
   source: string;
