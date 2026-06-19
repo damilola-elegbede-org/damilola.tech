@@ -7,11 +7,12 @@ const VALID_PAYLOAD = {
   message: 'I would like to discuss a fractional engagement for my engineering team.',
 };
 
-// Rate-limit context for this suite — two limiters apply to POST /api/v1/contact:
+// Rate-limit context for this suite:
 //
-// 1. Global middleware (middleware.ts): 100 req / 60 s per IP, incremented before the
-//    route handler runs. This suite sends at most 17 requests total; this limit is not
-//    exhausted.
+// 1. Global middleware (middleware.ts): 100 req / 60 s per IP on production only.
+//    Preview deployments (where E2E CI runs) skip this limit entirely — parallel
+//    browser matrix jobs share a single GitHub Actions IP and would otherwise
+//    exhaust the cap and produce false 429s on tests that expect 400.
 //
 // 2. Contact-specific limit: 5 req / 300 s per IP, applied at the route-handler level
 //    AFTER validation. Only valid-looking submissions (those that pass all field/format
@@ -158,10 +159,9 @@ test.describe('POST /api/v1/contact', () => {
   });
 
   // Rate limiting: endpoint enforces 5 req / 300 s per IP (contact-specific limit, #177).
-  // Placed last. By this point the quota is already spent by the prior tests (the rate
-  // limiter counts all requests before validation), so the first request here will return
-  // 429 immediately. test.skip on retry prevents the spent quota from also poisoning a
-  // retry run of the earlier tests.
+  // Placed last. This test exhausts the contact quota (5 valid submissions) via the loop
+  // below; invalid payloads do NOT consume quota (rate limit runs after validation). The
+  // test.skip on retry prevents re-running after the quota is spent for the 300 s window.
   test('repeated rapid submissions trigger 429 RATE_LIMITED', async ({ request }, testInfo) => {
     test.skip(testInfo.retry > 0, 'Rate-limit quota is spent; cannot retry within the 5-minute window');
     const OVER_LIMIT = 6;
