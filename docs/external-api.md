@@ -72,7 +72,7 @@ All responses follow a consistent JSON structure:
 | `NOT_FOUND` | 404 | Resource not found |
 | `BAD_REQUEST` | 400 | Invalid request parameters |
 | `VALIDATION_ERROR` | 400 | Request validation failed |
-| `RATE_LIMITED` | 429 | Too many requests |
+| `RATE_LIMITED` | 429 | Route-level rate limit exceeded |
 | `INTERNAL_ERROR` | 500 | Server error |
 
 ## Endpoints
@@ -348,6 +348,63 @@ GET /api/v1/resume-generations
 
 ```
 GET /api/v1/resume-generations/{id}
+```
+
+### Resume PDF
+
+Download the current base resume as a PDF.
+
+> **No authentication required.** This is the only `/api/v1/*` endpoint that is publicly accessible without an API key. All other endpoints require an `Authorization: Bearer` or `X-API-Key` header.
+
+```
+GET /api/v1/resume.pdf
+```
+
+**Response:**
+
+Returns a PDF binary stream.
+
+| Header | Value |
+|--------|-------|
+| `Content-Type` | `application/pdf` |
+| `Content-Disposition` | `attachment; filename="damilola-elegbede-resume.pdf"` |
+| `Cache-Control` | `no-store` |
+
+`Cache-Control: no-store` means the response is never cached — each request renders a fresh PDF from the current resume data.
+
+**Example:**
+
+```bash
+# Download to working directory
+curl -O https://damilola.tech/api/v1/resume.pdf
+
+# Download with a custom filename
+curl -o elegbede-resume.pdf https://damilola.tech/api/v1/resume.pdf
+```
+
+**Error Responses:**
+
+| Status | Code | Condition |
+|--------|------|-----------|
+| 429 | — | IP rate limit exceeded (100 req/min); see `Retry-After` header |
+| 500 | `INTERNAL_ERROR` | PDF rendering failed (server-side error) |
+
+**429 response body** (from rate-limit middleware — flat envelope, no `code` field):
+
+```json
+{ "error": "Too many requests. Please try again later." }
+```
+
+**500 response body:**
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "PDF generation failed"
+  }
+}
 ```
 
 ### Audit Log
