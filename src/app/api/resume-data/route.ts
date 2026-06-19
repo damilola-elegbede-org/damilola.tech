@@ -1,7 +1,9 @@
-import { fetchAllContent } from '@/lib/blob';
+import { fetchBlob } from '@/lib/blob';
 
 // Use Node.js runtime (not edge) to allow local file fallback in development
 export const runtime = 'nodejs';
+// Cold-start Blob fetch can exceed the default 10s limit
+export const maxDuration = 30;
 
 /**
  * GET /api/resume-data
@@ -10,16 +12,16 @@ export const runtime = 'nodejs';
  */
 export async function GET() {
   try {
-    const content = await fetchAllContent();
+    const resume = await fetchBlob('resume-full.json');
 
-    if (!content.resume) {
+    if (!resume) {
       return Response.json(
         { error: 'Resume data not available.' },
         { status: 503 }
       );
     }
 
-    const resumeData = JSON.parse(content.resume);
+    const resumeData = JSON.parse(resume);
 
     return Response.json(resumeData);
   } catch (error) {

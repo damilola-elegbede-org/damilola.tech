@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock @/lib/blob before importing the route
-const mockFetchAllContent = vi.fn();
+const mockFetchBlob = vi.fn();
 vi.mock('@/lib/blob', () => ({
-  fetchAllContent: mockFetchAllContent,
+  fetchBlob: mockFetchBlob,
 }));
 
 describe('resume-data API route', () => {
@@ -45,20 +45,9 @@ describe('resume-data API route', () => {
     },
   };
 
-  const mockContentFiles = {
-    resume: JSON.stringify(mockResumeData),
-    starStories: '{}',
-    leadershipPhilosophy: 'Philosophy content',
-    technicalExpertise: 'Technical content',
-    verilyFeedback: 'Feedback content',
-    anecdotes: 'Anecdotes content',
-    projectsContext: 'Projects content',
-    chatbotArchitecture: 'Architecture content',
-  };
-
   describe('GET /api/resume-data', () => {
     it('returns resume JSON data successfully', async () => {
-      mockFetchAllContent.mockResolvedValue(mockContentFiles);
+      mockFetchBlob.mockResolvedValue(JSON.stringify(mockResumeData));
 
       const { GET } = await import('@/app/api/resume-data/route');
 
@@ -67,11 +56,12 @@ describe('resume-data API route', () => {
 
       expect(response.status).toBe(200);
       expect(data).toEqual(mockResumeData);
-      expect(mockFetchAllContent).toHaveBeenCalledTimes(1);
+      expect(mockFetchBlob).toHaveBeenCalledTimes(1);
+      expect(mockFetchBlob).toHaveBeenCalledWith('resume-full.json');
     });
 
     it('response has correct content-type', async () => {
-      mockFetchAllContent.mockResolvedValue(mockContentFiles);
+      mockFetchBlob.mockResolvedValue(JSON.stringify(mockResumeData));
 
       const { GET } = await import('@/app/api/resume-data/route');
 
@@ -81,7 +71,7 @@ describe('resume-data API route', () => {
     });
 
     it('response contains expected fields', async () => {
-      mockFetchAllContent.mockResolvedValue(mockContentFiles);
+      mockFetchBlob.mockResolvedValue(JSON.stringify(mockResumeData));
 
       const { GET } = await import('@/app/api/resume-data/route');
 
@@ -96,7 +86,7 @@ describe('resume-data API route', () => {
     });
 
     it('parses resume JSON correctly', async () => {
-      mockFetchAllContent.mockResolvedValue(mockContentFiles);
+      mockFetchBlob.mockResolvedValue(JSON.stringify(mockResumeData));
 
       const { GET } = await import('@/app/api/resume-data/route');
 
@@ -114,10 +104,7 @@ describe('resume-data API route', () => {
 
   describe('error handling', () => {
     it('returns 503 when resume data is not available', async () => {
-      mockFetchAllContent.mockResolvedValue({
-        ...mockContentFiles,
-        resume: '', // Empty resume
-      });
+      mockFetchBlob.mockResolvedValue('');
 
       const { GET } = await import('@/app/api/resume-data/route');
 
@@ -128,28 +115,8 @@ describe('resume-data API route', () => {
       expect(data.error).toBe('Resume data not available.');
     });
 
-    it('returns 503 when resume field is missing', async () => {
-      mockFetchAllContent.mockResolvedValue({
-        starStories: '{}',
-        leadershipPhilosophy: 'Philosophy content',
-        technicalExpertise: 'Technical content',
-        verilyFeedback: 'Feedback content',
-        anecdotes: 'Anecdotes content',
-        projectsContext: 'Projects content',
-        chatbotArchitecture: 'Architecture content',
-      } as Record<string, string>);
-
-      const { GET } = await import('@/app/api/resume-data/route');
-
-      const response = await GET();
-      const data = await response.json();
-
-      expect(response.status).toBe(503);
-      expect(data.error).toBe('Resume data not available.');
-    });
-
-    it('returns 503 when fetchAllContent throws error', async () => {
-      mockFetchAllContent.mockRejectedValue(new Error('Blob storage error'));
+    it('returns 503 when fetchBlob throws error', async () => {
+      mockFetchBlob.mockRejectedValue(new Error('Blob storage error'));
 
       const { GET } = await import('@/app/api/resume-data/route');
 
@@ -169,10 +136,7 @@ describe('resume-data API route', () => {
     });
 
     it('returns 503 when resume contains invalid JSON', async () => {
-      mockFetchAllContent.mockResolvedValue({
-        ...mockContentFiles,
-        resume: 'invalid json {{{',
-      });
+      mockFetchBlob.mockResolvedValue('invalid json {{{');
 
       const { GET } = await import('@/app/api/resume-data/route');
 
@@ -192,7 +156,7 @@ describe('resume-data API route', () => {
     });
 
     it('logs error message with correct prefix', async () => {
-      mockFetchAllContent.mockRejectedValue(new Error('Network timeout'));
+      mockFetchBlob.mockRejectedValue(new Error('Network timeout'));
 
       const { GET } = await import('@/app/api/resume-data/route');
 
@@ -215,6 +179,11 @@ describe('resume-data API route', () => {
     it('uses nodejs runtime', async () => {
       const routeModule = await import('@/app/api/resume-data/route');
       expect(routeModule.runtime).toBe('nodejs');
+    });
+
+    it('exports maxDuration of 30', async () => {
+      const routeModule = await import('@/app/api/resume-data/route');
+      expect(routeModule.maxDuration).toBe(30);
     });
   });
 });
