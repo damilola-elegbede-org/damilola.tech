@@ -19,11 +19,6 @@ export const projectsData: Project[] = [
     ],
     links: [
       {
-        label: "GitHub",
-        url: "https://github.com/damilola-elegbede-org/cortex",
-        icon: "github",
-      },
-      {
         label: "Activity",
         url: "/projects/cortex/activity",
         icon: "external",

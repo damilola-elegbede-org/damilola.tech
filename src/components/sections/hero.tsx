@@ -80,6 +80,13 @@ export function Hero({ onOpenChat }: HeroProps) {
             >
               Run Fit Assessment
             </Button>
+            <a
+              href="/api/v1/resume.pdf"
+              download
+              className="inline-flex items-center justify-center rounded-full font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 h-12 px-6 text-lg bg-[var(--color-card)] text-[var(--color-text)] border border-[var(--color-border)] hover:bg-[var(--color-bg-alt)] focus-visible:ring-[var(--color-accent)]"
+            >
+              Download Resume
+            </a>
           </div>
         </div>
 

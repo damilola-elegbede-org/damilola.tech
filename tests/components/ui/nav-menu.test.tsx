@@ -64,4 +64,25 @@ describe('NavMenu', () => {
     expect(within(desktopNav).getByRole('link', { name: /education/i })).toBeInTheDocument();
     expect(within(desktopNav).getByRole('link', { name: /projects/i })).toBeInTheDocument();
   });
+
+  it('renders a download resume link in desktop nav', () => {
+    render(<NavMenu />);
+    const desktopNav = screen.getAllByRole('navigation')[0];
+    const downloadLink = within(desktopNav).getByRole('link', { name: /download resume/i });
+    expect(downloadLink).toBeInTheDocument();
+    expect(downloadLink).toHaveAttribute('href', '/api/v1/resume.pdf');
+    expect(downloadLink).toHaveAttribute('download');
+  });
+
+  it('renders a download resume link in mobile menu', () => {
+    render(<NavMenu />);
+    fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
+
+    const navs = screen.getAllByRole('navigation');
+    const mobileNav = navs[1];
+    const downloadLink = within(mobileNav).getByRole('link', { name: /download resume/i });
+    expect(downloadLink).toBeInTheDocument();
+    expect(downloadLink).toHaveAttribute('href', '/api/v1/resume.pdf');
+    expect(downloadLink).toHaveAttribute('download');
+  });
 });
