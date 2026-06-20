@@ -16,6 +16,7 @@ export const maxDuration = 30;
 const client = new Anthropic();
 
 const DEFAULT_MAX_BULLETS = 5;
+const MAX_MAX_BULLETS = 10;
 const MAX_JD_BYTES = 100 * 1024;
 
 function collectBullets(data: typeof resumeData): string[] {
@@ -105,7 +106,7 @@ export async function POST(req: Request) {
 
   const maxBullets =
     typeof maxBulletsRaw === 'number' && Number.isInteger(maxBulletsRaw) && maxBulletsRaw > 0
-      ? maxBulletsRaw
+      ? Math.min(maxBulletsRaw, MAX_MAX_BULLETS)
       : DEFAULT_MAX_BULLETS;
 
   const bullets = collectBullets(resumeData);
@@ -136,7 +137,10 @@ export async function POST(req: Request) {
     const parsed = parseJsonResponse(responseText);
 
     const topBullets = Array.isArray(parsed.top_bullets)
-      ? (parsed.top_bullets as unknown[]).filter((b) => typeof b === 'string')
+      ? (parsed.top_bullets as unknown[])
+          .filter((b) => typeof b === 'string')
+          .map((b) => (b as string).replace(/^\[[^\]]+\]\s*/, '').trim())
+          .slice(0, maxBullets)
       : [];
     const rationale = typeof parsed.rationale === 'string' ? parsed.rationale : '';
     const skillsMatch = Array.isArray(parsed.skills_match)

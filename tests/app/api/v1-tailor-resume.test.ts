@@ -144,6 +144,54 @@ describe('v1/tailor-resume API route', () => {
     expect(json.data.top_bullets).toHaveLength(1);
   });
 
+  it('clamps max_bullets to 10 when caller requests more', async () => {
+    await callRoute({ job_description: 'Cloud infrastructure role.', max_bullets: 50 });
+    const callArgs = mockCreate.mock.calls[0][0] as { messages: Array<{ content: string }> };
+    const prompt = callArgs.messages[0].content as string;
+    // Prompt should reflect the clamped value (10), not 50
+    expect(prompt).toContain('10 most relevant bullets');
+    expect(prompt).not.toContain('50 most relevant bullets');
+  });
+
+  it('enforces max_bullets server-side when model returns more bullets than requested', async () => {
+    const overage: typeof MOCK_CLAUDE_RESPONSE = {
+      top_bullets: [
+        'Bullet A', 'Bullet B', 'Bullet C', 'Bullet D', 'Bullet E',
+        'Bullet F', 'Bullet G', 'Bullet H', 'Bullet I', 'Bullet J',
+        'Bullet K', // 11th — should be sliced off
+      ],
+      rationale: 'Returned too many bullets.',
+      skills_match: [],
+    };
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify(overage) }],
+    });
+    const res = await callRoute({ job_description: 'Cloud infrastructure role.', max_bullets: 3 });
+    expect(res.status).toBe(200);
+    const json = await res.json() as { success: boolean; data: { top_bullets: string[] } };
+    expect(json.success).toBe(true);
+    expect(json.data.top_bullets).toHaveLength(3);
+  });
+
+  it('strips company prefix from bullets returned by model', async () => {
+    const withPrefix: typeof MOCK_CLAUDE_RESPONSE = {
+      top_bullets: [
+        '[Visa — Sr. Manager, DX] Led platform investments improving engineering velocity.',
+        'Built and scaled Cloud Infrastructure team to 13 engineers.',
+      ],
+      rationale: 'Platform focus matches.',
+      skills_match: ['Platform Engineering'],
+    };
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify(withPrefix) }],
+    });
+    const res = await callRoute({ job_description: 'Platform engineering role.' });
+    expect(res.status).toBe(200);
+    const json = await res.json() as { success: boolean; data: { top_bullets: string[] } };
+    expect(json.data.top_bullets[0]).toBe('Led platform investments improving engineering velocity.');
+    expect(json.data.top_bullets[1]).toBe('Built and scaled Cloud Infrastructure team to 13 engineers.');
+  });
+
   it('uses claude-sonnet-4-6 model', async () => {
     await callRoute({ job_description: 'We need an engineering leader.' });
     expect(mockCreate).toHaveBeenCalledWith(
