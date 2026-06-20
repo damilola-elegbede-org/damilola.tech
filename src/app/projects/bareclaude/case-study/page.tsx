@@ -199,8 +199,8 @@ export default function BareClaudeCaseStudy() {
                 GitHub App identity per agent
               </strong>
               <p className="mt-1">
-                Each specialist sub-agent has its own GitHub App bot identity (dara-fox[bot],
-                eli-cortex[bot], zara-cortex[bot], etc.). Commits, PRs, and reviews are
+                Each agent has its own GitHub App bot identity (dara-fox[bot],
+                clara-nova[bot], etc.). Commits, PRs, and reviews are
                 attributed per-agent — full audit trail, no shared credentials.
               </p>
             </div>

@@ -200,7 +200,7 @@ Every delegation is auditable: it lands in `infra/.state/delegation.log` (gitign
 
 **The decision:** Each agent gets its own GitHub App installation with its own bot identity. `git-agent.sh <agent>` sets `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL` and exports `GH_TOKEN` — all in a single invocation. No bare `git commit` or `git push` anywhere in the fleet.
 
-The result: every git operation is unambiguously agent-authored. `cleo-cortex[bot]` opened this PR. Audit trails are clean. Bot identity doesn't bleed into D's personal activity feed.
+The result: every git operation is unambiguously agent-authored. `dara-fox[bot]` opened this PR. Audit trails are clean. Bot identity doesn't bleed into D's personal activity feed.
 
 **The lesson:** identity hygiene is a hard requirement, not a nice-to-have. Even one unintended post under D's name in a technical review context undermines trust.
 
