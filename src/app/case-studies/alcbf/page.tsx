@@ -5,6 +5,22 @@ export const metadata: Metadata = {
   title: "A Lo Cubano Boulder Fest — Case Study | Damilola Elegbede",
   description:
     "How I debugged a production ticketing platform weeks before a live dance event — fixing analytics undercounting, QR atomicity failures, and silent data corruption with 7 concurrent PRs under real deadline pressure.",
+  alternates: {
+    canonical: "https://damilola.tech/case-studies/alcbf",
+  },
+  openGraph: {
+    title: "A Lo Cubano Boulder Fest — Case Study | Damilola Elegbede",
+    description:
+      "How I debugged a production ticketing platform weeks before a live dance event — fixing analytics undercounting, QR atomicity failures, and silent data corruption with 7 concurrent PRs.",
+    type: "website",
+    url: "https://damilola.tech/case-studies/alcbf",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "A Lo Cubano Boulder Fest — Case Study | Damilola Elegbede",
+    description:
+      "How I debugged a production ticketing platform weeks before a live dance event — fixing analytics undercounting, QR atomicity failures, and silent data corruption with 7 concurrent PRs.",
+  },
 };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
