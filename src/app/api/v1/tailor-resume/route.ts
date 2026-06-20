@@ -61,12 +61,12 @@ function extractTextContent(content: Array<{ type: string; text?: string }>): st
   return block?.text ?? '';
 }
 
-function parseJsonResponse(text: string): Record<string, unknown> {
+function parseJsonResponse(text: string): Record<string, unknown> | null {
   const trimmed = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
   try {
     return JSON.parse(trimmed) as Record<string, unknown>;
   } catch {
-    return {};
+    return null;
   }
 }
 
@@ -135,6 +135,9 @@ export async function POST(req: Request) {
       message.content as Array<{ type: string; text?: string }>
     );
     const parsed = parseJsonResponse(responseText);
+    if (!parsed) {
+      return Errors.internalError('AI response format error.');
+    }
 
     const topBullets = Array.isArray(parsed.top_bullets)
       ? (parsed.top_bullets as unknown[])

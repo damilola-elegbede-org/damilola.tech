@@ -214,4 +214,15 @@ describe('v1/tailor-resume API route', () => {
       expect.any(String)
     );
   });
+
+  it('returns 500 when Claude returns unparseable JSON', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'text', text: 'This is not valid JSON at all.' }],
+    });
+    const res = await callRoute({ job_description: 'Cloud infrastructure role.' });
+    expect(res.status).toBe(500);
+    const json = await res.json() as { success: boolean; error: { code: string } };
+    expect(json.success).toBe(false);
+    expect(json.error.code).toBe('INTERNAL_ERROR');
+  });
 });
