@@ -52,13 +52,13 @@ BareClaude is that OS. It runs continuously on a Mac Mini, managing my engineeri
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**19 agents** across two principal fleets plus an isolated third agent (TARS, serving Ana on a separate principal boundary):
+**19 agents** across two principal fleets plus an isolated third agent (TARS, D's spouse's personal assistant, on a separate principal boundary):
 
 | Fleet | Principal | Specialists |
 |---|---|---|
 | Life ops | Clara Nova 💫 (Chief of Staff) | Vesper (CFO), Cadence (PM), Portia (Legal), Atlas (Travel), Kai (Career), Echo (Social), Pixel (Design) |
 | Engineering | Dara Fox 🦊 (Distinguished Engineer) | Nyx (Security), Quinn (Verification), Zara (Frontend), Reid (Reliability), Eli (Backend), Iris (Data), Finn (Fullstack), Remy (QA), Cleo (Docs) |
-| Standalone | TARS 🤖 | — (separate principal: Ana, not D) |
+| Standalone | TARS 🤖 | — (D's spouse's personal assistant, separate principal) |
 
 ---
 

@@ -92,7 +92,7 @@ export default function BareClaudeCaseStudy() {
       <Section title="The Solution">
         <p className="mb-6 text-[var(--color-text-muted)]">
           BareClaude is a production multi-agent platform with 3 autonomous principals — Dara Fox
-          (Distinguished Engineer), Clara Nova (Chief of Staff), and TARS (Personal Assistant) —
+          (Distinguished Engineer), Clara Nova (Chief of Staff), and TARS (Spouse&apos;s Personal Assistant) —
           each with distinct domain authority, dedicated identity wrappers, and a shared launchd
           and queue infrastructure running 24/7 on a Mac Mini.
         </p>
@@ -103,7 +103,7 @@ export default function BareClaudeCaseStudy() {
         <ul className="mb-6 space-y-2">
           <Bullet>
             <strong>3 autonomous principals</strong> — Clara Nova (Chief of Staff), Dara Fox
-            (Distinguished Engineer), and TARS (Personal Assistant to Ana). Each principal has
+            (Distinguished Engineer), and TARS (Spouse&apos;s Personal Assistant). Each principal has
             domain-isolated authority, dedicated Slack and Telegram identities, and owns its
             surfaces end-to-end.
           </Bullet>

@@ -6,7 +6,7 @@ export const projectsData: Project[] = [
     name: "BareClaude Agent Fleet",
     subtitle: "Multi-agent AI system with autonomous task orchestration",
     description:
-      "BareClaude is D's personal agentic OS — 3 autonomous principals running 24/7 on a Mac Mini. Clara Nova handles life ops, calendar, and finances. Dara Fox owns the full engineering stack (security, testing, infra, product). TARS serves a second principal. Powered by Bun fleet workers, launchd, Linear, GitHub Apps, Slack webhooks, Tailscale, and the Claude API.",
+      "BareClaude is D's personal agentic OS — 3 autonomous principals running 24/7 on a Mac Mini. Clara Nova handles life ops, calendar, and finances. Dara Fox owns the full engineering stack (security, testing, infra, product). TARS serves as D's spouse's personal assistant. Powered by Bun fleet workers, launchd, Linear, GitHub Apps, Slack webhooks, Tailscale, and the Claude API.",
     techStack: [
       "TypeScript",
       "Bun",
@@ -33,13 +33,13 @@ export const projectsData: Project[] = [
     stats: {
       label: "System Scale",
       items: [
-        "3 autonomous principals: Clara Nova (Chief of Staff), Dara Fox (Distinguished Engineer), TARS (Personal Assistant)",
+        "3 autonomous principals: Clara Nova (Chief of Staff), Dara Fox (Distinguished Engineer), TARS (Spouse's Personal Assistant)",
         "20+ launchd cron jobs across planning, execution, heartbeat, PR digest, and vault sync",
         "Slack + Telegram + Linear + GitHub + Gmail routing via per-agent identity wrappers",
       ],
     },
     highlights: [
-      "3-principal architecture: Clara (life ops + 7 domains), Dara (engineering + 9 domains), TARS (second principal)",
+      "3-principal architecture: Clara (life ops + 7 domains), Dara (engineering + 9 domains), TARS (spouse's personal assistant)",
       "Bun fleet workers replace 19 bash daemons: launchd-supervised, keychain-accessible, no Terminal-rooted sessions",
       "Automated SDLC: branch \u2192 CI \u2192 CodeRabbit \u2192 3-gate merge check \u2192 D clicks Merge",
       "Queue-based dispatch: cron jobs and Slack webhooks enqueue via flock-protected scripts",
@@ -54,7 +54,7 @@ export const projectsData: Project[] = [
         items: [
           "Clara Nova (Claude Opus): Chief of Staff — Slack, Linear OPS, Gmail, Calendar, Telegram, Notion",
           "Dara Fox (Claude Opus): Distinguished Engineer — Linear ENG, GitHub, Vercel, all 9 engineering domains",
-          "TARS (Claude Sonnet): Personal Assistant to a second principal — separate Telegram, isolated scope",
+          "TARS (Claude Sonnet): Spouse's personal assistant — separate Telegram bot, isolated scope and principal",
           "Each principal is a launchd bun worker + grammy Telegram listener + queue-dispatched cron set",
         ],
       },
