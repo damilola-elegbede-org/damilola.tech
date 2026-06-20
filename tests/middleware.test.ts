@@ -23,16 +23,26 @@ function stubRedisCount(count: number): void {
 describe('api/v1 rate limiting middleware', () => {
   const origUrl = process.env.UPSTASH_REDIS_REST_URL;
   const origToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const origVercelEnv = process.env.VERCEL_ENV;
 
   beforeEach(() => {
     mockFetch.mockReset();
     process.env.UPSTASH_REDIS_REST_URL = 'https://redis.example.com';
     process.env.UPSTASH_REDIS_REST_TOKEN = 'test-token';
+    // Simulate production so the middleware doesn't short-circuit the rate limit check.
+    // middleware.ts skips rate limiting when VERCEL_ENV !== 'production' to prevent
+    // parallel CI jobs (sharing one outbound IP) from exhausting the global 100/60s cap.
+    process.env.VERCEL_ENV = 'production';
   });
 
   afterEach(() => {
     process.env.UPSTASH_REDIS_REST_URL = origUrl;
     process.env.UPSTASH_REDIS_REST_TOKEN = origToken;
+    if (origVercelEnv === undefined) {
+      delete process.env.VERCEL_ENV;
+    } else {
+      process.env.VERCEL_ENV = origVercelEnv;
+    }
   });
 
   it('passes requests under the limit (200)', async () => {

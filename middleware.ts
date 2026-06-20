@@ -16,6 +16,14 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return NextResponse.next();
   }
 
+  // Skip rate limiting on non-production deployments. Parallel CI E2E jobs (5 browser
+  // projects) share a single GitHub Actions outbound IP; their combined request volume
+  // exhausts the 100/60s cap and produces false 429s for tests that expect 400. Preview
+  // deployments are ephemeral and don't need IP-based protection.
+  if (process.env.VERCEL_ENV !== 'production') {
+    return NextResponse.next();
+  }
+
   // x-forwarded-for is set by Vercel's edge and is the canonical IP source in Next.js 15+
   // (NextRequest.ip was removed in Next.js 15). 'unknown' is a shared fallback bucket.
   const ip =
