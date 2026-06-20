@@ -333,7 +333,7 @@ export default function ApiKeysPage() {
                   type="text"
                   value={newKeyName}
                   onChange={(e) => setNewKeyName(e.target.value)}
-                  placeholder="e.g., OpenClaw Production"
+                  placeholder="e.g., BareClaude Production"
                   className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-[var(--color-text)] placeholder:text-[var(--color-text-muted)]"
                   maxLength={100}
                 />

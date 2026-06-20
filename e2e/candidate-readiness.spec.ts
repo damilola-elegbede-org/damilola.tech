@@ -41,7 +41,7 @@ test.describe('candidate-readiness smoke (ENG-480)', () => {
     const body = await res.text();
     expect(body).toContain('damilola.tech</loc>');
     expect(body).toContain('/consulting');
-    expect(body).toContain('/projects/cortex/case-study');
+    expect(body).toContain('/projects/bareclaude/case-study');
   });
 
   // ── Home page ───────────────────────────────────────────────────────────
@@ -136,21 +136,21 @@ test.describe('candidate-readiness smoke (ENG-480)', () => {
     await expect(page.getByRole('region', { name: 'Contact' })).toBeVisible();
   });
 
-  // ── /projects/cortex/case-study ─────────────────────────────────────────
+  // ── /projects/bareclaude/case-study ─────────────────────────────────────
 
-  test('/projects/cortex/case-study returns 200', async ({ page }) => {
-    const res = await page.goto('/projects/cortex/case-study');
+  test('/projects/bareclaude/case-study returns 200', async ({ page }) => {
+    const res = await page.goto('/projects/bareclaude/case-study');
     expect(res?.status()).toBe(200);
   });
 
-  test('/projects/cortex/case-study has correct title', async ({ page }) => {
-    await page.goto('/projects/cortex/case-study');
-    await expect(page).toHaveTitle(/Cortex Agent Fleet/);
+  test('/projects/bareclaude/case-study has correct title', async ({ page }) => {
+    await page.goto('/projects/bareclaude/case-study');
+    await expect(page).toHaveTitle(/BareClaude Agent Fleet/);
   });
 
-  test('/projects/cortex/case-study h1 is visible', async ({ page }) => {
-    await page.goto('/projects/cortex/case-study');
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Cortex Agent Fleet');
+  test('/projects/bareclaude/case-study h1 is visible', async ({ page }) => {
+    await page.goto('/projects/bareclaude/case-study');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('BareClaude Agent Fleet');
   });
 
   // ── Public API endpoints ─────────────────────────────────────────────────

@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Cortex Agent Fleet — Case Study | Damilola Elegbede",
+  title: "BareClaude Agent Fleet — Case Study | Damilola Elegbede",
   description:
     "How I built a production multi-agent AI system with autonomous task orchestration, fleet-wide cohesion, and 73+ completed engineering tasks — from first principles.",
 };
@@ -42,7 +42,7 @@ function Bullet({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function CortexCaseStudy() {
+export default function BareClaudeCaseStudy() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-20">
       {/* Breadcrumb */}
@@ -58,7 +58,7 @@ export default function CortexCaseStudy() {
           Case Study
         </p>
         <h1 className="mb-4 text-4xl font-bold text-[var(--color-text)] md:text-5xl">
-          Cortex Agent Fleet
+          BareClaude Agent Fleet
         </h1>
         <p className="text-lg text-[var(--color-text-muted)]">
           A production multi-agent AI system that autonomously manages engineering operations
@@ -91,10 +91,10 @@ export default function CortexCaseStudy() {
 
       <Section title="The Solution">
         <p className="mb-6 text-[var(--color-text-muted)]">
-          Cortex is a production multi-agent platform running 2 gateway agents — Dara Fox
-          (Distinguished Engineer) and Clara Nova (Chief of Staff) — each with distinct
-          domain authority, shared infrastructure, and a dispatched sub-agent model for
-          implementation work.
+          BareClaude is a production multi-agent platform with 3 autonomous principals — Dara Fox
+          (Distinguished Engineer), Clara Nova (Chief of Staff), and TARS (Spouse&apos;s Personal Assistant) —
+          each with distinct domain authority, dedicated identity wrappers, and a shared launchd
+          and queue infrastructure running 24/7 on a Mac Mini.
         </p>
 
         <h3 className="mb-3 text-lg font-semibold text-[var(--color-text)]">
@@ -102,9 +102,10 @@ export default function CortexCaseStudy() {
         </h3>
         <ul className="mb-6 space-y-2">
           <Bullet>
-            <strong>2 Opus-tier gateway agents</strong> — domain-isolated orchestrators
-            that architect, delegate, verify, and integrate. They never implement directly;
-            that&apos;s the sub-agents&apos; job.
+            <strong>3 autonomous principals</strong> — Clara Nova (Chief of Staff), Dara Fox
+            (Distinguished Engineer), and TARS (Spouse&apos;s Personal Assistant). Each principal has
+            domain-isolated authority, dedicated Slack and Telegram identities, and owns its
+            surfaces end-to-end.
           </Bullet>
           <Bullet>
             <strong>8+ specialist sub-agents on-demand</strong> — frontend-engineer,
@@ -199,8 +200,8 @@ export default function CortexCaseStudy() {
                 GitHub App identity per agent
               </strong>
               <p className="mt-1">
-                Each specialist sub-agent has its own GitHub App bot identity (dara-fox[bot],
-                eli-cortex[bot], zara-cortex[bot], etc.). Commits, PRs, and reviews are
+                Each agent has its own GitHub App bot identity (dara-fox[bot],
+                clara-nova[bot], etc.). Commits, PRs, and reviews are
                 attributed per-agent — full audit trail, no shared credentials.
               </p>
             </div>
@@ -278,7 +279,7 @@ export default function CortexCaseStudy() {
       {/* Footer links */}
       <div className="flex flex-wrap gap-6 border-t border-[var(--color-border)] pt-8">
         <a
-          href="https://github.com/damilola-elegbede-org/cortex"
+          href="https://github.com/damilola-elegbede-org/bareclaude"
           target="_blank"
           rel="noopener noreferrer"
           className="text-sm text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-accent)]"
@@ -286,7 +287,7 @@ export default function CortexCaseStudy() {
           GitHub →
         </a>
         <Link
-          href="/projects/cortex/activity"
+          href="/projects/bareclaude/activity"
           className="text-sm text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-accent)]"
         >
           Weekly Activity →

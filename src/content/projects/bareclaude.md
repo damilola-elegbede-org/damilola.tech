@@ -1,8 +1,8 @@
 ---
 title: "BareClaude: A Personal Agentic OS"
-subtitle: "Designing and operating a 19-agent autonomous fleet for engineering and life ops"
+subtitle: "3 autonomous agents — Clara, Dara, TARS — running 24/7 on TypeScript, Bun, launchd, and the Claude API"
 date: "2026-05-28"
-tags: ["AI Systems", "Multi-Agent", "Architecture", "Infrastructure", "Claude API"]
+tags: ["Claude API", "TypeScript", "Bun", "Next.js", "SQLite", "Tailscale", "GitHub Apps", "Linear", "Slack", "launchd", "macOS", "Multi-Agent"]
 status: "production"
 ---
 
@@ -52,13 +52,13 @@ BareClaude is that OS. It runs continuously on a Mac Mini, managing my engineeri
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**19 agents** across two principal fleets plus an isolated third agent (TARS, serving Ana on a separate principal boundary):
+**19 agents** across two principal fleets plus an isolated third agent (TARS, D's spouse's personal assistant, on a separate principal boundary):
 
 | Fleet | Principal | Specialists |
 |---|---|---|
 | Life ops | Clara Nova 💫 (Chief of Staff) | Vesper (CFO), Cadence (PM), Portia (Legal), Atlas (Travel), Kai (Career), Echo (Social), Pixel (Design) |
 | Engineering | Dara Fox 🦊 (Distinguished Engineer) | Nyx (Security), Quinn (Verification), Zara (Frontend), Reid (Reliability), Eli (Backend), Iris (Data), Finn (Fullstack), Remy (QA), Cleo (Docs) |
-| Standalone | TARS 🤖 | — (separate principal: Ana, not D) |
+| Standalone | TARS 🤖 | — (D's spouse's personal assistant, separate principal) |
 
 ---
 
@@ -200,7 +200,7 @@ Every delegation is auditable: it lands in `infra/.state/delegation.log` (gitign
 
 **The decision:** Each agent gets its own GitHub App installation with its own bot identity. `git-agent.sh <agent>` sets `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL` and exports `GH_TOKEN` — all in a single invocation. No bare `git commit` or `git push` anywhere in the fleet.
 
-The result: every git operation is unambiguously agent-authored. `cleo-cortex[bot]` opened this PR. Audit trails are clean. Bot identity doesn't bleed into D's personal activity feed.
+The result: every git operation is unambiguously agent-authored. `dara-fox[bot]` opened this PR. Audit trails are clean. Bot identity doesn't bleed into D's personal activity feed.
 
 **The lesson:** identity hygiene is a hard requirement, not a nice-to-have. Even one unintended post under D's name in a technical review context undermines trust.
 
