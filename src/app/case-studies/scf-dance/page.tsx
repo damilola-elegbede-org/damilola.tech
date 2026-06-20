@@ -5,6 +5,22 @@ export const metadata: Metadata = {
   title: "Salsa Con Flow Dance — Case Study | Damilola Elegbede",
   description:
     "How I built and hardened a full-stack booking platform for a professional Latin dance instructor — delivering CI reliability, security layers, and Node.js 20 upgrade before a GitHub Actions deprecation deadline.",
+  alternates: {
+    canonical: "https://damilola.tech/case-studies/scf-dance",
+  },
+  openGraph: {
+    title: "Salsa Con Flow Dance — Case Study | Damilola Elegbede",
+    description:
+      "How I built and hardened a full-stack booking platform for a professional Latin dance instructor — delivering CI reliability, security layers, and Node.js 20 upgrade before a GitHub Actions deprecation deadline.",
+    type: "website",
+    url: "https://damilola.tech/case-studies/scf-dance",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Salsa Con Flow Dance — Case Study | Damilola Elegbede",
+    description:
+      "How I built and hardened a full-stack booking platform for a professional Latin dance instructor — delivering CI reliability, security layers, and Node.js 20 upgrade before a GitHub Actions deprecation deadline.",
+  },
 };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
