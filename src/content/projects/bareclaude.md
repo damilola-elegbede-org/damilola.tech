@@ -1,8 +1,8 @@
 ---
 title: "BareClaude: A Personal Agentic OS"
-subtitle: "Designing and operating a 19-agent autonomous fleet for engineering and life ops"
+subtitle: "3 autonomous agents — Clara, Dara, TARS — running 24/7 on TypeScript, Bun, launchd, and the Claude API"
 date: "2026-05-28"
-tags: ["AI Systems", "Multi-Agent", "Architecture", "Infrastructure", "Claude API"]
+tags: ["Claude API", "TypeScript", "Bun", "Next.js", "SQLite", "Tailscale", "GitHub Apps", "Linear", "Slack", "launchd", "macOS", "Multi-Agent"]
 status: "production"
 ---
 
