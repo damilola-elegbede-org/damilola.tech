@@ -42,7 +42,8 @@ export type AuditEventType =
   | 'api_audit_accessed'
   | 'api_mcp_request'
   | 'api_cover_letter_generation'
-  | 'api_extract_job_description';
+  | 'api_extract_job_description'
+  | 'api_tailor_resume';
 
 export interface TrafficSource {
   source: string;
