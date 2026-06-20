@@ -17,13 +17,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.8,
     },
     {
-      url: `${BASE_URL}/projects/cortex/case-study`,
+      url: `${BASE_URL}/projects/bareclaude/case-study`,
       lastModified: new Date('2026-05-01'),
       changeFrequency: 'monthly',
       priority: 0.8,
     },
     {
-      url: `${BASE_URL}/projects/cortex/activity`,
+      url: `${BASE_URL}/projects/bareclaude/activity`,
       lastModified: new Date('2026-05-01'),
       changeFrequency: 'daily',
       priority: 0.7,

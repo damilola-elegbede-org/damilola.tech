@@ -2,8 +2,8 @@ import type { Project } from "@/types";
 
 export const projectsData: Project[] = [
   {
-    id: "cortex-agent-fleet",
-    name: "Cortex Agent Fleet",
+    id: "bareclaude-agent-fleet",
+    name: "BareClaude Agent Fleet",
     subtitle: "Multi-agent AI system with autonomous task orchestration",
     description:
       "Production multi-agent platform running 2 specialized AI agents on a Mac Mini with centralized orchestration. Features inter-agent communication, automated SDLC with sub-agent delegation, config drift detection, incident monitoring, and a Signal-based command interface.",
@@ -20,12 +20,12 @@ export const projectsData: Project[] = [
     links: [
       {
         label: "Activity",
-        url: "/projects/cortex/activity",
+        url: "/projects/bareclaude/activity",
         icon: "external",
       },
       {
         label: "Case Study",
-        url: "/projects/cortex/case-study",
+        url: "/projects/bareclaude/case-study",
         icon: "external",
       },
     ],

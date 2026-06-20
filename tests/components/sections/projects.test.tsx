@@ -52,7 +52,7 @@ describe('Projects', () => {
     expect(screen.getByText('JavaScript')).toBeInTheDocument();
     expect(screen.getAllByText('Next.js')).toHaveLength(2);
     expect(screen.getByText('Stripe')).toBeInTheDocument();
-    // Claude API appears in 3 projects (cortex, damilola.tech, and Pipedream)
+    // Claude API appears in 3 projects (bareclaude, damilola.tech, and Pipedream)
     expect(screen.getAllByText('Claude API')).toHaveLength(3);
   });
 
@@ -66,10 +66,10 @@ describe('Projects', () => {
     expect(githubLinks.length).toBeGreaterThan(0);
   });
 
-  it('cortex project does not link to a broken private org github url', () => {
+  it('bareclaude project does not link to the old cortex org github url', () => {
     render(<Projects />);
 
-    // The broken org link damilola-elegbede-org/cortex should not appear
+    // The old org link damilola-elegbede-org/cortex should not appear
     const links = screen.getAllByRole('link');
     const brokenLink = links.find(
       (link) => link.getAttribute('href') === 'https://github.com/damilola-elegbede-org/cortex'

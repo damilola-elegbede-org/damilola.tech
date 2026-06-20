@@ -1,16 +1,16 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Cortex Case Study Page', () => {
+test.describe('BareClaude Case Study Page', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/projects/cortex/case-study');
+    await page.goto('/projects/bareclaude/case-study');
   });
 
   test('should have correct page title', async ({ page }) => {
-    await expect(page).toHaveTitle('Cortex Agent Fleet — Case Study | Damilola Elegbede');
+    await expect(page).toHaveTitle('BareClaude Agent Fleet — Case Study | Damilola Elegbede');
   });
 
   test('should display header with correct content', async ({ page }) => {
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Cortex Agent Fleet');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('BareClaude Agent Fleet');
     await expect(page.getByText('Case Study', { exact: true })).toBeVisible();
     await expect(
       page.getByText(/production multi-agent AI system/i)
@@ -58,9 +58,9 @@ test.describe('Cortex Case Study Page', () => {
     await expect(page.getByRole('link', { name: '← All Projects' })).toBeVisible();
   });
 
-  test('Weekly Activity link navigates to /projects/cortex/activity', async ({ page }) => {
+  test('Weekly Activity link navigates to /projects/bareclaude/activity', async ({ page }) => {
     await page.getByRole('link', { name: 'Weekly Activity →' }).click();
-    await expect(page).toHaveURL(/\/projects\/cortex\/activity/);
+    await expect(page).toHaveURL(/\/projects\/bareclaude\/activity/);
   });
 
   test('All Projects footer link navigates to /#projects', async ({ page }) => {
@@ -78,5 +78,11 @@ test.describe('Cortex Case Study Page', () => {
     await expect(page.getByRole('heading', { name: 'Fleet Architecture' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Autonomous Scheduling' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'PR Quality Gates' })).toBeVisible();
+  });
+
+  test('old /projects/cortex/case-study redirects here', async ({ page }) => {
+    const res = await page.goto('/projects/cortex/case-study');
+    await expect(page).toHaveURL(/\/projects\/bareclaude\/case-study/);
+    expect(res?.status()).toBe(200);
   });
 });

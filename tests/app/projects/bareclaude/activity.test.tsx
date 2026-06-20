@@ -59,13 +59,13 @@ async function renderPage(summaries: ActivitySummary[]) {
 
   // Dynamic import so mock is in place first
   const { default: Page } = await import(
-    "@/app/projects/cortex/activity/page"
+    "@/app/projects/bareclaude/activity/page"
   );
   const jsx = await Page();
   render(jsx);
 }
 
-describe("CortexActivityPage", () => {
+describe("BareClaude ActivityPage", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
@@ -82,7 +82,7 @@ describe("CortexActivityPage", () => {
     await renderPage([]);
     expect(
       screen.getByRole("heading", {
-        name: /cortex agent fleet — engineering activity/i,
+        name: /bareclaude agent fleet — engineering activity/i,
       }),
     ).toBeInTheDocument();
   });

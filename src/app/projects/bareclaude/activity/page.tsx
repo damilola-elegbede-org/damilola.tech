@@ -7,9 +7,9 @@ import type { ActivitySummary } from "@/lib/types/activity-summary";
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
-  title: "Engineering Activity — Cortex Agent Fleet | Damilola Elegbede",
+  title: "Engineering Activity — BareClaude Agent Fleet | Damilola Elegbede",
   description:
-    "Weekly engineering activity from the Cortex multi-agent system — PRs shipped, features delivered, and highlights from each week.",
+    "Weekly engineering activity from the BareClaude multi-agent system — PRs shipped, features delivered, and highlights from each week.",
 };
 
 const ACTIVITY_PREFIX = "damilola.tech/activity/";
@@ -70,7 +70,7 @@ function formatWeekEnding(dateStr: string): string {
   });
 }
 
-export default async function CortexActivityPage() {
+export default async function BareClaudeActivityPage() {
   const summaries = await getActivityData();
 
   return (
@@ -111,10 +111,10 @@ export default async function CortexActivityPage() {
               marginBottom: "0.5rem",
             }}
           >
-            Cortex Agent Fleet — Engineering Activity
+            BareClaude Agent Fleet — Engineering Activity
           </h1>
           <p style={{ color: "var(--color-text-muted)", fontSize: "1rem" }}>
-            Weekly engineering activity from the Cortex multi-agent system
+            Weekly engineering activity from the BareClaude multi-agent system
           </p>
         </div>
 
