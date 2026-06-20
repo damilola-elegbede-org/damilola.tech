@@ -1,11 +1,11 @@
 /**
- * API Key types for external integrations (e.g., OpenClaw).
+ * API Key types for external integrations (e.g., BareClaude).
  */
 
 export interface ApiKey {
   /** Unique identifier (UUID) */
   id: string;
-  /** Display name (e.g., "OpenClaw Production") */
+  /** Display name (e.g., "BareClaude Production") */
   name: string;
   /** Optional notes about the key's purpose */
   description?: string;

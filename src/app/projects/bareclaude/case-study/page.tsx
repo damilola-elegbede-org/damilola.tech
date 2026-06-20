@@ -91,10 +91,10 @@ export default function BareClaudeCaseStudy() {
 
       <Section title="The Solution">
         <p className="mb-6 text-[var(--color-text-muted)]">
-          BareClaude is a production multi-agent platform running 2 gateway agents — Dara Fox
-          (Distinguished Engineer) and Clara Nova (Chief of Staff) — each with distinct
-          domain authority, shared infrastructure, and a dispatched sub-agent model for
-          implementation work.
+          BareClaude is a production multi-agent platform with 3 autonomous principals — Dara Fox
+          (Distinguished Engineer), Clara Nova (Chief of Staff), and TARS (Personal Assistant) —
+          each with distinct domain authority, dedicated identity wrappers, and a shared launchd
+          and queue infrastructure running 24/7 on a Mac Mini.
         </p>
 
         <h3 className="mb-3 text-lg font-semibold text-[var(--color-text)]">
@@ -102,9 +102,10 @@ export default function BareClaudeCaseStudy() {
         </h3>
         <ul className="mb-6 space-y-2">
           <Bullet>
-            <strong>2 Opus-tier gateway agents</strong> — domain-isolated orchestrators
-            that architect, delegate, verify, and integrate. They never implement directly;
-            that&apos;s the sub-agents&apos; job.
+            <strong>3 autonomous principals</strong> — Clara Nova (Chief of Staff), Dara Fox
+            (Distinguished Engineer), and TARS (Personal Assistant to Ana). Each principal has
+            domain-isolated authority, dedicated Slack and Telegram identities, and owns its
+            surfaces end-to-end.
           </Bullet>
           <Bullet>
             <strong>8+ specialist sub-agents on-demand</strong> — frontend-engineer,
