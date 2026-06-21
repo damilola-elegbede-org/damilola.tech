@@ -1,9 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST } from '../route';
 
+vi.mock('@vercel/functions', () => ({
+  waitUntil: vi.fn(),
+}));
+
 vi.mock('@/lib/rate-limit', () => ({
   checkGenericRateLimit: vi.fn().mockResolvedValue({ limited: false, remaining: 4 }),
   getClientIp: vi.fn().mockReturnValue('127.0.0.1'),
+}));
+
+vi.mock('@/lib/telegram', () => ({
+  sendLeadNotification: vi.fn().mockResolvedValue(undefined),
 }));
 
 function makeRequest(body: unknown): Request {
@@ -26,6 +34,7 @@ describe('POST /api/v1/contact', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   it('returns 201 for a valid submission', async () => {
@@ -134,5 +143,24 @@ describe('POST /api/v1/contact', () => {
     vi.mocked(checkGenericRateLimit).mockResolvedValueOnce({ limited: true, remaining: 0, retryAfter: 300 });
     const res = await POST(makeRequest(validBody));
     expect(res.status).toBe(429);
+  });
+
+  it('calls sendLeadNotification with correct fields on success', async () => {
+    const { sendLeadNotification } = await import('@/lib/telegram');
+    await POST(makeRequest(validBody));
+    expect(sendLeadNotification).toHaveBeenCalledOnce();
+    expect(vi.mocked(sendLeadNotification).mock.calls[0][0]).toMatchObject({
+      name: 'Alice Tester',
+      email: 'alice@example.com',
+      company: 'Acme Inc',
+      message: 'Hello, I would like to discuss a fractional engagement.',
+    });
+  });
+
+  it('returns 201 even when sendLeadNotification rejects', async () => {
+    const { sendLeadNotification } = await import('@/lib/telegram');
+    vi.mocked(sendLeadNotification).mockRejectedValueOnce(new Error('Telegram down'));
+    const res = await POST(makeRequest(validBody));
+    expect(res.status).toBe(201);
   });
 });
