@@ -27,8 +27,7 @@ All `/api/v1/*` routes share a global rate limit enforced by middleware before a
 
 | Scope | Limit | Window | Algorithm |
 |-------|-------|--------|-----------|
-| All `/api/v1/*` | 100 requests | per minute | Fixed window |
-| Per | IP address | | Upstash Redis |
+| All `/api/v1/*` (per IP address) | 100 requests | per minute | Fixed window (Upstash Redis) |
 
 **Fail-open behavior:** If Redis is unavailable, requests pass through — the global limit is never enforced in a way that could block all traffic due to an infrastructure outage.
 
@@ -42,7 +41,7 @@ Retry-After: 60
 
 ```json
 {
-  "error": "Too many requests. Please try again in 60 seconds."
+  "error": "Too many requests. Please try again later."
 }
 ```
 
