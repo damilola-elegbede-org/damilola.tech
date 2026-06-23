@@ -51,6 +51,9 @@ jobs:
           ADMIN_PASSWORD_PREVIEW: ${{ steps.env.outputs.is_production == 'true' && secrets.ADMIN_PASSWORD_PRODUCTION || secrets.ADMIN_PASSWORD_PREVIEW }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          # Enable full consulting smoke suite on production deployments only (ENG-636).
+          # consulting-smoke.spec.ts skips the full describe blocks unless this is set.
+          CONSULTING_SMOKE_FULL: ${{ steps.env.outputs.is_production == 'true' && '1' || '' }}
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
