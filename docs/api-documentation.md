@@ -232,6 +232,56 @@ Download the current resume as a PDF.
 curl -O -J https://damilola.tech/api/v1/resume.pdf
 ```
 
+### Health
+
+#### GET /api/health
+
+Returns the current health status of the application.
+
+**Response (200 — healthy):**
+
+```json
+{
+  "status": "ok",
+  "website": "up",
+  "timestamp": "2026-06-07T12:00:00.000Z",
+  "environment": "production",
+  "version": "a1b2c3d4e5f6...",
+  "checks": {
+    "app": "ok"
+  }
+}
+```
+
+**Response (503 — degraded):**
+
+```json
+{
+  "status": "error",
+  "website": "down",
+  "timestamp": "2026-06-07T12:00:00.000Z",
+  "environment": "production",
+  "version": "a1b2c3d4e5f6...",
+  "checks": {
+    "app": "error"
+  }
+}
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | `"ok" \| "error"` | Overall health result |
+| `website` | `"up" \| "down"` | Overall site status |
+| `timestamp` | ISO 8601 string | Time of the health check |
+| `environment` | string | `VERCEL_ENV` → `NODE_ENV` → `"development"` |
+| `version` | string | `VERCEL_GIT_COMMIT_SHA` at deploy time, or `"dev"` locally |
+| `checks.app` | `"ok" \| "error"` | Application-layer check |
+
+**No authentication required. No rate limiting.**
+
+
 ## Admin Endpoints
 
 All admin endpoints require authentication. Include JWT token cookie in requests.
