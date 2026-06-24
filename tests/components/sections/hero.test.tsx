@@ -11,7 +11,7 @@ describe('Hero', () => {
   it('renders the title', () => {
     render(<Hero onOpenChat={() => {}} />);
     // Title appears as both the main title and in the role bubbles
-    const titleElements = screen.getAllByText('Sr. Engineering Manager');
+    const titleElements = screen.getAllByText('Distinguished Engineer');
     expect(titleElements.length).toBeGreaterThanOrEqual(1);
     // Verify the main title has accent color styling
     const mainTitle = titleElements.find(el =>
@@ -23,7 +23,7 @@ describe('Hero', () => {
   it('renders the tagline', () => {
     render(<Hero onOpenChat={() => {}} />);
     expect(
-      screen.getByText('I build engineering organizations that deliver results, retain top talent, and develop leaders')
+      screen.getByText('I architect systems for org-scale impact — AI agent infrastructure, cloud platforms, and distributed foundations that compound engineering velocity across organizations')
     ).toBeInTheDocument();
   });
 
