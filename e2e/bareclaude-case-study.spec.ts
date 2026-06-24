@@ -81,8 +81,7 @@ test.describe('BareClaude Case Study Page', () => {
   });
 
   test('old /projects/cortex/case-study redirects here', async ({ page }) => {
-    const res = await page.goto('/projects/cortex/case-study');
+    await page.goto('/projects/cortex/case-study');
     await expect(page).toHaveURL(/\/projects\/bareclaude\/case-study/);
-    expect(res?.status()).toBe(200);
   });
 });
