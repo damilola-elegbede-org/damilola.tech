@@ -5,6 +5,8 @@ import { saveApplication, listApplicationIds, getApplications } from '@/lib/appl
 import { APPLICATION_STATUSES } from '@/lib/types/application';
 import type { Application, ApplicationStatus } from '@/lib/types/application';
 
+// stage always defaults to 'Applied' on creation — advancement via PATCH /[id]
+
 export const runtime = 'nodejs';
 
 export async function POST(req: Request): Promise<Response> {
@@ -99,6 +101,7 @@ export async function POST(req: Request): Promise<Response> {
     role_id,
     applied_at,
     status,
+    stage: 'Applied',
     score,
     notes,
     cover_letter_draft,
