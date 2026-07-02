@@ -328,7 +328,7 @@ describe('POST /api/v1/generate-cover-letter', () => {
     it('returns 400 when JobDescriptionInputError is thrown during URL fetch', async () => {
       const { JobDescriptionInputError } = await import('@/lib/job-description-input');
       mockResolveJobDescriptionInput.mockRejectedValue(
-        new JobDescriptionInputError('Could not fetch job posting.')
+        new JobDescriptionInputError('Could not fetch job posting.', 'network_error')
       );
 
       const { POST } = await import('@/app/api/v1/generate-cover-letter/route');
