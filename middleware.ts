@@ -24,6 +24,16 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return NextResponse.next();
   }
 
+  // e2e.yml only runs the Playwright suite against Production deployments, so the
+  // non-production skip above never applies to CI traffic — the same shared-IP false-429
+  // problem it describes happens in production too. Trust the same secret Playwright
+  // already sends as x-vercel-protection-bypass to get past Vercel's deployment
+  // protection (playwright.config.ts) and skip the app-level limiter for it as well.
+  const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+  if (bypassSecret && request.headers.get('x-vercel-protection-bypass') === bypassSecret) {
+    return NextResponse.next();
+  }
+
   // x-forwarded-for is set by Vercel's edge and is the canonical IP source in Next.js 15+
   // (NextRequest.ip was removed in Next.js 15). 'unknown' is a shared fallback bucket.
   const ip =
