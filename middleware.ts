@@ -7,6 +7,18 @@ export const runtime = 'edge';
 export const RATE_LIMIT = 100;  // max requests per window per IP
 export const WINDOW_SEC = 60;   // fixed window size in seconds
 
+// Constant-time string comparison. middleware.ts runs on the edge runtime, which doesn't
+// support Node's `crypto.timingSafeEqual` (used elsewhere in this codebase, e.g. csrf.ts),
+// so this compares char codes via XOR accumulation instead of short-circuiting `===`.
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
   const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -30,7 +42,8 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   // already sends as x-vercel-protection-bypass to get past Vercel's deployment
   // protection (playwright.config.ts) and skip the app-level limiter for it as well.
   const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
-  if (bypassSecret && request.headers.get('x-vercel-protection-bypass') === bypassSecret) {
+  const providedBypass = request.headers.get('x-vercel-protection-bypass');
+  if (bypassSecret && providedBypass && timingSafeEqual(providedBypass, bypassSecret)) {
     return NextResponse.next();
   }
 
