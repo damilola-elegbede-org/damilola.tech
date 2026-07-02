@@ -206,7 +206,7 @@ describe('POST /api/v1/extract-job-description', () => {
     it('returns 400 when JobDescriptionInputError is thrown (network failure)', async () => {
       const { JobDescriptionInputError } = await import('@/lib/job-description-input');
       mockResolveJobDescriptionInput.mockRejectedValue(
-        new JobDescriptionInputError('Could not fetch the job posting.')
+        new JobDescriptionInputError('Could not fetch the job posting.', 'network_error')
       );
 
       const { POST } = await import('@/app/api/v1/extract-job-description/route');
@@ -220,7 +220,7 @@ describe('POST /api/v1/extract-job-description', () => {
     it('returns 400 when URL is blocked by SSRF validator', async () => {
       const { JobDescriptionInputError } = await import('@/lib/job-description-input');
       mockResolveJobDescriptionInput.mockRejectedValue(
-        new JobDescriptionInputError('This URL is not allowed. Please provide the job description text directly.')
+        new JobDescriptionInputError('This URL is not allowed. Please provide the job description text directly.', 'invalid_url')
       );
 
       const { POST } = await import('@/app/api/v1/extract-job-description/route');
