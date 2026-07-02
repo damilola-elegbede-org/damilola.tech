@@ -1,0 +1,27 @@
+name: score_job Regression Harness
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  score-job-regression:
+    name: score_job Regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run generate-prompt
+      - name: Run score_job regression harness
+        env:
+          # Fixture-loading tier always runs (no secrets needed).
+          # Live-scoring tier activates only when the secret is present.
+          RUN_SCORE_REGRESSION: '1'
+          DAMILOLA_SCORE_API_KEY: ${{ secrets.DAMILOLA_SCORE_API_KEY }}
+        run: npx vitest run tests/integration/score-regression.test.ts
