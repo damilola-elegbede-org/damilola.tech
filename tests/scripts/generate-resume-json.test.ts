@@ -50,7 +50,7 @@ describe("generateResumeJson", () => {
     const result = generateResumeJson(createExistingResumeJson());
 
     expect(result.tagline).toBe(
-      "I build engineering organizations that deliver results, retain top talent, and develop leaders",
+      "I architect systems for org-scale impact — AI agent infrastructure, cloud platforms, and distributed foundations that compound engineering velocity across organizations",
     );
   });
 

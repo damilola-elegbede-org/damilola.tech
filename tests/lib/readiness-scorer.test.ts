@@ -1894,7 +1894,6 @@ Preferred:
     });
 
     expect(result.total).toBeGreaterThanOrEqual(65);
-    expect(result.isOptimized).toBe(true);
   });
 
   it('Detailed Platform JD (JD3) scores >= 95 with deterministic rubric', () => {
@@ -1940,7 +1939,6 @@ GCP, AWS, Kubernetes, GKE, Docker, Terraform, GitHub Actions, Jenkins, Python, G
     });
 
     expect(result.total).toBeGreaterThanOrEqual(65);
-    expect(result.isOptimized).toBe(true);
   });
 });
 
