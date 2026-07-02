@@ -90,4 +90,29 @@ test.describe('Home Page', () => {
     const count = await navLinks.count();
     expect(count).toBeGreaterThanOrEqual(4);
   });
+
+  test('should include JSON-LD structured data with Person and WebSite schema', async ({ page }) => {
+    const jsonLdScript = page.locator('script[type="application/ld+json"]');
+    await expect(jsonLdScript).toBeAttached();
+
+    const content = await jsonLdScript.textContent();
+    const data = JSON.parse(content!);
+
+    // Verify @graph contains both Person and WebSite entries
+    expect(data['@context']).toBe('https://schema.org');
+    expect(Array.isArray(data['@graph'])).toBe(true);
+
+    const person = data['@graph'].find((node: { '@type': string }) => node['@type'] === 'Person');
+    expect(person).toBeDefined();
+    expect(person.name).toBe('Damilola Elegbede');
+    expect(person.jobTitle).toBe('Distinguished Engineer');
+    expect(person.url).toBe('https://damilola.tech');
+    expect(person.sameAs).toContain('https://linkedin.com/in/damilola-elegbede');
+    expect(person.sameAs).toContain('https://github.com/damilola-elegbede');
+
+    const website = data['@graph'].find((node: { '@type': string }) => node['@type'] === 'WebSite');
+    expect(website).toBeDefined();
+    expect(website.name).toBe('Damilola Elegbede');
+    expect(website.url).toBe('https://damilola.tech');
+  });
 });
