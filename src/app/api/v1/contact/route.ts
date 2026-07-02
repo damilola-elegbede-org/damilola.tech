@@ -1,73 +1,111 @@
-import { Errors } from '@/lib/api-response';
-import { checkGenericRateLimit, getClientIp } from '@/lib/rate-limit';
+import { Errors } from "@/lib/api-response";
+import { checkGenericRateLimit, getClientIp } from "@/lib/rate-limit";
 
-export const runtime = 'nodejs';
+export const runtime = "nodejs";
 
-const MAX_MESSAGE_LENGTH = 10_000;
-
-const CONTACT_RATE_LIMIT = {
-  key: 'contact',
+const RATE_LIMIT_CONFIG = {
+  key: "contact",
   limit: 5,
   windowSeconds: 300,
-} as const;
+};
+
+// Basic RFC-style email check: local@domain.tld
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function validateBody(body: unknown):
+  | { valid: true; data: { name: string; email: string; company?: string; message: string } }
+  | { valid: false; error: string }
+{
+  if (!body || typeof body !== "object") {
+    return { valid: false, error: "Request body must be a JSON object." };
+  }
+
+  const b = body as Record<string, unknown>;
+
+  // Honeypot: real users never fill this hidden field
+  if (b.website) {
+    return { valid: false, error: "Invalid request." };
+  }
+
+  if (typeof b.name !== "string" || b.name.trim().length === 0) {
+    return { valid: false, error: "`name` is required." };
+  }
+  if (b.name.length > 100) {
+    return { valid: false, error: "`name` must be 100 characters or fewer." };
+  }
+
+  if (typeof b.email !== "string" || !EMAIL_RE.test(b.email)) {
+    return { valid: false, error: "`email` must be a valid email address." };
+  }
+  if (b.email.length > 200) {
+    return { valid: false, error: "`email` must be 200 characters or fewer." };
+  }
+
+  if (b.company !== undefined && b.company !== null && b.company !== "") {
+    if (typeof b.company !== "string") {
+      return { valid: false, error: "`company` must be a string." };
+    }
+    if (b.company.length > 100) {
+      return { valid: false, error: "`company` must be 100 characters or fewer." };
+    }
+  }
+
+  if (typeof b.message !== "string" || b.message.trim().length === 0) {
+    return { valid: false, error: "`message` is required." };
+  }
+  if (b.message.length > 10000) {
+    return { valid: false, error: "`message` must be 10,000 characters or fewer." };
+  }
+
+  return {
+    valid: true,
+    data: {
+      name: b.name.trim(),
+      email: (b.email as string).trim(),
+      company:
+        typeof b.company === "string" && b.company.trim()
+          ? b.company.trim()
+          : undefined,
+      message: b.message.trim(),
+    },
+  };
+}
 
 export async function POST(req: Request) {
   const ip = getClientIp(req);
 
-  let body: Record<string, unknown>;
+  const rateResult = await checkGenericRateLimit(RATE_LIMIT_CONFIG, ip);
+  if (rateResult.limited) {
+    return Errors.rateLimited(rateResult.retryAfter ?? 300);
+  }
+
+  let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return Errors.validationError('Invalid JSON body.');
+    return Errors.badRequest("Invalid JSON body.");
   }
 
-  // Honeypot: a filled website field is a bot signal — reject as validation error.
-  if (body.website) {
-    return Errors.validationError('Invalid submission.');
+  const validation = validateBody(body);
+  if (!validation.valid) {
+    return Errors.validationError(validation.error);
   }
 
-  const { name, email, message } = body;
-
-  if (!name || typeof name !== 'string' || !name.trim()) {
-    return Errors.validationError('Name is required.');
-  }
-
-  if (!email || typeof email !== 'string' || !email.trim()) {
-    return Errors.validationError('Email is required.');
-  }
-
-  if (!message || typeof message !== 'string' || !message.trim()) {
-    return Errors.validationError('Message is required.');
-  }
-
-  const emailStr = email.trim();
-
-  // Block CRLF injection (email header smuggling vector).
-  if (/[\r\n]/.test(emailStr)) {
-    return Errors.validationError('Invalid email format.');
-  }
-
-  // Require @ with a domain segment that contains a dot (TLD presence check).
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailStr)) {
-    return Errors.validationError('Invalid email format.');
-  }
-
-  if (message.length > MAX_MESSAGE_LENGTH) {
-    return Errors.validationError('Message is too long (max 10,000 characters).');
-  }
-
-  // Rate limit applied after validation — only valid-looking submissions consume quota.
-  // Invalid payloads (missing fields, bad format) are rejected above without burning slots.
-  const rateLimit = await checkGenericRateLimit(CONTACT_RATE_LIMIT, ip);
-  if (rateLimit.limited) {
-    return Errors.rateLimited(rateLimit.retryAfter ?? 300);
-  }
+  // Log submission so it surfaces in Vercel function logs — the only delivery path until Resend is wired up
+  console.log(JSON.stringify({
+    event: "contact_submission",
+    ts: new Date().toISOString(),
+    name: validation.data.name,
+    email: validation.data.email,
+    company: validation.data.company ?? null,
+    message: validation.data.message,
+  }));
 
   return Response.json(
     {
       success: true,
       data: {
-        confirmation: 'Thank you for reaching out. I will get back to you shortly.',
+        confirmation: "Thank you for reaching out. I'll be in touch within 48 hours.",
       },
     },
     { status: 201 }

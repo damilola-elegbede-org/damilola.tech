@@ -209,6 +209,79 @@ Get example job descriptions for testing fit assessment.
 
 **No Rate Limiting**
 
+### Contact API
+
+#### POST /api/v1/contact
+
+Submit a contact inquiry from the consulting page.
+
+**Request Body:**
+
+```json
+{
+  "name": "Jane Smith",
+  "email": "jane@example.com",
+  "company": "Acme Corp",
+  "message": "I'd like to discuss a potential engagement.",
+  "website": ""
+}
+```
+
+| Field | Type | Required | Constraints |
+|-------|------|----------|-------------|
+| `name` | string | Yes | ≤ 100 characters |
+| `email` | string | Yes | Valid email address, ≤ 200 characters |
+| `company` | string | No | ≤ 100 characters |
+| `message` | string | Yes | ≤ 10,000 characters |
+| `website` | string | No | Honeypot — must be empty; populated value silently rejected |
+
+**Response (201 Created):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "confirmation": "Thank you for reaching out. I'll be in touch within 48 hours."
+  }
+}
+```
+
+**Response (400 Validation Error):**
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "`email` must be a valid email address."
+  }
+}
+```
+
+**Response (429 Rate Limited):**
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 300
+```
+
+**Rate Limit:** 5 requests per 5 minutes per IP (enforced at the route level, distinct from the middleware-level 100 req/min limit)
+
+**No Authentication Required**
+
+**Example:**
+
+```bash
+curl -X POST https://damilola.tech/api/v1/contact \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Jane Smith",
+    "email": "jane@example.com",
+    "company": "Acme Corp",
+    "message": "I'd like to discuss a potential engagement."
+  }'
+```
+
 ### Resume Download
 
 #### GET /api/v1/resume.pdf
@@ -668,6 +741,7 @@ Retry-After: 300
 |----------|-------|--------|-----|
 | `/api/chat` | 50 | 5 min | IP |
 | `/api/fit-assessment` | 10 | 1 hour | IP |
+| `/api/v1/contact` | 5 | 5 min | IP |
 
 ### Admin Endpoints
 
