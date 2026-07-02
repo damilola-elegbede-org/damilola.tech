@@ -8,6 +8,7 @@ import {
   FitAssessment,
   Education,
   Projects,
+  ResumeCta,
   Contact,
 } from '@/components/sections';
 import { ChatFab, ChatPanel } from '@/components/chat';
@@ -33,6 +34,7 @@ export default function Home() {
         <Education />
         <Projects />
         <FitAssessment />
+        <ResumeCta />
         <Contact />
       </main>
 
