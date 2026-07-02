@@ -20,6 +20,7 @@ export interface ApiErrorResponse {
   error: {
     code: string;
     message: string;
+    [key: string]: unknown;
   };
 }
 
@@ -48,13 +49,15 @@ export function apiSuccess<T>(
 export function apiError(
   code: string,
   message: string,
-  status: number = 400
+  status: number = 400,
+  extra?: Record<string, unknown>
 ): Response {
   const response: ApiErrorResponse = {
     success: false,
     error: {
       code,
       message,
+      ...extra,
     },
   };
 
@@ -87,8 +90,8 @@ export const Errors = {
   notFound: (message = 'Resource not found.') =>
     apiError(ErrorCodes.NOT_FOUND, message, 404),
 
-  badRequest: (message = 'Invalid request.') =>
-    apiError(ErrorCodes.BAD_REQUEST, message, 400),
+  badRequest: (message = 'Invalid request.', extra?: Record<string, unknown>) =>
+    apiError(ErrorCodes.BAD_REQUEST, message, 400, extra),
 
   validationError: (message: string) =>
     apiError(ErrorCodes.VALIDATION_ERROR, message, 400),

@@ -197,7 +197,7 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     if (error instanceof JobDescriptionInputError) {
-      return Errors.badRequest(error.message);
+      return Errors.badRequest(error.message, { failure_mode: error.failureMode });
     }
 
     console.error('[api/v1/score-job] Error:', error);

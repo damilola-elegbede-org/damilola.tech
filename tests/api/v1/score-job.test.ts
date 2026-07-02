@@ -24,9 +24,11 @@ vi.mock('@/lib/job-description-input', () => ({
   resolveJobDescriptionInput: (...args: unknown[]) => mockResolveJobDescriptionInput(...args),
   resolvePreFetchedJobDescription: (...args: unknown[]) => mockResolvePreFetchedJobDescription(...args),
   JobDescriptionInputError: class JobDescriptionInputError extends Error {
-    constructor(message: string) {
+    failureMode: string;
+    constructor(message: string, failureMode: string) {
       super(message);
       this.name = 'JobDescriptionInputError';
+      this.failureMode = failureMode;
     }
   },
 }));
@@ -342,12 +344,77 @@ describe('POST /api/v1/score-job', () => {
     it('returns 400 when JobDescriptionInputError is thrown', async () => {
       const { JobDescriptionInputError } = await import('@/lib/job-description-input');
       mockResolveJobDescriptionInput.mockRejectedValue(
-        new JobDescriptionInputError('Cannot fetch URL')
+        new JobDescriptionInputError('Cannot fetch URL', 'posting_404')
       );
 
       const { POST } = await import('@/app/api/v1/score-job/route');
       const response = await POST(makeRequest(validBody));
       expect(response.status).toBe(400);
+    });
+
+    it('includes failure_mode in 400 response for empty_body_spa', async () => {
+      const { JobDescriptionInputError } = await import('@/lib/job-description-input');
+      mockResolveJobDescriptionInput.mockRejectedValue(
+        new JobDescriptionInputError('Content too short.', 'empty_body_spa')
+      );
+
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest(validBody));
+      const data = await response.json() as { success: false; error: { code: string; message: string; failure_mode: string } };
+      expect(response.status).toBe(400);
+      expect(data.error.failure_mode).toBe('empty_body_spa');
+    });
+
+    it('includes failure_mode in 400 response for ua_blocked', async () => {
+      const { JobDescriptionInputError } = await import('@/lib/job-description-input');
+      mockResolveJobDescriptionInput.mockRejectedValue(
+        new JobDescriptionInputError('Access denied.', 'ua_blocked')
+      );
+
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest(validBody));
+      const data = await response.json() as { success: false; error: { failure_mode: string } };
+      expect(response.status).toBe(400);
+      expect(data.error.failure_mode).toBe('ua_blocked');
+    });
+
+    it('includes failure_mode in 400 response for posting_404', async () => {
+      const { JobDescriptionInputError } = await import('@/lib/job-description-input');
+      mockResolveJobDescriptionInput.mockRejectedValue(
+        new JobDescriptionInputError('Job posting not found.', 'posting_404')
+      );
+
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest(validBody));
+      const data = await response.json() as { success: false; error: { failure_mode: string } };
+      expect(response.status).toBe(400);
+      expect(data.error.failure_mode).toBe('posting_404');
+    });
+
+    it('includes failure_mode in 400 response for not_jd_content', async () => {
+      const { JobDescriptionInputError } = await import('@/lib/job-description-input');
+      mockResolveJobDescriptionInput.mockRejectedValue(
+        new JobDescriptionInputError('Not a job description.', 'not_jd_content')
+      );
+
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest(validBody));
+      const data = await response.json() as { success: false; error: { failure_mode: string } };
+      expect(response.status).toBe(400);
+      expect(data.error.failure_mode).toBe('not_jd_content');
+    });
+
+    it('includes failure_mode in 400 response for fetch_timeout', async () => {
+      const { JobDescriptionInputError } = await import('@/lib/job-description-input');
+      mockResolveJobDescriptionInput.mockRejectedValue(
+        new JobDescriptionInputError('Request timed out.', 'fetch_timeout')
+      );
+
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest(validBody));
+      const data = await response.json() as { success: false; error: { failure_mode: string } };
+      expect(response.status).toBe(400);
+      expect(data.error.failure_mode).toBe('fetch_timeout');
     });
 
     it('returns 500 on unexpected errors', async () => {
