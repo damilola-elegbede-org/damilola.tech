@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { projectsData } from '@/lib/projects-data';
 
 export const metadata: Metadata = {
-  title: 'Portfolio — Damilola Elegbede | Distinguished Engineer',
+  title: 'Portfolio — Damilola Elegbede | Engineering Manager',
   description:
     'Engineering projects by Damilola Elegbede: multi-agent AI systems, production web platforms, and infrastructure automation. Built for scale, shipped to production.',
   openGraph: {

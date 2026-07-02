@@ -39,7 +39,7 @@ export const metadata: Metadata = {
         url: '/api/og',
         width: 1200,
         height: 630,
-        alt: 'Damilola Elegbede - Distinguished Engineer',
+        alt: 'Damilola Elegbede - Engineering Manager',
       },
     ],
   },
@@ -62,7 +62,7 @@ const jsonLd = {
     {
       '@type': 'Person',
       name: 'Damilola Elegbede',
-      jobTitle: 'Distinguished Engineer',
+      jobTitle: 'Senior Engineering Manager',
       url: 'https://damilola.tech',
       sameAs: [
         'https://linkedin.com/in/damilola-elegbede',
