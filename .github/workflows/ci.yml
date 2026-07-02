@@ -35,6 +35,9 @@ jobs:
   test:
     name: Unit Tests
     runs-on: ubuntu-latest
+    env:
+      RUN_SCORE_REGRESSION: '1'
+      DAMILOLA_SCORE_API_KEY: ${{ secrets.DAMILOLA_SCORE_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
