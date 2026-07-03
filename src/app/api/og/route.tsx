@@ -21,7 +21,7 @@ export async function GET() {
           Damilola Elegbede
         </div>
         <div style={{ color: '#0066FF', fontSize: 44, fontWeight: 600, marginBottom: 24 }}>
-          Distinguished Engineer
+          Engineering Manager
         </div>
         <div style={{ color: '#8B9EB0', fontSize: 24 }}>
           AI Infrastructure · System Architecture · Platform Engineering
