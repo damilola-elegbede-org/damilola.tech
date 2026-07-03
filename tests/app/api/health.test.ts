@@ -29,6 +29,7 @@ describe('health API route', () => {
       website: 'up',
       timestamp: '2026-03-11T12:00:00.000Z',
       environment: 'production',
+      version: 'dev',
       checks: {
         app: 'ok',
       },
@@ -49,5 +50,17 @@ describe('health API route', () => {
     const routeModule = await import('@/app/api/health/route');
 
     expect(routeModule.runtime).toBe('nodejs');
+  });
+
+  it('returns deployed commit SHA when VERCEL_GIT_COMMIT_SHA is set', async () => {
+    process.env.VERCEL_GIT_COMMIT_SHA = 'abc123';
+
+    const { GET } = await import('@/app/api/health/route');
+
+    const response = await GET();
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.version).toBe('abc123');
   });
 });
