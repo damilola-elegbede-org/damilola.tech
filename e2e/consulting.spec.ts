@@ -51,15 +51,15 @@ test.describe('Consulting Page', () => {
     await expect(page.getByText('Leveling', { exact: true })).toBeVisible();
   });
 
-  test('should display CTA section with correct mailto link', async ({ page }) => {
+  // #177 replaced the mailto CTA with an inline ContactForm (POST /api/v1/contact);
+  // this asserts the form that actually renders today.
+  test('should display CTA section with the contact form', async ({ page }) => {
     await expect(page.getByRole('heading', { name: "Let's talk about your team" })).toBeVisible();
 
-    const cta = page.getByRole('link', { name: /damilola.elegbede@gmail.com/i });
-    await expect(cta).toBeVisible();
-    const href = await cta.getAttribute('href');
-    expect(href).toBe(
-      'mailto:damilola.elegbede@gmail.com?subject=Fractional%20VPE%20Inquiry'
-    );
+    await expect(page.getByLabel(/^Name/i)).toBeVisible();
+    await expect(page.getByLabel(/^Email/i)).toBeVisible();
+    await expect(page.getByLabel(/^Message/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
   });
 
   test('should have working back navigation links', async ({ page }) => {

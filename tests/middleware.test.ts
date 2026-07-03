@@ -7,8 +7,12 @@ import { NextRequest } from 'next/server';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-function makeRequest(path = '/api/v1/score-job', ip?: string): NextRequest {
-  const headers: Record<string, string> = {};
+function makeRequest(
+  path = '/api/v1/score-job',
+  ip?: string,
+  extraHeaders?: Record<string, string>
+): NextRequest {
+  const headers: Record<string, string> = { ...extraHeaders };
   if (ip) headers['x-forwarded-for'] = ip;
   return new NextRequest(`https://damilola.tech${path}`, { method: 'POST', headers });
 }
@@ -24,6 +28,7 @@ describe('api/v1 rate limiting middleware', () => {
   const origUrl = process.env.UPSTASH_REDIS_REST_URL;
   const origToken = process.env.UPSTASH_REDIS_REST_TOKEN;
   const origVercelEnv = process.env.VERCEL_ENV;
+  const origBypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 
   beforeEach(() => {
     mockFetch.mockReset();
@@ -33,6 +38,7 @@ describe('api/v1 rate limiting middleware', () => {
     // middleware.ts skips rate limiting when VERCEL_ENV !== 'production' to prevent
     // parallel CI jobs (sharing one outbound IP) from exhausting the global 100/60s cap.
     process.env.VERCEL_ENV = 'production';
+    delete process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
   });
 
   afterEach(() => {
@@ -42,6 +48,11 @@ describe('api/v1 rate limiting middleware', () => {
       delete process.env.VERCEL_ENV;
     } else {
       process.env.VERCEL_ENV = origVercelEnv;
+    }
+    if (origBypassSecret === undefined) {
+      delete process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+    } else {
+      process.env.VERCEL_AUTOMATION_BYPASS_SECRET = origBypassSecret;
     }
   });
 
@@ -154,5 +165,44 @@ describe('api/v1 rate limiting middleware', () => {
     const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
     expect(body[0][1]).toContain('8.8.8.8');
     expect(body[0][1]).not.toContain('1.2.3.4');
+  });
+
+  it('bypasses rate limiting when x-vercel-protection-bypass matches the configured secret', async () => {
+    process.env.VERCEL_AUTOMATION_BYPASS_SECRET = 'test-bypass-secret';
+    const { middleware, RATE_LIMIT } = await import('../middleware');
+    stubRedisCount(RATE_LIMIT + 1);
+
+    const res = await middleware(
+      makeRequest('/api/v1/score-job', '1.2.3.4', {
+        'x-vercel-protection-bypass': 'test-bypass-secret',
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('does not bypass rate limiting when x-vercel-protection-bypass does not match the secret', async () => {
+    process.env.VERCEL_AUTOMATION_BYPASS_SECRET = 'test-bypass-secret';
+    const { middleware, RATE_LIMIT } = await import('../middleware');
+    stubRedisCount(RATE_LIMIT + 1);
+
+    const res = await middleware(
+      makeRequest('/api/v1/score-job', '1.2.3.4', {
+        'x-vercel-protection-bypass': 'wrong-secret',
+      })
+    );
+    expect(res.status).toBe(429);
+  });
+
+  it('does not bypass rate limiting when VERCEL_AUTOMATION_BYPASS_SECRET is unset', async () => {
+    const { middleware, RATE_LIMIT } = await import('../middleware');
+    stubRedisCount(RATE_LIMIT + 1);
+
+    const res = await middleware(
+      makeRequest('/api/v1/score-job', '1.2.3.4', {
+        'x-vercel-protection-bypass': 'anything',
+      })
+    );
+    expect(res.status).toBe(429);
   });
 });
