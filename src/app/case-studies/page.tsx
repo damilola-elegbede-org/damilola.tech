@@ -5,6 +5,22 @@ export const metadata: Metadata = {
   title: "Case Studies | Damilola Elegbede",
   description:
     "Deep-dives into production engineering problems — how I diagnosed, fixed, and shipped complex systems under real constraints.",
+  alternates: {
+    canonical: "https://damilola.tech/case-studies",
+  },
+  openGraph: {
+    title: "Case Studies | Damilola Elegbede",
+    description:
+      "Deep-dives into production engineering problems — how I diagnosed, fixed, and shipped complex systems under real constraints.",
+    type: "website",
+    url: "https://damilola.tech/case-studies",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Case Studies | Damilola Elegbede",
+    description:
+      "Deep-dives into production engineering problems — how I diagnosed, fixed, and shipped complex systems under real constraints.",
+  },
 };
 
 const caseStudies = [
