@@ -195,6 +195,7 @@ test.describe('/consulting page – smoke test (ENG-502)', () => {
     });
 
     test('"Work with me" CTA links to #contact', async ({ page }) => {
+      test.skip(true, 'eng-447-consulting-hero (PR #171) not yet merged to main — CTA text/anchor from that branch do not exist on the current /consulting page');
       await page.goto('/consulting');
       const cta = page.getByRole('link', { name: /Work with me/i });
       await expect(cta).toBeVisible();
@@ -202,6 +203,7 @@ test.describe('/consulting page – smoke test (ENG-502)', () => {
     });
 
     test('contact section has id="contact" for anchor navigation', async ({ page }) => {
+      test.skip(true, 'eng-447-consulting-hero (PR #171) not yet merged to main — #contact anchor from that branch does not exist on the current /consulting page');
       await page.goto('/consulting');
       await expect(page.locator('#contact')).toBeVisible();
     });

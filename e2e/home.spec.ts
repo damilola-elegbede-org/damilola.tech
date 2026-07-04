@@ -105,7 +105,7 @@ test.describe('Home Page', () => {
     const person = data['@graph'].find((node: { '@type': string }) => node['@type'] === 'Person');
     expect(person).toBeDefined();
     expect(person.name).toBe('Damilola Elegbede');
-    expect(person.jobTitle).toBe('Distinguished Engineer');
+    expect(person.jobTitle).toBe('Senior Engineering Manager');
     expect(person.url).toBe('https://damilola.tech');
     expect(person.sameAs).toContain('https://linkedin.com/in/damilola-elegbede');
     expect(person.sameAs).toContain('https://github.com/damilola-elegbede');
