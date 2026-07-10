@@ -84,4 +84,11 @@ test.describe('Consulting Page', () => {
     const content = await page.content();
     expect(content).toContain('/consulting');
   });
+
+  test('should display social proof section with past employers', async ({ page }) => {
+    const socialProof = page.getByLabel('Past employers');
+    await expect(socialProof.getByText('As seen at')).toBeVisible();
+    await expect(socialProof.getByText('Verily Life Sciences', { exact: true })).toBeVisible();
+    await expect(socialProof.getByText('Qualcomm', { exact: true })).toBeVisible();
+  });
 });

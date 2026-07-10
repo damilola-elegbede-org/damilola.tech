@@ -216,6 +216,23 @@ export default function ConsultingPage() {
         </div>
       </section>
 
+      {/* Social proof */}
+      <section className="mb-14" aria-label="Past employers">
+        <p className="mb-4 text-center text-xs font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+          As seen at
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          {["Visa", "Verily Life Sciences", "Qualcomm"].map((employer) => (
+            <span
+              key={employer}
+              className="rounded-full border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-2 text-sm text-[var(--color-text-muted)]"
+            >
+              {employer}
+            </span>
+          ))}
+        </div>
+      </section>
+
       {/* CTA */}
       <section
         className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-alt)] p-8"
