@@ -6,6 +6,7 @@
  */
 
 import { Redis } from '@upstash/redis';
+import { timingSafeEqual } from 'crypto';
 
 // Admin login configuration
 const MAX_ATTEMPTS = 5; // Failed attempts before lockout
@@ -308,6 +309,25 @@ export function getClientIp(req: Request): string {
 
   // Last resort fallback
   return 'unknown';
+}
+
+/**
+ * True when the request carries Vercel's automation-bypass secret — the same trusted
+ * header Playwright sends on every request (playwright.config.ts) to get past Vercel's
+ * deployment protection and, per middleware.ts, the global rate limiter. GitHub Actions
+ * E2E jobs share one outbound IP, so any per-route limiter keyed on IP needs the same
+ * exemption or CI trips it and gets false 429s instead of the responses tests expect.
+ */
+export function isVercelBypassRequest(req: Request): boolean {
+  const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+  const provided = req.headers.get('x-vercel-protection-bypass');
+  if (!bypassSecret || !provided) return false;
+
+  const bypassBuffer = Buffer.from(bypassSecret, 'utf-8');
+  const providedBuffer = Buffer.from(provided, 'utf-8');
+  if (bypassBuffer.length !== providedBuffer.length) return false;
+
+  return timingSafeEqual(bypassBuffer, providedBuffer);
 }
 
 /**

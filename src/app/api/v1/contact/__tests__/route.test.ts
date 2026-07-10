@@ -4,12 +4,13 @@ import { POST } from '../route';
 vi.mock('@/lib/rate-limit', () => ({
   checkGenericRateLimit: vi.fn().mockResolvedValue({ limited: false, remaining: 4 }),
   getClientIp: vi.fn().mockReturnValue('127.0.0.1'),
+  isVercelBypassRequest: vi.fn().mockReturnValue(false),
 }));
 
-function makeRequest(body: unknown): Request {
+function makeRequest(body: unknown, headers?: Record<string, string>): Request {
   return new Request('http://localhost/api/v1/contact', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(body),
   });
 }
@@ -131,6 +132,23 @@ describe('POST /api/v1/contact', () => {
 
   it('returns 429 when rate limited', async () => {
     const { checkGenericRateLimit } = await import('@/lib/rate-limit');
+    vi.mocked(checkGenericRateLimit).mockResolvedValueOnce({ limited: true, remaining: 0, retryAfter: 300 });
+    const res = await POST(makeRequest(validBody));
+    expect(res.status).toBe(429);
+  });
+
+  it('skips the rate limit check entirely for a trusted Vercel bypass request', async () => {
+    const { checkGenericRateLimit, isVercelBypassRequest } = await import('@/lib/rate-limit');
+    vi.mocked(isVercelBypassRequest).mockReturnValueOnce(true);
+    vi.mocked(checkGenericRateLimit).mockResolvedValueOnce({ limited: true, remaining: 0, retryAfter: 300 });
+    const res = await POST(makeRequest(validBody, { 'x-vercel-protection-bypass': 'trusted-secret' }));
+    expect(res.status).toBe(201);
+    expect(checkGenericRateLimit).not.toHaveBeenCalled();
+  });
+
+  it('still enforces the rate limit when the bypass check fails', async () => {
+    const { checkGenericRateLimit, isVercelBypassRequest } = await import('@/lib/rate-limit');
+    vi.mocked(isVercelBypassRequest).mockReturnValueOnce(false);
     vi.mocked(checkGenericRateLimit).mockResolvedValueOnce({ limited: true, remaining: 0, retryAfter: 300 });
     const res = await POST(makeRequest(validBody));
     expect(res.status).toBe(429);
