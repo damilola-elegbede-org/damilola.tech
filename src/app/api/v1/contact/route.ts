@@ -1,5 +1,5 @@
 import { Errors } from "@/lib/api-response";
-import { checkGenericRateLimit, getClientIp } from "@/lib/rate-limit";
+import { checkGenericRateLimit, getClientIp, isVercelBypassRequest } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -72,11 +72,12 @@ function validateBody(body: unknown):
 }
 
 export async function POST(req: Request) {
-  const ip = getClientIp(req);
-
-  const rateResult = await checkGenericRateLimit(RATE_LIMIT_CONFIG, ip);
-  if (rateResult.limited) {
-    return Errors.rateLimited(rateResult.retryAfter ?? 300);
+  if (!isVercelBypassRequest(req)) {
+    const ip = getClientIp(req);
+    const rateResult = await checkGenericRateLimit(RATE_LIMIT_CONFIG, ip);
+    if (rateResult.limited) {
+      return Errors.rateLimited(rateResult.retryAfter ?? 300);
+    }
   }
 
   let body: unknown;

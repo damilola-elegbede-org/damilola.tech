@@ -320,4 +320,58 @@ describe('rate-limit module', () => {
       expect(getClientIp(req)).toBe('203.0.113.195');
     });
   });
+
+  describe('isVercelBypassRequest', () => {
+    const ORIGINAL_SECRET = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+
+    afterEach(() => {
+      if (ORIGINAL_SECRET === undefined) {
+        delete process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+      } else {
+        process.env.VERCEL_AUTOMATION_BYPASS_SECRET = ORIGINAL_SECRET;
+      }
+    });
+
+    it('returns true when the header matches the configured secret', async () => {
+      process.env.VERCEL_AUTOMATION_BYPASS_SECRET = 'trusted-secret';
+      const { isVercelBypassRequest } = await import('@/lib/rate-limit');
+
+      const req = new Request('http://localhost', {
+        headers: { 'x-vercel-protection-bypass': 'trusted-secret' },
+      });
+
+      expect(isVercelBypassRequest(req)).toBe(true);
+    });
+
+    it('returns false when the header does not match the configured secret', async () => {
+      process.env.VERCEL_AUTOMATION_BYPASS_SECRET = 'trusted-secret';
+      const { isVercelBypassRequest } = await import('@/lib/rate-limit');
+
+      const req = new Request('http://localhost', {
+        headers: { 'x-vercel-protection-bypass': 'wrong-secret' },
+      });
+
+      expect(isVercelBypassRequest(req)).toBe(false);
+    });
+
+    it('returns false when no secret is configured', async () => {
+      delete process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+      const { isVercelBypassRequest } = await import('@/lib/rate-limit');
+
+      const req = new Request('http://localhost', {
+        headers: { 'x-vercel-protection-bypass': 'anything' },
+      });
+
+      expect(isVercelBypassRequest(req)).toBe(false);
+    });
+
+    it('returns false when the header is absent', async () => {
+      process.env.VERCEL_AUTOMATION_BYPASS_SECRET = 'trusted-secret';
+      const { isVercelBypassRequest } = await import('@/lib/rate-limit');
+
+      const req = new Request('http://localhost');
+
+      expect(isVercelBypassRequest(req)).toBe(false);
+    });
+  });
 });
