@@ -17,6 +17,30 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.8,
     },
     {
+      url: `${BASE_URL}/case-studies`,
+      lastModified: new Date('2026-07-02'),
+      changeFrequency: 'monthly',
+      priority: 0.8,
+    },
+    {
+      url: `${BASE_URL}/case-studies/alcbf`,
+      lastModified: new Date('2026-07-02'),
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
+    {
+      url: `${BASE_URL}/case-studies/scf-dance`,
+      lastModified: new Date('2026-07-02'),
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
+    {
+      url: `${BASE_URL}/portfolio`,
+      lastModified: new Date('2026-07-02'),
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
+    {
       url: `${BASE_URL}/projects/bareclaude/case-study`,
       lastModified: new Date('2026-05-01'),
       changeFrequency: 'monthly',
@@ -27,6 +51,24 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified: new Date('2026-05-01'),
       changeFrequency: 'daily',
       priority: 0.7,
+    },
+    {
+      url: `${BASE_URL}/projects/alcbf/case-study`,
+      lastModified: new Date('2026-07-01'),
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
+    {
+      url: `${BASE_URL}/projects/forge-intel/case-study`,
+      lastModified: new Date('2026-07-01'),
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
+    {
+      url: `${BASE_URL}/projects/rate-limiting`,
+      lastModified: new Date('2026-06-19'),
+      changeFrequency: 'monthly',
+      priority: 0.6,
     },
     {
       url: `${BASE_URL}/docs`,
