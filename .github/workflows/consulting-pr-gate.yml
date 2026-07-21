@@ -1,0 +1,66 @@
+name: Consulting PR Gate
+
+# PR-blocking E2E check for /consulting (ENG-922). Complements e2e.yml, which
+# runs the full cross-browser suite post-deploy against Preview/Production
+# URLs but never gates a PR. This job builds+starts the app locally and runs
+# e2e/consulting-pr-gate.spec.ts — a small, request-budget-bounded spec — so a
+# broken contact form or rate limiter is caught before merge, not after
+# deploy. It does not reuse consulting-smoke.spec.ts / api/contact.spec.ts,
+# which assume the VERCEL_AUTOMATION_BYPASS_SECRET exemption from the
+# post-deploy run and exceed the contact endpoint's rate-limit quota when run
+# without it (see e2e/consulting-pr-gate.spec.ts header + ENG-1540).
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: consulting-pr-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  consulting-e2e:
+    name: Consulting E2E (PR gate)
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - name: Start server
+        run: nohup npx next start -p 3000 > next-start.log 2>&1 &
+      - name: Wait for server
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000 > /dev/null; then
+              echo "Server is up"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Server did not become ready in time"
+          cat next-start.log || true
+          exit 1
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: playwright-chromium-
+      - run: npx playwright install --with-deps chromium
+      - name: Run consulting PR-gate smoke test
+        run: npx playwright test e2e/consulting-pr-gate.spec.ts --project=chromium
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-consulting
+          path: playwright-report/
+          retention-days: 7
