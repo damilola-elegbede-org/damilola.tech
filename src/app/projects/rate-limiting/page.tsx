@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     description:
       "Fixed-window rate limiting via Upstash Redis at the Next.js edge — 100 req/min per IP, fail-open under Redis failure, 9-test suite covering boundary and proxy-chain cases.",
     type: "article",
-    url: "https://damilola.tech/projects/rate-limiting",
+    url: "https://www.damilola.tech/projects/rate-limiting",
   },
 };
 

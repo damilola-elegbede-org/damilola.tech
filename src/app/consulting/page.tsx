@@ -16,14 +16,14 @@ export const metadata: Metadata = {
     "Architecture Review",
   ],
   alternates: {
-    canonical: "https://damilola.tech/consulting",
+    canonical: "https://www.damilola.tech/consulting",
   },
   openGraph: {
     title: "Fractional Engineering Leadership | Damilola Elegbede",
     description:
       "Fractional VP Engineering for Seed–Series B startups. Architecture reviews, team building, and DevEx strategy.",
     type: "website",
-    url: "https://damilola.tech/consulting",
+    url: "https://www.damilola.tech/consulting",
   },
   twitter: {
     card: "summary_large_image",

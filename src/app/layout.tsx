@@ -9,7 +9,7 @@ import './globals.css';
 const googleVerificationToken = process.env.GOOGLE_SITE_VERIFICATION;
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://damilola.tech'),
+  metadataBase: new URL('https://www.damilola.tech'),
   title: 'Damilola Elegbede | Engineering Manager',
   description:
     'Engineering Manager with 15+ years building high-performance organizations at Verily Life Sciences and Qualcomm. Specializing in cloud infrastructure, platform engineering, and developer experience.',
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
       'Building high-performance organizations that deliver enterprise-scale solutions',
     type: 'website',
     locale: 'en_US',
-    url: 'https://damilola.tech',
+    url: 'https://www.damilola.tech',
     images: [
       {
         url: '/api/og',
@@ -63,7 +63,7 @@ const jsonLd = {
       '@type': 'Person',
       name: 'Damilola Elegbede',
       jobTitle: 'Senior Engineering Manager',
-      url: 'https://damilola.tech',
+      url: 'https://www.damilola.tech',
       sameAs: [
         'https://linkedin.com/in/damilola-elegbede',
         'https://github.com/damilola-elegbede',
@@ -72,7 +72,7 @@ const jsonLd = {
     {
       '@type': 'WebSite',
       name: 'Damilola Elegbede',
-      url: 'https://damilola.tech',
+      url: 'https://www.damilola.tech',
     },
   ],
 };

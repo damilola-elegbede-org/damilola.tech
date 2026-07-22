@@ -29,7 +29,7 @@ describe('sitemap', () => {
 
   it('includes every canonical live route', () => {
     for (const route of EXPECTED_ROUTES) {
-      expect(urls).toContain(`https://damilola.tech${route}`);
+      expect(urls).toContain(`https://www.damilola.tech${route}`);
     }
   });
 
