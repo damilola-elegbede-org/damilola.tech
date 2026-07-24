@@ -238,7 +238,7 @@ test.describe('/consulting page – smoke test (ENG-502)', () => {
     test('og:url points to canonical damilola.tech/consulting', async ({ page }) => {
       await page.goto('/consulting');
       const ogUrl = page.locator('meta[property="og:url"]');
-      await expect(ogUrl).toHaveAttribute('content', 'https://damilola.tech/consulting');
+      await expect(ogUrl).toHaveAttribute('content', 'https://www.damilola.tech/consulting');
     });
 
     test('/consulting is not blocked by robots.txt', async ({ request }) => {
