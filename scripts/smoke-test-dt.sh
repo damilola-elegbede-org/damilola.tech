@@ -35,7 +35,7 @@ check "Hero contains 'Distinguished Engineer'" "$(grep -q 'Distinguished Enginee
 # 2. Case study routes
 echo ""
 echo "[ Case studies ]"
-for path in /projects/cortex/case-study /projects/forge-intel/case-study /projects/alcbf/case-study; do
+for path in /projects/cortex/case-study /projects/alcbf/case-study; do
   CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL$path" 2>/dev/null)
   check "GET $path → 200" "$([ "$CODE" = "200" ] && echo pass || echo "fail: HTTP $CODE")"
 done
