@@ -120,7 +120,7 @@ export default function ConsultingPage() {
         <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-[var(--color-accent)]">
           Fractional Advisory
         </p>
-        <h1 className="mb-5 text-4xl font-bold leading-tight text-[var(--color-text)] md:text-5xl">
+        <h1 className="mb-5 max-md:text-4xl! font-bold leading-tight text-[var(--color-text)] md:text-5xl">
           Engineering leadership,{" "}
           <span className="text-[var(--color-text-title)]">fractionally.</span>
         </h1>
