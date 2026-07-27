@@ -50,11 +50,19 @@ export default function AlcbfCaseStudy() {
         <h1 className="mb-4 text-4xl font-bold text-[var(--color-text)] md:text-5xl">
           A Lo Cubano Boulder Fest
         </h1>
-        <p className="text-lg text-[var(--color-text-muted)]">
+        <p className="mb-6 text-lg text-[var(--color-text-muted)]">
           A production ticketing platform serving a live Latin dance event — and the three
           critical bugs I found and fixed in the weeks before May 15 go-live: an analytics
           undercount, a QR validation race condition, and a silent data corruption in checkout.
         </p>
+        <a
+          href="https://www.alocubanoboulderfest.org/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-accent)]"
+        >
+          Live Demo →
+        </a>
       </header>
 
       <div className="mb-12 grid grid-cols-2 gap-4 sm:grid-cols-4">
