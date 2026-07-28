@@ -59,12 +59,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.7,
     },
     {
-      url: `${BASE_URL}/projects/forge-intel/case-study`,
-      lastModified: new Date('2026-07-01'),
-      changeFrequency: 'monthly',
-      priority: 0.7,
-    },
-    {
       url: `${BASE_URL}/projects/rate-limiting`,
       lastModified: new Date('2026-06-19'),
       changeFrequency: 'monthly',
