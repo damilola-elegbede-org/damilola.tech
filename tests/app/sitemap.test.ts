@@ -19,7 +19,6 @@ describe('sitemap', () => {
     '/projects/bareclaude/case-study',
     '/projects/bareclaude/activity',
     '/projects/alcbf/case-study',
-    '/projects/forge-intel/case-study',
     '/projects/rate-limiting',
     '/docs',
     '/docs/about',
