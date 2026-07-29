@@ -9,6 +9,7 @@ set -euo pipefail
 BASE_URL="${1:-https://www.damilola.tech}"
 PASS=0
 FAIL=0
+CURL_TIMEOUT_OPTS=(--connect-timeout 5 --max-time 15)
 
 check() {
   local label="$1"
@@ -28,7 +29,7 @@ echo ""
 
 # 1. Homepage 200 + hero h1
 echo "[ Homepage ]"
-HOMEPAGE=$(curl -s -o /tmp/dt-homepage.html -w "%{http_code}" "$BASE_URL/" 2>/dev/null)
+HOMEPAGE=$(curl -s "${CURL_TIMEOUT_OPTS[@]}" -o /tmp/dt-homepage.html -w "%{http_code}" "$BASE_URL/" 2>/dev/null)
 check "GET / → 200" "$([ "$HOMEPAGE" = "200" ] && echo pass || echo "fail: HTTP $HOMEPAGE")"
 check "Hero contains 'Damilola Elegbede'" "$(grep -q 'Damilola Elegbede' /tmp/dt-homepage.html && echo pass || echo 'fail: text not found')"
 
@@ -36,18 +37,18 @@ check "Hero contains 'Damilola Elegbede'" "$(grep -q 'Damilola Elegbede' /tmp/dt
 echo ""
 echo "[ Case studies ]"
 for path in /projects/bareclaude/case-study /projects/alcbf/case-study; do
-  CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL$path" 2>/dev/null)
+  CODE=$(curl -s "${CURL_TIMEOUT_OPTS[@]}" -o /dev/null -w "%{http_code}" "$BASE_URL$path" 2>/dev/null)
   check "GET $path → 200" "$([ "$CODE" = "200" ] && echo pass || echo "fail: HTTP $CODE")"
 done
 # Legacy cortex path must keep redirecting permanently (308) so its SEO signal
 # consolidates onto the bareclaude URL.
-CORTEX_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/projects/cortex/case-study" 2>/dev/null)
+CORTEX_CODE=$(curl -s "${CURL_TIMEOUT_OPTS[@]}" -o /dev/null -w "%{http_code}" "$BASE_URL/projects/cortex/case-study" 2>/dev/null)
 check "GET /projects/cortex/case-study → 308 (permanent)" "$([ "$CORTEX_CODE" = "308" ] && echo pass || echo "fail: HTTP $CORTEX_CODE")"
 
 # 3. /api/health
 echo ""
 echo "[ Health endpoint ]"
-HEALTH_CODE=$(curl -s -o /tmp/dt-health.json -w "%{http_code}" "$BASE_URL/api/health" 2>/dev/null)
+HEALTH_CODE=$(curl -s "${CURL_TIMEOUT_OPTS[@]}" -o /tmp/dt-health.json -w "%{http_code}" "$BASE_URL/api/health" 2>/dev/null)
 check "GET /api/health → 200" "$([ "$HEALTH_CODE" = "200" ] && echo pass || echo "fail: HTTP $HEALTH_CODE")"
 check "/api/health body has status:ok" "$(python3 -c 'import json,sys; d=json.load(open("/tmp/dt-health.json")); sys.exit(0 if d.get("status")=="ok" else 1)' 2>/dev/null && echo pass || echo 'fail: status!=ok or parse error')"
 
@@ -58,7 +59,7 @@ check "/api/health body has status:ok" "$(python3 -c 'import json,sys; d=json.lo
 echo ""
 echo "[ score-job API ]"
 SCORE_BODY='{"url":"https://example.com/jobs/1","title":"Senior Engineer","company":"Example Co"}'
-SCORE_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+SCORE_CODE=$(curl -s "${CURL_TIMEOUT_OPTS[@]}" -o /dev/null -w "%{http_code}" \
   -X POST "$BASE_URL/api/v1/score-job" \
   -H "Content-Type: application/json" \
   -d "$SCORE_BODY" 2>/dev/null)
@@ -67,7 +68,7 @@ check "POST /api/v1/score-job unauthenticated → 401" "$([ "$SCORE_CODE" = "401
 # 5. sitemap.xml
 echo ""
 echo "[ Sitemap ]"
-SITEMAP_CODE=$(curl -s -o /tmp/dt-sitemap.xml -w "%{http_code}" "$BASE_URL/sitemap.xml" 2>/dev/null)
+SITEMAP_CODE=$(curl -s "${CURL_TIMEOUT_OPTS[@]}" -o /tmp/dt-sitemap.xml -w "%{http_code}" "$BASE_URL/sitemap.xml" 2>/dev/null)
 check "GET /sitemap.xml → 200" "$([ "$SITEMAP_CODE" = "200" ] && echo pass || echo "fail: HTTP $SITEMAP_CODE")"
 URL_COUNT=$(grep -c '<loc>' /tmp/dt-sitemap.xml 2>/dev/null || echo 0)
 check "Sitemap has ≥10 URLs (found $URL_COUNT)" "$([ "$URL_COUNT" -ge 10 ] && echo pass || echo "fail: only $URL_COUNT URLs")"
@@ -80,7 +81,7 @@ check "Sitemap has ≥10 URLs (found $URL_COUNT)" "$([ "$URL_COUNT" -ge 10 ] && 
 BAD_URLS=""
 while IFS= read -r loc; do
   [ -z "$loc" ] && continue
-  LOC_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$loc" 2>/dev/null)
+  LOC_CODE=$(curl -s "${CURL_TIMEOUT_OPTS[@]}" -o /dev/null -w "%{http_code}" "$loc" 2>/dev/null)
   if [ "$LOC_CODE" != "200" ]; then
     BAD_URLS="${BAD_URLS}\n    $LOC_CODE $loc"
   fi
