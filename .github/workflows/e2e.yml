@@ -41,7 +41,13 @@ jobs:
           key: playwright-${{ matrix.project }}-${{ hashFiles('**/package-lock.json') }}
           restore-keys: playwright-${{ matrix.project }}-
       - run: npx playwright install --with-deps ${{ matrix.project }}
-      - run: npx playwright test --project=${{ matrix.project }}
+      # e2e/consulting-pr-gate.spec.ts (ENG-922) is scoped exclusively to the
+      # consulting-pr-gate.yml PR-gate workflow, which runs against a plain
+      # `next start` with no VERCEL_AUTOMATION_BYPASS_SECRET. This deploy-status
+      # run sets that secret, which exempts CI traffic from the contact route's
+      # rate limiter — so the spec's "expect 429" assertion can never pass here
+      # (see the spec's own header comment). Exclude it from this sweep.
+      - run: npx playwright test --project=${{ matrix.project }} --grep-invert "ENG-922"
         env:
           PLAYWRIGHT_BASE_URL: ${{ github.event.deployment_status.target_url }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}

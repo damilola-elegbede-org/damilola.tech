@@ -106,13 +106,13 @@ test.describe('Home Page', () => {
     expect(person).toBeDefined();
     expect(person.name).toBe('Damilola Elegbede');
     expect(person.jobTitle).toBe('Senior Engineering Manager');
-    expect(person.url).toBe('https://damilola.tech');
+    expect(person.url).toBe('https://www.damilola.tech');
     expect(person.sameAs).toContain('https://linkedin.com/in/damilola-elegbede');
     expect(person.sameAs).toContain('https://github.com/damilola-elegbede');
 
     const website = data['@graph'].find((node: { '@type': string }) => node['@type'] === 'WebSite');
     expect(website).toBeDefined();
     expect(website.name).toBe('Damilola Elegbede');
-    expect(website.url).toBe('https://damilola.tech');
+    expect(website.url).toBe('https://www.damilola.tech');
   });
 });
