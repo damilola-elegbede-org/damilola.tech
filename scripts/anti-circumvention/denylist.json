@@ -6,7 +6,7 @@
     "circumvent(s|ing)?",
     "multi-strategy\\s+ats\\s+bypass"
   ],
-  "scrapeVerbPattern": "scrap(e|es|ed|ing)|bypass(es|ed|ing)?|circumvent(s|ed|ing)?|target(s|ed|ing)?",
+  "scrapeVerbPattern": "scrap(e|es|ed|ing)|bypass(es|ed|ing)?|circumvent(s|ed|ing)?|target(s|ed|ing)?(?!=)",
   "employerTokens": {
     "algorithm": "sha256",
     "normalize": "lowercase, strip to [a-z0-9] only",
@@ -36,12 +36,7 @@
     ]
   },
   "_allowlistFormat": "Each entry: { \"pattern\": \"<literal substring or /regex/>\", \"justification\": \"<why this is legitimate, not circumvention>\" }. A source line matched by a denylist rule is skipped if it also matches an allowlist pattern.",
-  "allowlist": [
-    {
-      "pattern": "/target=\"_blank\"/",
-      "justification": "target=\"_blank\" is the standard HTML/JSX attribute for opening an external link in a new tab, not a scrape/bypass verb. It false-positived the employer-proximity check on src/app/case-studies/scf-dance/page.tsx (CI run 30707938906, 2026-08-01) because a legitimate tech-stack mention of Vercel (our own hosting platform, referenced generically across case studies) fell within the 20-token proximity window of an unrelated 'Live Demo' external link. Scoped to the literal HTML attribute syntax so it cannot mask real scrape/bypass/target prose."
-    }
-  ],
+  "allowlist": [],
   "sources": [
     "src/lib/projects-data.ts",
     "src/app/**/page.tsx",
