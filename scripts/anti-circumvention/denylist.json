@@ -6,7 +6,7 @@
     "circumvent(s|ing)?",
     "multi-strategy\\s+ats\\s+bypass"
   ],
-  "scrapeVerbPattern": "scrap(e|es|ed|ing)|bypass(es|ed|ing)?|circumvent(s|ed|ing)?|target(s|ed|ing)?",
+  "scrapeVerbPattern": "scrap(e|es|ed|ing)|bypass(es|ed|ing)?|circumvent(s|ed|ing)?|target(s|ed|ing)?(?!=)",
   "employerTokens": {
     "algorithm": "sha256",
     "normalize": "lowercase, strip to [a-z0-9] only",

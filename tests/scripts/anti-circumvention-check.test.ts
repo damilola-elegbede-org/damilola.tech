@@ -81,6 +81,29 @@ describe("anti-circumvention-check", () => {
     expect(violations.some((v) => v.kind === "employer-proximity")).toBe(true);
   });
 
+  it("does not flag the HTML target=\"_blank\" attribute as a scrape/target verb, but still flags prose 'targets'", () => {
+    const denylist = {
+      circumventionPatterns: [],
+      scrapeVerbPattern:
+        "scrap(e|es|ed|ing)|bypass(es|ed|ing)?|target(s|ed|ing)?(?!=)",
+      employerTokens: {
+        proximityWindowTokens: 20,
+        hashes: [sha256(normalizeToken("wonderco"))],
+      },
+      goldenRegression: { hashes: [] },
+      allowlist: [],
+      sources: [],
+    };
+
+    const benign =
+      '<a href="https://example.com/wonderco" target="_blank" rel="noopener noreferrer">Live Demo</a>';
+    expect(scanText("synthetic.tsx", benign, denylist as never)).toEqual([]);
+
+    const dangerous = "A scraper that targets Wonderco job postings directly.";
+    const violations = scanText("synthetic.tsx", dangerous, denylist as never);
+    expect(violations.some((v) => v.kind === "employer-proximity")).toBe(true);
+  });
+
   it("flags a generic circumvention-language pattern independent of any employer", () => {
     const denylist = {
       circumventionPatterns: ["bypass(es|ing)?\\s+[\\s\\S]{0,40}?auth[- ]?wall"],
