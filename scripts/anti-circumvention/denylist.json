@@ -1,0 +1,45 @@
+{
+  "_comment": "ENG-1603 — no plaintext employer names or literal RED-ALERT copy live in this file by design. Employer names are SHA-256 hashes of the lowercased name; the golden regression set is SHA-256 hashes of the exact removed PR#215 sentences (normalize: trim, lowercase, collapse whitespace). Both are one-way — grepping this file for any of the PR#215 strings or company names returns zero hits.",
+  "circumventionPatterns": [
+    "bypass(es|ing)?\\s+[\\s\\S]{0,40}?(ats|auth[- ]?wall|authentication|login)",
+    "auth[- ]?wall",
+    "circumvent(s|ing)?",
+    "multi-strategy\\s+ats\\s+bypass"
+  ],
+  "scrapeVerbPattern": "scrap(e|es|ed|ing)|bypass(es|ed|ing)?|circumvent(s|ed|ing)?|target(s|ed|ing)?",
+  "employerTokens": {
+    "algorithm": "sha256",
+    "normalize": "lowercase, strip to [a-z0-9] only",
+    "proximityWindowTokens": 20,
+    "hashes": [
+      "c70eca6b0f88f44d81a41311647e50fda1ac454ec04ffd442b0eb4743a993131",
+      "13ed070478ef62c3a7baa36c8d042a9d1cdc0fcbb2af93a795f2ad20ad6e9cb5",
+      "8d4321d936320802386311d254c4af52951abb880b47fb077edf3d89c150b289",
+      "ab7d0a36ecbe10c286f92a49bffb57ed6bf5bc6c3a3e15967f3ea8d028316969",
+      "9d3508a8484ee2520ca5fe0e52eab835774efa3fe533267e914eb00ad78d2579",
+      "4e44ddffb6dae60735fb43538340933c5ecca14871f9c5efb1759acc172622d0",
+      "f300f10844ecfc75f12a0deb789ce9ddb41209c38307e65436e81d43ad4658d9",
+      "3b3516aad1d9e72e7d091dbac082583ac9842af1dc624474ea61349417ea2690",
+      "21f2dcaa6f47cfacb542f1ff16aae70cab9a1f2407e3c8fd4e783725c2831833"
+    ]
+  },
+  "goldenRegression": {
+    "algorithm": "sha256",
+    "normalize": "trim, lowercase, collapse internal whitespace to single space",
+    "description": "Hashes of the exact sentences removed by PR#215 (the RED-ALERT copy). A public source file whose normalized text hashes to one of these is a verbatim regression of the removed exposure, independent of the pattern/token rules above.",
+    "hashes": [
+      "4e3e16afb0efffb6dea5efd803c65ac8671fe343f06d5489c9fd06227583aea0",
+      "97e7e57c5b187fa27de6b030dcbac5c067a3d3c9f74ea436b6041b01ea6bb2ce",
+      "61020a0e49afd231b2836400421690d401f6b36bd94c09d30a71a12cf9e0b4a9",
+      "c81b1cc138e09bb5799c335497cb6543819794e2fe800272239b07dcdac79118",
+      "f08082d4b3c61691b53a80bd7733d2bed6e3c8bcaf98e2b2bf0f72572a1da871"
+    ]
+  },
+  "_allowlistFormat": "Each entry: { \"pattern\": \"<literal substring or /regex/>\", \"justification\": \"<why this is legitimate, not circumvention>\" }. A source line matched by a denylist rule is skipped if it also matches an allowlist pattern.",
+  "allowlist": [],
+  "sources": [
+    "src/lib/projects-data.ts",
+    "src/app/**/page.tsx",
+    "src/content/**"
+  ]
+}

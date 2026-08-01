@@ -1,0 +1,33 @@
+name: Anti-Circumvention Copy Gate
+
+# PR-blocking check (ENG-1603): fails the build when public-facing copy
+# advertises bypassing an employer's ATS/auth systems, or names a specific
+# company as a scrape/bypass target — the RED-ALERT class of exposure fixed
+# reactively by PR#215. Deliberately dumb and deterministic (regex + hash
+# sweep, not an LLM judge) — see scripts/anti-circumvention/denylist.json for
+# the rule set. Runs on pull_request only, not a scheduled scan, per ENG-1603
+# acceptance.
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: anti-circumvention-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: Anti-Circumvention Copy Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npx tsx scripts/anti-circumvention/check.ts
