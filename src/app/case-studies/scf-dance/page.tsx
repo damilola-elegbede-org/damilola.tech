@@ -50,12 +50,20 @@ export default function ScfDanceCaseStudy() {
         <h1 className="mb-4 text-4xl font-bold text-[var(--color-text)] md:text-5xl">
           Salsa Con Flow Dance
         </h1>
-        <p className="text-lg text-[var(--color-text-muted)]">
+        <p className="mb-6 text-lg text-[var(--color-text-muted)]">
           A full-stack booking platform for a professional Latin dance instructor — built on
           Next.js and Vercel, then systematically hardened: rate limiting, CSP headers,
           Vercel Analytics, and a Node.js 20 upgrade shipped before a GitHub Actions
           deprecation deadline.
         </p>
+        <a
+          href="https://www.saborconflowdance.org/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-accent)]"
+        >
+          Live Demo →
+        </a>
       </header>
 
       <div className="mb-12 grid grid-cols-2 gap-4 sm:grid-cols-4">
