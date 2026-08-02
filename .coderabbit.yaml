@@ -14,7 +14,12 @@ reviews:
   auto_resolve_threads: true
 
   # Review profile - balanced between thoroughness and noise
-  profile: chill
+  # quiet: only critical/major findings post inline; everything else collapses
+  # into the summary. Switched from `chill`/`assertive` 2026-08-02 per D
+  # (approved via email reply to the July CodeRabbit product-update fwd) —
+  # matches the fleet-wide rollout started on bareclaude#460, reduces per-PR
+  # CodeRabbit API/quota consumption. Does not affect CI or mergeability.
+  profile: quiet
 
   # Request changes for high-severity issues only
   request_changes_workflow: false
