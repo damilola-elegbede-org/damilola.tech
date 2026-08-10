@@ -182,6 +182,15 @@ describe('evaluateJobKnockout', () => {
       expect(result.hardReasons).toContain('clearance_required');
     });
 
+    it('knocks out a role requiring a generic Secret clearance (not just Top Secret)', () => {
+      const result = evaluateJobKnockout({
+        title: 'Engineering Manager',
+        jobDescription: 'Candidates must hold a Secret clearance.',
+      });
+      expect(result.knockedOut).toBe(true);
+      expect(result.hardReasons).toContain('clearance_required');
+    });
+
     it('does not knock out a role with no clearance language', () => {
       const result = evaluateJobKnockout({
         title: 'Engineering Manager',
@@ -215,6 +224,27 @@ describe('evaluateJobKnockout', () => {
       });
       expect(result.knockedOut).toBe(true);
       expect(result.hardReasons).toContain('clearance_required');
+    });
+
+    it('scopes negation to its own clause across a semicolon, not the whole sentence', () => {
+      // Two distinct clauses in ONE sentence: the first negates active
+      // clearance, the second affirmatively requires security clearance.
+      const result = evaluateJobKnockout({
+        title: 'Engineering Manager',
+        jobDescription:
+          'No active clearance is required; candidates must obtain and maintain a security clearance.',
+      });
+      expect(result.knockedOut).toBe(true);
+      expect(result.hardReasons).toContain('clearance_required');
+    });
+
+    it('negates a non-"clearance"-worded requirement like TS/SCI correctly', () => {
+      const result = evaluateJobKnockout({
+        title: 'Engineering Manager',
+        jobDescription: 'No TS/SCI required for this role.',
+      });
+      expect(result.knockedOut).toBe(false);
+      expect(result.hardReasons).not.toContain('clearance_required');
     });
   });
 

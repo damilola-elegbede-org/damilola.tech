@@ -73,14 +73,38 @@ const ONSITE_ONLY_PATTERN =
 const REMOTE_OR_HYBRID_ESCAPE_PATTERN =
   /\b(hybrid|remote[- ]?friendly|remote[- ]?flexible|fully remote|remote position|work from (home|anywhere)|flexible (work|schedule))\b/i;
 
-const CLEARANCE_PATTERN =
-  /\b(security clearance|active clearance|ts\/sci|top secret clearance|obtain(?:ing)?\s+(?:and\s+maintain(?:ing)?\s+)?a?\s*(?:u\.?s\.?\s*government\s*)?(?:security\s*)?clearance|polygraph)\b/i;
+// Qualified clearance-type phrases — deliberately requires a qualifying word
+// (not bare "clearance", which shows up in unrelated contexts like "customs
+// clearance" or "medical clearance") so the KNOCKOUT match itself stays
+// precise. "secret clearance" also covers "top secret clearance" as a
+// substring, kept explicit for readability.
+const CLEARANCE_TERM =
+  '(?:security clearance|active clearance|ts\\/sci|top secret clearance|secret clearance|public trust clearance|polygraph)';
+const CLEARANCE_PATTERN = new RegExp(
+  `\\b(${CLEARANCE_TERM}|obtain(?:ing)?\\s+(?:and\\s+maintain(?:ing)?\\s+)?a?\\s*(?:u\\.?s\\.?\\s*government\\s*)?(?:security\\s*)?clearance)\\b`,
+  'i'
+);
 
-// Explicit negation near the word "clearance" — e.g. "No security clearance
-// is required for this commercial role." — must NOT be knocked out. Checked
-// whenever CLEARANCE_PATTERN matches, before treating it as a hard reason.
-const CLEARANCE_NEGATION_PATTERN =
-  /\bno\b[^.]{0,60}\bclearance\b|\bclearance\b[^.]{0,60}\b(?:is\s+)?not\s+required\b|\bdoes\s+not\s+require[^.]{0,60}\bclearance\b|\bwithout\b[^.]{0,60}\bclearance\b/i;
+// Negation-anchor terms are intentionally BROADER than CLEARANCE_TERM (adds
+// bare "clearance") — safe here because a wider anchor can only ever
+// SUPPRESS a knockout (never cause one), and it's what lets "No clearance
+// is required to apply" register as a negation of a *nearby* clearance
+// mention without itself being able to trigger the knockout on its own.
+const CLEARANCE_NEGATION_ANCHOR = `(?:${CLEARANCE_TERM}|clearance)`;
+
+// Explicit negation near a clearance term — e.g. "No security clearance is
+// required" or "No TS/SCI required" — must NOT be knocked out. Bounded to a
+// 60-char window and stops at a clause boundary ('.', ';') so it can't leak
+// across an unrelated clause (checked per-clause by hasAffirmativeClearance-
+// Requirement below, which already excludes '.'/'!'/'?'/';' from each clause
+// via splitClauses — the [^.;] here is defence in depth for the same rule).
+const CLEARANCE_NEGATION_PATTERN = new RegExp(
+  `\\bno\\b[^.;]{0,60}\\b${CLEARANCE_NEGATION_ANCHOR}\\b` +
+    `|\\b${CLEARANCE_NEGATION_ANCHOR}\\b[^.;]{0,60}\\b(?:is\\s+)?not\\s+required\\b` +
+    `|\\bdoes\\s+not\\s+require[^.;]{0,60}\\b${CLEARANCE_NEGATION_ANCHOR}\\b` +
+    `|\\bwithout\\b[^.;]{0,60}\\b${CLEARANCE_NEGATION_ANCHOR}\\b`,
+  'i'
+);
 
 // $180,000 / $180K — a single figure. Range endpoints that drop their own
 // leading '$' (e.g. the "260k" in "$220k–260k") are handled separately in
@@ -94,13 +118,15 @@ const SALARY_TOKEN_PATTERN = /\$\s?(\d{2,3}(?:,\d{3})?)(k)?/gi;
 const SALARY_RANGE_PATTERN =
   /\$\s?(\d{1,3}(?:,\d{3})*)(k)?\s*(?:-|–|—|to)\s*\$?\s?(\d{1,3}(?:,\d{3})*)(k)?/gi;
 
-// Naive sentence splitter used to scope negation/escape checks to the same
-// clause as the triggering phrase, instead of testing the whole document —
-// a document-wide test lets an unrelated negation elsewhere ("no clearance
-// needed to apply" for one part of the role) suppress a real, separately
-// stated requirement ("must obtain and maintain a security clearance").
-function splitSentences(text: string): string[] {
-  return text.split(/(?<=[.!?])\s+|\n+/).filter((s) => s.trim().length > 0);
+// Naive clause splitter used to scope negation/escape checks to the same
+// clause as the triggering phrase, instead of testing the whole document or
+// even the whole sentence — a document/sentence-wide test lets an unrelated
+// negation elsewhere ("no clearance needed to apply") suppress a real,
+// separately stated requirement in the SAME sentence ("...; candidates must
+// obtain and maintain a security clearance"). Splits on '.', '!', '?', ';',
+// and newlines.
+function splitClauses(text: string): string[] {
+  return text.split(/(?<=[.!?;])\s+|\n+/).filter((s) => s.trim().length > 0);
 }
 
 function classifyTitle(title: string): {
@@ -127,7 +153,7 @@ function checkOnsiteOnly(jobDescription: string): boolean {
   // aside elsewhere can't paper over an explicit on-site-only requirement
   // for THIS role — an affirmative on-site claim wins unless the same
   // clause also carries the escape language.
-  const onsiteSentences = splitSentences(jobDescription).filter((s) => ONSITE_ONLY_PATTERN.test(s));
+  const onsiteSentences = splitClauses(jobDescription).filter((s) => ONSITE_ONLY_PATTERN.test(s));
   const anyUnescaped = onsiteSentences.some((s) => !REMOTE_OR_HYBRID_ESCAPE_PATTERN.test(s));
   return anyUnescaped;
 }
@@ -139,7 +165,7 @@ function checkOnsiteOnly(jobDescription: string): boolean {
 // like "must obtain and maintain a security clearance" — an affirmative
 // requirement takes precedence over an unrelated negation.
 function hasAffirmativeClearanceRequirement(jobDescription: string): boolean {
-  return splitSentences(jobDescription).some(
+  return splitClauses(jobDescription).some(
     (s) => CLEARANCE_PATTERN.test(s) && !CLEARANCE_NEGATION_PATTERN.test(s)
   );
 }
