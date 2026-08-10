@@ -59,9 +59,11 @@ const MANAGEMENT_TITLE_PATTERN =
 const VP_TITLE_PATTERN = /\bvp\b|\bvice president\b/i;
 
 // Hard-out per Clara's ruling: "any IC title (Staff/Principal/Distinguished)".
-// Broadened slightly to catch the common synonyms for the same IC tracks.
+// Allows up to two filler words between the level and "Engineer" so common
+// variants (Staff Platform Engineer, Principal Data Engineer, Distinguished
+// Systems Engineer) are caught, not just the bare/"Software Engineer" forms.
 const IC_TITLE_PATTERN =
-  /\b(staff|principal|distinguished)\s+(software\s+)?engineer\b|\bindividual contributor\b/i;
+  /\b(staff|principal|distinguished)\s+(?:[\w-]+\s+){0,2}engineer\b|\bindividual contributor\b/i;
 
 const ONSITE_ONLY_PATTERN =
   /\b(100%\s*on[- ]?site|fully\s+on[- ]?site|fully\s+in[- ]?office|on[- ]?site\s+(only|required|five days|5 days)|no\s+remote\s+work|not\s+a\s+remote\s+(position|role)|in[- ]?office\s+(only|five days|5 days))\b/i;
@@ -72,9 +74,23 @@ const REMOTE_OR_HYBRID_ESCAPE_PATTERN =
 const CLEARANCE_PATTERN =
   /\b(security clearance|active clearance|ts\/sci|top secret clearance|obtain(?:ing)?\s+(?:and\s+maintain(?:ing)?\s+)?a?\s*(?:u\.?s\.?\s*government\s*)?(?:security\s*)?clearance|polygraph)\b/i;
 
-// $180,000 / $180K / $180,000-$210,000 / $180k-$210k — captures every number
-// token so the caller can take the max across a stated range.
+// Explicit negation near the word "clearance" — e.g. "No security clearance
+// is required for this commercial role." — must NOT be knocked out. Checked
+// whenever CLEARANCE_PATTERN matches, before treating it as a hard reason.
+const CLEARANCE_NEGATION_PATTERN =
+  /\bno\b[^.]{0,60}\bclearance\b|\bclearance\b[^.]{0,60}\b(?:is\s+)?not\s+required\b|\bdoes\s+not\s+require[^.]{0,60}\bclearance\b|\bwithout\b[^.]{0,60}\bclearance\b/i;
+
+// $180,000 / $180K — a single figure. Range endpoints that drop their own
+// leading '$' (e.g. the "260k" in "$220k–260k") are handled separately in
+// extractMaxStatedSalary, which also infers a missing 'k' on a range's
+// second endpoint from the first.
 const SALARY_TOKEN_PATTERN = /\$\s?(\d{2,3}(?:,\d{3})?)(k)?/gi;
+
+// A compensation range where the second endpoint may omit '$' and/or 'k'
+// because it's understood to inherit both from the first (e.g. "$220k–260k",
+// "$180,000 - $210,000", "$180K to $210K").
+const SALARY_RANGE_PATTERN =
+  /\$\s?(\d{1,3}(?:,\d{3})*)(k)?\s*(?:-|–|—|to)\s*\$?\s?(\d{1,3}(?:,\d{3})*)(k)?/gi;
 
 function classifyTitle(title: string): {
   isManagement: boolean;
@@ -100,23 +116,43 @@ function checkOnsiteOnly(jobDescription: string): boolean {
   return true;
 }
 
-function extractMaxStatedSalary(jobDescription: string): number | null {
-  const matches = [...jobDescription.matchAll(SALARY_TOKEN_PATTERN)];
-  if (matches.length === 0) return null;
+function parseAmount(digits: string, hasK: boolean): number | null {
+  const numeric = Number(digits.replace(/,/g, ''));
+  if (!Number.isFinite(numeric)) return null;
+  // "180k" -> 180 * 1000. "180,000" already has the full magnitude, and a
+  // bare "180" with no k-suffix and no thousands-comma is too small to be a
+  // plausible annual base salary token — skip it rather than treat it as $180.
+  if (hasK) return numeric * 1000;
+  if (numeric >= 1000) return numeric;
+  return null;
+}
 
-  const values = matches
-    .map(([, digits, kSuffix]) => {
-      const numeric = Number(digits.replace(/,/g, ''));
-      if (!Number.isFinite(numeric)) return null;
-      // "$180k" -> 180 * 1000. "$180,000" already has the full magnitude, and
-      // a bare "$180" with no k-suffix and no thousands-comma is too small to
-      // be a plausible annual base salary token — skip it rather than treat
-      // it as $180.
-      if (kSuffix) return numeric * 1000;
-      if (numeric >= 1000) return numeric;
-      return null;
-    })
-    .filter((n): n is number => n !== null);
+function extractMaxStatedSalary(jobDescription: string): number | null {
+  const values: number[] = [];
+
+  // Range form first, so a second endpoint that dropped its own '$' and/or
+  // 'k' (e.g. the "260k" in "$220k–260k", or the "260,000" in "$220,000 -
+  // 260,000") is still captured, inheriting scale from the first endpoint.
+  for (const [, startDigits, startK, endDigits, endK] of jobDescription.matchAll(SALARY_RANGE_PATTERN)) {
+    const startHasK = Boolean(startK);
+    const endRawNumeric = Number(endDigits.replace(/,/g, ''));
+    // Inherit the first endpoint's 'k' scale when the second omits it and its
+    // bare digits are too small to be a real salary on their own (e.g. the
+    // "260" in "$220k–260k" is 260, not 260000, until we apply this).
+    const endHasK = Boolean(endK) || (startHasK && endRawNumeric < 1000);
+    const start = parseAmount(startDigits, startHasK);
+    const end = parseAmount(endDigits, endHasK);
+    if (start !== null) values.push(start);
+    if (end !== null) values.push(end);
+  }
+
+  // Single-figure form, e.g. "$195,000 base" with no range. Duplicate hits on
+  // numbers already captured by the range pass above are harmless — the
+  // final result is a max(), which duplicates cannot change.
+  for (const [, digits, kSuffix] of jobDescription.matchAll(SALARY_TOKEN_PATTERN)) {
+    const val = parseAmount(digits, Boolean(kSuffix));
+    if (val !== null) values.push(val);
+  }
 
   if (values.length === 0) return null;
   return Math.max(...values);
@@ -136,7 +172,9 @@ export function evaluateJobKnockout(input: JobKnockoutInput): JobKnockoutResult 
 
   if (checkOnsiteOnly(jobDescription)) hardReasons.push('onsite_only_no_remote_path');
 
-  if (CLEARANCE_PATTERN.test(jobDescription)) hardReasons.push('clearance_required');
+  if (CLEARANCE_PATTERN.test(jobDescription) && !CLEARANCE_NEGATION_PATTERN.test(jobDescription)) {
+    hardReasons.push('clearance_required');
+  }
 
   const maxSalary = extractMaxStatedSalary(jobDescription);
   if (maxSalary !== null && maxSalary < COMP_FLOOR) softPenalties.push('comp_below_floor');

@@ -86,6 +86,18 @@ describe('evaluateJobKnockout', () => {
       expect(result.stretchFlags).toContain('vp_stretch');
     });
 
+    it('knocks out IC title variants with a role word between the level and Engineer', () => {
+      expect(
+        evaluateJobKnockout({ title: 'Staff Platform Engineer', jobDescription: '' }).hardReasons
+      ).toContain('ic_only_title');
+      expect(
+        evaluateJobKnockout({ title: 'Principal Data Engineer', jobDescription: '' }).hardReasons
+      ).toContain('ic_only_title');
+      expect(
+        evaluateJobKnockout({ title: 'Distinguished Systems Engineer', jobDescription: '' }).hardReasons
+      ).toContain('ic_only_title');
+    });
+
     it('does not hard-knock an unclear/ambiguous title on title alone', () => {
       const result = evaluateJobKnockout({
         title: 'Engineering Lead',
@@ -158,6 +170,23 @@ describe('evaluateJobKnockout', () => {
       });
       expect(result.hardReasons).not.toContain('clearance_required');
     });
+
+    it('does not knock out a role that explicitly states no clearance is required', () => {
+      const result = evaluateJobKnockout({
+        title: 'Engineering Manager',
+        jobDescription: 'No security clearance is required for this commercial role.',
+      });
+      expect(result.knockedOut).toBe(false);
+      expect(result.hardReasons).not.toContain('clearance_required');
+    });
+
+    it('does not knock out when clearance is explicitly stated as not required', () => {
+      const result = evaluateJobKnockout({
+        title: 'Director of Engineering',
+        jobDescription: 'Security clearance is not required for this position.',
+      });
+      expect(result.hardReasons).not.toContain('clearance_required');
+    });
   });
 
   describe('soft penalty: base comp below $230K', () => {
@@ -200,6 +229,28 @@ describe('evaluateJobKnockout', () => {
         jobDescription: 'Salary: $180k - $210k',
       });
       expect(result.softPenalties).toContain('comp_below_floor');
+    });
+
+    it('parses a range where only the first endpoint carries a dollar sign', () => {
+      const clearsFloor = evaluateJobKnockout({
+        title: 'Engineering Manager',
+        jobDescription: 'Base salary: $220k–260k',
+      });
+      expect(clearsFloor.softPenalties).not.toContain('comp_below_floor');
+
+      const belowFloor = evaluateJobKnockout({
+        title: 'Engineering Manager',
+        jobDescription: 'Base salary: $180k–210k',
+      });
+      expect(belowFloor.softPenalties).toContain('comp_below_floor');
+    });
+
+    it('parses a range where only the first endpoint carries a dollar sign, full digits', () => {
+      const result = evaluateJobKnockout({
+        title: 'Engineering Manager',
+        jobDescription: 'Base salary: $220,000-260,000',
+      });
+      expect(result.softPenalties).not.toContain('comp_below_floor');
     });
   });
 
