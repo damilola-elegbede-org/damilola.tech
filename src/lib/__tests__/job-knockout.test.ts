@@ -152,6 +152,15 @@ describe('evaluateJobKnockout', () => {
       expect(result.hardReasons).not.toContain('onsite_only_no_remote_path');
     });
 
+    it('does not knock out a role with ordinary partial remote-work wording', () => {
+      const result = evaluateJobKnockout({
+        title: 'Engineering Manager',
+        jobDescription: 'Fully on-site, with up to two days of remote work per week.',
+      });
+      expect(result.knockedOut).toBe(false);
+      expect(result.hardReasons).not.toContain('onsite_only_no_remote_path');
+    });
+
     it('knocks out an on-site-only role even when hybrid is mentioned for a different team', () => {
       const result = evaluateJobKnockout({
         title: 'Engineering Manager',
@@ -233,6 +242,15 @@ describe('evaluateJobKnockout', () => {
         title: 'Engineering Manager',
         jobDescription:
           'No active clearance is required; candidates must obtain and maintain a security clearance.',
+      });
+      expect(result.knockedOut).toBe(true);
+      expect(result.hardReasons).toContain('clearance_required');
+    });
+
+    it('detects an affirmative requirement even when an earlier negation shares the same clause', () => {
+      const result = evaluateJobKnockout({
+        title: 'Engineering Manager',
+        jobDescription: 'No clearance is needed to apply, but the hire must obtain a security clearance.',
       });
       expect(result.knockedOut).toBe(true);
       expect(result.hardReasons).toContain('clearance_required');

@@ -70,8 +70,12 @@ const IC_LEVEL_PATTERN = /\b(staff|principal|distinguished)\b|\bindividual contr
 const ONSITE_ONLY_PATTERN =
   /\b(100%\s*on[- ]?site|fully\s+on[- ]?site|fully\s+in[- ]?office|on[- ]?site\s+(only|required|five days|5 days)|no\s+remote\s+work|not\s+a\s+remote\s+(position|role)|in[- ]?office\s+(only|five days|5 days))\b/i;
 
+// "days? (of) remote" (e.g. "two days of remote work", "2 remote days per
+// week") is deliberately NOT anchored to "no" — a negated case like "no
+// remote work available" has no "days" token at all, so it can't collide
+// with this alternative.
 const REMOTE_OR_HYBRID_ESCAPE_PATTERN =
-  /\b(hybrid|remote[- ]?friendly|remote[- ]?flexible|fully remote|remote position|work from (home|anywhere)|flexible (work|schedule))\b/i;
+  /\b(hybrid|remote[- ]?friendly|remote[- ]?flexible|fully remote|remote position|work from (home|anywhere)|flexible (work|schedule)|\w+\s+remote\s+days?\b|\w+\s+days?\s+(?:of\s+)?remote\b)\b/i;
 
 // Qualified clearance-type phrases — deliberately requires a qualifying word
 // (not bare "clearance", which shows up in unrelated contexts like "customs
@@ -85,26 +89,18 @@ const CLEARANCE_PATTERN = new RegExp(
   'i'
 );
 
-// Negation-anchor terms are intentionally BROADER than CLEARANCE_TERM (adds
-// bare "clearance") — safe here because a wider anchor can only ever
-// SUPPRESS a knockout (never cause one), and it's what lets "No clearance
-// is required to apply" register as a negation of a *nearby* clearance
-// mention without itself being able to trigger the knockout on its own.
-const CLEARANCE_NEGATION_ANCHOR = `(?:${CLEARANCE_TERM}|clearance)`;
-
-// Explicit negation near a clearance term — e.g. "No security clearance is
-// required" or "No TS/SCI required" — must NOT be knocked out. Bounded to a
-// 60-char window and stops at a clause boundary ('.', ';') so it can't leak
-// across an unrelated clause (checked per-clause by hasAffirmativeClearance-
-// Requirement below, which already excludes '.'/'!'/'?'/';' from each clause
-// via splitClauses — the [^.;] here is defence in depth for the same rule).
-const CLEARANCE_NEGATION_PATTERN = new RegExp(
-  `\\bno\\b[^.;]{0,60}\\b${CLEARANCE_NEGATION_ANCHOR}\\b` +
-    `|\\b${CLEARANCE_NEGATION_ANCHOR}\\b[^.;]{0,60}\\b(?:is\\s+)?not\\s+required\\b` +
-    `|\\bdoes\\s+not\\s+require[^.;]{0,60}\\b${CLEARANCE_NEGATION_ANCHOR}\\b` +
-    `|\\bwithout\\b[^.;]{0,60}\\b${CLEARANCE_NEGATION_ANCHOR}\\b`,
-  'i'
-);
+// Negation lookback/lookahead windows (characters), used to associate a
+// negation marker with ONE SPECIFIC clearance mention rather than a whole
+// clause or sentence — see hasAffirmativeClearanceRequirement below. A
+// clause-level check let one negated mention ("No clearance is needed to
+// apply") suppress a separate, affirmative mention later in the SAME clause
+// ("...but the hire must obtain a security clearance"); per-match proximity
+// doesn't have that failure mode because each mention is judged on its own
+// immediately-local context.
+const NEGATION_LOOKBACK_CHARS = 40;
+const NEGATION_LOOKAHEAD_CHARS = 25;
+const NEGATION_BEFORE_PATTERN = /\b(no|without|does\s*n[o']t\s+require)\b/i;
+const NEGATION_AFTER_PATTERN = /^\s*(?:is\s+)?not\s+required\b/i;
 
 // $180,000 / $180K — a single figure. Range endpoints that drop their own
 // leading '$' (e.g. the "260k" in "$220k–260k") are handled separately in
@@ -159,15 +155,26 @@ function checkOnsiteOnly(jobDescription: string): boolean {
 }
 
 // A clearance mention is an affirmative requirement only if at least one
-// sentence carrying it is NOT itself negated. Scoped per-sentence (not
-// document-wide) so "No clearance is required to apply" elsewhere in the
-// posting can't suppress a separately, affirmatively stated requirement
-// like "must obtain and maintain a security clearance" — an affirmative
-// requirement takes precedence over an unrelated negation.
+// OCCURRENCE of it in the text is not itself locally negated — judged
+// per-match (a small window immediately around that specific mention), not
+// per-clause or per-document. That's what lets "No clearance is needed to
+// apply, but the hire must obtain a security clearance" correctly knock out
+// (the second mention is unnegated in its own local context) while "No
+// security clearance is required" and "No TS/SCI required" correctly don't
+// (the negation is immediately local to the only mention present).
 function hasAffirmativeClearanceRequirement(jobDescription: string): boolean {
-  return splitClauses(jobDescription).some(
-    (s) => CLEARANCE_PATTERN.test(s) && !CLEARANCE_NEGATION_PATTERN.test(s)
-  );
+  const globalPattern = new RegExp(CLEARANCE_PATTERN.source, 'gi');
+  for (const match of jobDescription.matchAll(globalPattern)) {
+    if (match.index === undefined) continue;
+    const before = jobDescription.slice(Math.max(0, match.index - NEGATION_LOOKBACK_CHARS), match.index);
+    const after = jobDescription.slice(
+      match.index + match[0].length,
+      Math.min(jobDescription.length, match.index + match[0].length + NEGATION_LOOKAHEAD_CHARS)
+    );
+    const negated = NEGATION_BEFORE_PATTERN.test(before) || NEGATION_AFTER_PATTERN.test(after);
+    if (!negated) return true;
+  }
+  return false;
 }
 
 function parseAmount(digits: string, hasK: boolean): number | null {
