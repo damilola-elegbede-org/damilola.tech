@@ -59,11 +59,13 @@ const MANAGEMENT_TITLE_PATTERN =
 const VP_TITLE_PATTERN = /\bvp\b|\bvice president\b/i;
 
 // Hard-out per Clara's ruling: "any IC title (Staff/Principal/Distinguished)".
-// Allows up to two filler words between the level and "Engineer" so common
-// variants (Staff Platform Engineer, Principal Data Engineer, Distinguished
-// Systems Engineer) are caught, not just the bare/"Software Engineer" forms.
-const IC_TITLE_PATTERN =
-  /\b(staff|principal|distinguished)\s+(?:[\w-]+\s+){0,2}engineer\b|\bindividual contributor\b/i;
+// The level word itself is the IC signal — Clara's ruling doesn't scope it to
+// "...Engineer" titles specifically, and titles like "Staff Software
+// Architect" or "Principal Product Manager" are exactly as IC-only as "Staff
+// Software Engineer". classifyTitle() below exempts any title that also
+// carries a management/VP signal (e.g. "Staff Engineering Manager"), so this
+// intentionally does not require an "Engineer" suffix.
+const IC_LEVEL_PATTERN = /\b(staff|principal|distinguished)\b|\bindividual contributor\b/i;
 
 const ONSITE_ONLY_PATTERN =
   /\b(100%\s*on[- ]?site|fully\s+on[- ]?site|fully\s+in[- ]?office|on[- ]?site\s+(only|required|five days|5 days)|no\s+remote\s+work|not\s+a\s+remote\s+(position|role)|in[- ]?office\s+(only|five days|5 days))\b/i;
@@ -92,6 +94,15 @@ const SALARY_TOKEN_PATTERN = /\$\s?(\d{2,3}(?:,\d{3})?)(k)?/gi;
 const SALARY_RANGE_PATTERN =
   /\$\s?(\d{1,3}(?:,\d{3})*)(k)?\s*(?:-|–|—|to)\s*\$?\s?(\d{1,3}(?:,\d{3})*)(k)?/gi;
 
+// Naive sentence splitter used to scope negation/escape checks to the same
+// clause as the triggering phrase, instead of testing the whole document —
+// a document-wide test lets an unrelated negation elsewhere ("no clearance
+// needed to apply" for one part of the role) suppress a real, separately
+// stated requirement ("must obtain and maintain a security clearance").
+function splitSentences(text: string): string[] {
+  return text.split(/(?<=[.!?])\s+|\n+/).filter((s) => s.trim().length > 0);
+}
+
 function classifyTitle(title: string): {
   isManagement: boolean;
   isIcOnly: boolean;
@@ -103,17 +114,34 @@ function classifyTitle(title: string): {
   // management/VP signal — a title like "Staff Engineering Manager" (rare,
   // some orgs use it for a senior IC-adjacent management role) should not
   // be knocked out just because "staff" appears somewhere in the string.
-  const isIcOnly = IC_TITLE_PATTERN.test(title) && !isManagement && !isVpStretch;
+  const isIcOnly = IC_LEVEL_PATTERN.test(title) && !isManagement && !isVpStretch;
   return { isManagement, isIcOnly, isVpStretch };
 }
 
 function checkOnsiteOnly(jobDescription: string): boolean {
   if (!ONSITE_ONLY_PATTERN.test(jobDescription)) return false;
-  // "Not Denver alone" clause: any hybrid/remote escape language anywhere in
-  // the JD means this is not a zero-remote-path posting, even if an on-site
-  // phrase also appears (e.g. "hybrid — 3 days on-site per week").
-  if (REMOTE_OR_HYBRID_ESCAPE_PATTERN.test(jobDescription)) return false;
-  return true;
+  // "Not Denver alone" clause: hybrid/remote escape language in the SAME
+  // sentence as the on-site claim (e.g. "hybrid — 3 days on-site per week")
+  // means this is not a zero-remote-path posting. Scoped to the sentence,
+  // not the whole document, so an unrelated "our other teams work hybrid"
+  // aside elsewhere can't paper over an explicit on-site-only requirement
+  // for THIS role — an affirmative on-site claim wins unless the same
+  // clause also carries the escape language.
+  const onsiteSentences = splitSentences(jobDescription).filter((s) => ONSITE_ONLY_PATTERN.test(s));
+  const anyUnescaped = onsiteSentences.some((s) => !REMOTE_OR_HYBRID_ESCAPE_PATTERN.test(s));
+  return anyUnescaped;
+}
+
+// A clearance mention is an affirmative requirement only if at least one
+// sentence carrying it is NOT itself negated. Scoped per-sentence (not
+// document-wide) so "No clearance is required to apply" elsewhere in the
+// posting can't suppress a separately, affirmatively stated requirement
+// like "must obtain and maintain a security clearance" — an affirmative
+// requirement takes precedence over an unrelated negation.
+function hasAffirmativeClearanceRequirement(jobDescription: string): boolean {
+  return splitSentences(jobDescription).some(
+    (s) => CLEARANCE_PATTERN.test(s) && !CLEARANCE_NEGATION_PATTERN.test(s)
+  );
 }
 
 function parseAmount(digits: string, hasK: boolean): number | null {
@@ -172,7 +200,7 @@ export function evaluateJobKnockout(input: JobKnockoutInput): JobKnockoutResult 
 
   if (checkOnsiteOnly(jobDescription)) hardReasons.push('onsite_only_no_remote_path');
 
-  if (CLEARANCE_PATTERN.test(jobDescription) && !CLEARANCE_NEGATION_PATTERN.test(jobDescription)) {
+  if (hasAffirmativeClearanceRequirement(jobDescription)) {
     hardReasons.push('clearance_required');
   }
 

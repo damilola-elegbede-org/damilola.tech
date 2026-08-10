@@ -98,6 +98,15 @@ describe('evaluateJobKnockout', () => {
       ).toContain('ic_only_title');
     });
 
+    it('knocks out IC-level titles beyond the Engineer track', () => {
+      expect(
+        evaluateJobKnockout({ title: 'Staff Software Architect', jobDescription: '' }).hardReasons
+      ).toContain('ic_only_title');
+      expect(
+        evaluateJobKnockout({ title: 'Principal Product Manager', jobDescription: '' }).hardReasons
+      ).toContain('ic_only_title');
+    });
+
     it('does not hard-knock an unclear/ambiguous title on title alone', () => {
       const result = evaluateJobKnockout({
         title: 'Engineering Lead',
@@ -141,6 +150,16 @@ describe('evaluateJobKnockout', () => {
         jobDescription: 'Lead the payments engineering team and drive technical strategy.',
       });
       expect(result.hardReasons).not.toContain('onsite_only_no_remote_path');
+    });
+
+    it('knocks out an on-site-only role even when hybrid is mentioned for a different team', () => {
+      const result = evaluateJobKnockout({
+        title: 'Engineering Manager',
+        jobDescription:
+          'This role is 100% on-site, five days a week in our downtown office. Note: our design org offers hybrid schedules, but engineering does not.',
+      });
+      expect(result.knockedOut).toBe(true);
+      expect(result.hardReasons).toContain('onsite_only_no_remote_path');
     });
   });
 
@@ -186,6 +205,16 @@ describe('evaluateJobKnockout', () => {
         jobDescription: 'Security clearance is not required for this position.',
       });
       expect(result.hardReasons).not.toContain('clearance_required');
+    });
+
+    it('does not let an unrelated negation suppress a separately stated affirmative requirement', () => {
+      const result = evaluateJobKnockout({
+        title: 'Engineering Manager',
+        jobDescription:
+          'No clearance is required to apply. Hires must obtain and maintain a security clearance within 90 days of starting.',
+      });
+      expect(result.knockedOut).toBe(true);
+      expect(result.hardReasons).toContain('clearance_required');
     });
   });
 
