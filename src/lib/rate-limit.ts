@@ -28,6 +28,22 @@ export const RATE_LIMIT_CONFIGS = {
   resumeGenerator: { key: 'resume-generator', limit: 100, windowSeconds: 3600 }, // 100 per hour
   tailorResume: { key: 'tailor-resume', limit: 100, windowSeconds: 3600 }, // 100 per hour
   mcp: { key: 'mcp', limit: 200, windowSeconds: 60 }, // 200 per minute per key+IP
+
+  // score-job is the only endpoint here that is BOTH API-key-gated and driven by
+  // an automated batch client. It was metered under `resumeGenerator` — 100/hr
+  // keyed by IP, shared with four sibling endpoints — so a single authenticated
+  // first-party caller sat inside an anonymous abuse limit and hit 429 partway
+  // through every full batch (~86 of 126 calls, retry-after up to 2096s).
+  //
+  // Keyed by API key id rather than IP: one caller's batch must not exhaust
+  // another's, and all fleet traffic egresses from one address, so an IP key
+  // collapses every agent into a single bucket.
+  //
+  // 600/hr sized against the largest observed batch (133 roles on 2026-08-11,
+  // growing as scrape targets are added) with ~4.5x headroom, so target growth
+  // does not silently re-create the wall. This is an abuse ceiling for a trusted
+  // client, not a capacity plan — inter-call pacing still governs load.
+  scoreJobAuthenticated: { key: 'score-job-authenticated', limit: 600, windowSeconds: 3600 },
 } as const;
 
 export interface GenericRateLimitResult {
