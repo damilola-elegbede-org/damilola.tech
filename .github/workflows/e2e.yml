@@ -8,6 +8,9 @@ concurrency:
   group: e2e-${{ github.event.deployment.id || github.sha }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   e2e:
     name: E2E (${{ matrix.project }})
