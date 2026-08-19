@@ -61,8 +61,16 @@ const COMP_FLOOR = 230_000;
 // In-lane management titles (scope floor: EM and above). Checked first so an
 // explicit management title always wins over an incidental IC-keyword match
 // in the same string (e.g. "Engineering Manager, Staff Platform Team").
+//
+// The director/engineering branches tolerate comma/hyphen separators, reversed
+// word order ("Engineering Director"), and one domain word between "of" and
+// "engineering" ("Director of Software Engineering") — non-canonical phrasing
+// CodeRabbit flagged (PR#226) as falsely knocking out genuine Director-of-Eng
+// roles under the inverted default. Deliberately does NOT cover "Head of
+// Infrastructure" or other non-engineering/platform "head of" domains — D's
+// 2026-08-18 ruling scopes in-lane "head of" titles to Eng/Platform only.
 const MANAGEMENT_TITLE_PATTERN =
-  /\b(engineering manager|em\b|director[- ]?(of)?\s*engineering|head of (engineering|platform)|senior engineering manager|sr\.?\s*engineering manager|group engineering manager|senior manager|sr\.?\s*manager)\b/i;
+  /\b(engineering manager|em\b|director[\s,-]*(?:of\s+)?(?:\w+\s+)?engineering|engineering[\s,-]*director|head of (engineering|platform)|senior engineering manager|sr\.?\s*engineering manager|group engineering manager|senior manager|sr\.?\s*manager)\b/i;
 
 const VP_TITLE_PATTERN = /\bvp\b|\bvice president\b/i;
 

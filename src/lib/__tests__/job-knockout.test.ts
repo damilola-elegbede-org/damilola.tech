@@ -93,7 +93,7 @@ describe('evaluateJobKnockout', () => {
       expect(result.stretchFlags).toContain('vp_stretch');
     });
 
-    it('knocks out IC title variants with a role word between the level and Engineer', () => {
+    it('knocks out titles with no management signal, regardless of IC keyword (inverted default)', () => {
       expect(
         evaluateJobKnockout({ title: 'Staff Platform Engineer', jobDescription: '' }).hardReasons
       ).toContain('ic_only_title');
@@ -105,13 +105,21 @@ describe('evaluateJobKnockout', () => {
       ).toContain('ic_only_title');
     });
 
-    it('knocks out IC-level titles beyond the Engineer track', () => {
+    it('knocks out non-Engineer-track titles with no management signal (inverted default)', () => {
       expect(
         evaluateJobKnockout({ title: 'Staff Software Architect', jobDescription: '' }).hardReasons
       ).toContain('ic_only_title');
       expect(
         evaluateJobKnockout({ title: 'Principal Product Manager', jobDescription: '' }).hardReasons
       ).toContain('ic_only_title');
+    });
+
+    it('does not knock out Director/Engineering title variants with non-canonical word order or punctuation', () => {
+      for (const title of ['Engineering Director', 'Director, Engineering', 'Director of Software Engineering']) {
+        expect(
+          evaluateJobKnockout({ title, jobDescription: '' }).hardReasons
+        ).not.toContain('ic_only_title');
+      }
     });
 
     it('knocks out an unclear/ambiguous title with no explicit management signal (inverted default)', () => {
