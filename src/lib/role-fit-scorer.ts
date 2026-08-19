@@ -3,11 +3,11 @@
  *
  * ENG-1564. Spec: clara/.tmp/reports/ats-scoring-spec-2026-08-18.md (Clara Nova,
  * OPS-397). Supersedes job-knockout.ts (the 2026-08-10 binary gate) and, for
- * /api/v1/score-job only, replaces calculateReadinessScore() as the source of
- * currentScore.total. Does NOT touch readiness-scorer.ts — that module stays
- * the /score-resume and /resume-generator scorer, a different question
- * ("does D's resume match this JD") from this one ("is this role in D's lane,
- * and how good a fit is it").
+ * /api/v1/score-job only, supplies a distinct roleFit result alongside the
+ * readiness-based currentScore. Does NOT touch readiness-scorer.ts — that
+ * module stays the /score-resume and /resume-generator scorer, a different
+ * question ("does D's resume match this JD") from this one ("is this role in
+ * D's lane, and how good a fit is it").
  *
  * v1 scope decision (2026-08-19, logged on ENG-1564): signals 3/4/8 are
  * spec'd as semantic/LLM-judged (S). This v1 implements them as deterministic
@@ -34,13 +34,14 @@ export type GateFailedReason =
   | 'G1_no_mgmt_signal'
   | 'G2_ic_exclusion'
   | 'G3_function_exclusion'
-  | 'G4_geography';
+  | 'G4_geography'
+  | 'G5_location'
+  | 'G6_comp_floor';
 
 export interface SignalBreakdown {
   level: number;
   scope: number;
   strategy: number;
-  impact: number;
   comp: number;
   company: number;
   location: number;
@@ -113,7 +114,7 @@ function countMatches(haystack: string, needles: string[]): number {
 function g1Passes(head: string, jobDescription: string): boolean {
   if (G1_TITLE_PATTERN.test(head)) return true;
   const body = jobDescription.toLowerCase();
-  return countMatches(body, G1_BODY_SIGNALS) >= 2;
+  return countMatches(body, G1_BODY_SIGNALS) >= 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -152,10 +153,10 @@ function g3Rejects(head: string, jobDescription: string): boolean {
   if (G3_EXCLUDED_FUNCTION.test(head)) return true;
   if (G3_PROGRAM_PRODUCT_MGMT.test(head)) {
     // Preserved unless the title also carries a G1 management-of-engineers
-    // token AND the body clears the G1 body fallback (>=2 signals).
+    // token AND the body clears the G1 body fallback (>=1 signal).
     const hasG1Title = G1_TITLE_PATTERN.test(head);
     const bodySignals = countMatches(jobDescription.toLowerCase(), G1_BODY_SIGNALS);
-    if (!(hasG1Title && bodySignals >= 2)) return true;
+    if (!(hasG1Title && bodySignals >= 1)) return true;
   }
   return false;
 }
@@ -168,7 +169,7 @@ const US_HUBS = [
   'san francisco', 'sf', 'bay area', 'new york', 'nyc', 'brooklyn', 'seattle',
   'bellevue', 'redmond', 'austin', 'dallas', 'houston', 'denver', 'boulder',
   'chicago', 'boston', 'cambridge ma', 'los angeles', 'la', 'san jose',
-  'mountain view', 'sunnyvale', 'palo alto', 'san diego', 'atlanta',
+  'mountain view', 'sunnyvale', 'palo alto', 'santa clara', 'san diego', 'atlanta',
   'portland', 'phoenix', 'miami', 'nashville', 'pittsburgh', 'raleigh',
   'salt lake city', 'minneapolis', 'philadelphia', 'washington',
 ];
@@ -263,6 +264,21 @@ interface GateResult {
   head: string;
   tail: string;
   geo: GeoVerdict;
+  maxStatedSalary: number | null;
+}
+
+function locationSources(tail: string, jobDescription: string, structuredLocation?: string): string {
+  return [structuredLocation ?? '', tail, jobDescription.slice(0, 1500)].join(' ').toLowerCase();
+}
+
+/** G5 accepts explicitly US-scoped remote work, not generic remote language. */
+function isRemoteUS(jobDescription: string, tail: string, structuredLocation?: string): boolean {
+  const source = locationSources(tail, jobDescription, structuredLocation);
+  return /\bremote\b/.test(source) && /\b(?:us|usa|united states|us-based)\b|\bu\.s\.(?=\W|$)/.test(source);
+}
+
+function isBoulderColorado(jobDescription: string, tail: string, structuredLocation?: string): boolean {
+  return /\bboulder\b|\bcolorado\b|\bdenver\b/.test(locationSources(tail, jobDescription, structuredLocation));
 }
 
 function evaluateGates(input: RoleFitInput): GateResult {
@@ -282,7 +298,7 @@ function evaluateGates(input: RoleFitInput): GateResult {
   const g1Ok = g1Passes(normalized, jobDescription);
   if (!g1Ok) {
     failed.push('G1_no_mgmt_signal');
-    evidence.G1_no_mgmt_signal = `no management-title match in title="${normalized}" and body fallback signals < 2`;
+    evidence.G1_no_mgmt_signal = `no management-title match in title="${normalized}" and body fallback signals < 1`;
   }
 
   // G2 short-circuits on a G1 title match — never IC-rejects a management title.
@@ -302,7 +318,18 @@ function evaluateGates(input: RoleFitInput): GateResult {
     evidence.G4_geography = `tail="${tail}" resolves non-US with no US token present`;
   }
 
-  return { failed, evidence, normalized, head, tail, geo };
+  if (geo === 'us' && !isRemoteUS(jobDescription, tail, input.location) && !isBoulderColorado(jobDescription, tail, input.location)) {
+    failed.push('G5_location');
+    evidence.G5_location = `tail="${tail}" is US-based but not Remote-US or Boulder/Denver/Colorado`;
+  }
+
+  const maxStatedSalary = extractMaxStatedSalary(input.compRange ?? jobDescription);
+  if (maxStatedSalary !== null && maxStatedSalary < 230_000) {
+    failed.push('G6_comp_floor');
+    evidence.G6_comp_floor = `stated maximum base salary $${maxStatedSalary.toLocaleString()} is below $230,000`;
+  }
+
+  return { failed, evidence, normalized, head, tail, geo, maxStatedSalary };
 }
 
 // ---------------------------------------------------------------------------
@@ -310,7 +337,7 @@ function evaluateGates(input: RoleFitInput): GateResult {
 // ---------------------------------------------------------------------------
 
 function scoreLevel(title: string): number {
-  if (/\b(director|sr\.? director|senior director|head of engineering|head of platform engineering)\b/.test(title)) {
+  if (/\b(director|sr\.? director|senior director|head of engineering|head of platform engineering|vp\s*(of\s*)?engineering|vice president,?\s*(of\s*)?engineering)\b/.test(title)) {
     return 24;
   }
   if (/\b(senior engineering manager|sr\.?\s*manager,?\s*(software|engineering|platform|infrastructure)|group engineering manager|em ?2|m ?2)\b/.test(title)) {
@@ -319,41 +346,29 @@ function scoreLevel(title: string): number {
   if (/\b(engineering manager|manager,?\s*software engineering)\b/.test(title)) {
     return 21;
   }
-  if (/\bvp\s*(of\s*)?engineering|vice president,?\s*(of\s*)?engineering\b/.test(title)) {
-    return 16;
-  }
   return 12; // management signal present only via body fallback (G1 already confirmed it)
 }
 
-const SCOPE_SIGNALS: Array<{ pts: number; pattern: RegExp }> = [
-  { pts: 7, pattern: /\bmanag\w+ (engineering )?managers\b|\bleaders? of leaders\b|\bmanagers report to\b|\bsecond[- ]line\b|\blead(ing)? engineering managers\b/ },
-  { pts: 5, pattern: /\bmultiple teams\b|\b\d+ teams\b|\bthe organi[sz]ation\b|\bacross teams\b|\ba group of teams\b|\bsub-?teams\b/ },
-  { pts: 3, pattern: /\bown the roadmap for\b|\bcharter\b|\bown the .+ domain\b/ },
-  { pts: 2, pattern: /\bhiring plan\b|\bheadcount planning\b|\bgrow the team\b|\bbuild out the team\b|\bbudget\b/ },
-  { pts: 2, pattern: /\bperformance\b|\bcareer growth\b|\bcareer development\b|\bdevelop engineers\b|\bmentor\b/ },
-];
-
-// Headcount tiers scored separately (mutually exclusive, take best match).
-function scopeHeadcountPts(jd: string): number {
-  const explicit = jd.match(/\b(\d{1,3})\+?\s*(engineers|people)\b|\borg of\s*(\d{1,3})\b/);
+function scopeBasePts(jd: string): { pts: number; flag?: 'span_unquantified' } {
+  const explicit = jd.match(/\b(\d{1,3})\+?\s*(?:engineers|people)\b|\borg of\s*(\d{1,3})\b/);
   if (explicit) {
-    const n = Number(explicit[1] ?? explicit[3]);
-    if (n >= 25) return 5;
-    if (n >= 10) return 4;
-    return 2;
+    const count = Number(explicit[1] ?? explicit[2]);
+    return { pts: count >= 6 ? 10 : 5 };
   }
-  if (/\ba team of engineers\b|\bteam of engineers\b/.test(jd)) return 2;
-  return 0;
+  if (/\bsmall team\b|\bfirst em hire\b|\bfirst engineering manager hire\b/.test(jd)) return { pts: 5 };
+  return { pts: 10, flag: 'span_unquantified' };
+}
+
+function scopeBonusPts(jd: string): number {
+  let bonus = 0;
+  if (/\bmanag\w+ (engineering )?managers\b|\bleaders? of leaders\b|\bmanagers report to\b|\bsecond[- ]line\b|\blead(ing)? engineering managers\b/.test(jd)) bonus += 3;
+  if (/\bmultiple teams\b|\b\d+ teams\b|\bthe organi[sz]ation\b|\bacross teams\b|\ba group of teams\b|\bsub-?teams\b/.test(jd) || /\b(?:2[5-9]|[3-9]\d|\d{3,})\+?\s*(?:engineers|people)\b|\borg of\s*(?:2[5-9]|[3-9]\d|\d{3,})\b/.test(jd)) bonus += 3;
+  return bonus;
 }
 
 function scoreScope(jobDescription: string): number {
   const jd = jobDescription.toLowerCase();
-  let total = 0;
-  for (const s of SCOPE_SIGNALS) {
-    if (s.pattern.test(jd)) total += s.pts;
-  }
-  total += scopeHeadcountPts(jd);
-  return Math.min(16, total);
+  return Math.min(16, scopeBasePts(jd).pts + scopeBonusPts(jd));
 }
 
 const STRATEGY_FAMILIES: RegExp[] = [
@@ -366,7 +381,10 @@ const STRATEGY_FAMILIES: RegExp[] = [
 function scoreStrategy(jobDescription: string): number {
   const jd = jobDescription.toLowerCase();
   const hits = STRATEGY_FAMILIES.filter((f) => f.test(jd)).length;
-  return Math.min(12, hits * 3);
+  let outcomes = 0;
+  if (IMPACT_CUSTOMER.test(jd)) outcomes += 5;
+  if (IMPACT_METRICS.test(jd)) outcomes += 5;
+  return Math.min(22, hits * 3 + outcomes);
 }
 
 // "adoption" alone is a customer/business-outcome signal (§3.4 sub-signal 1);
@@ -375,22 +393,6 @@ function scoreStrategy(jobDescription: string): number {
 // counting one mention across both sub-signals.
 const IMPACT_CUSTOMER = /\bcustomers\b|\brevenue\b|\bbusiness impact\b|\bp&l\b|\benterprise customers\b|\badoption\b(?!\s*rate)/;
 const IMPACT_METRICS = /\blatency\b|\breliability\b|\buptime\b|\bdora\b|\bdeveloper velocity\b|\badoption rate\b|\bsla\b/;
-const OUTCOME_VERB_PATTERN = /\b(own|drive|deliver|improve|scale|decide|influence)(s|d|ing)?\b/g;
-const TOOL_NOUN_PATTERN = /\b(kafka|kubernetes|k8s|spark|terraform|docker|react|aws|postgres|kinesis)\b/g;
-const IMPACT_SCALE = /\b0->1\b|\b0-to-1\b|\bambiguous\b|\bhyper-growth\b|\binflection point\b|\bgreenfield\b/;
-
-function scoreImpact(jobDescription: string): number {
-  const jd = jobDescription.toLowerCase();
-  let total = 0;
-  if (IMPACT_CUSTOMER.test(jd)) total += 3;
-  if (IMPACT_METRICS.test(jd)) total += 3;
-  const verbCount = jd.match(OUTCOME_VERB_PATTERN)?.length ?? 0;
-  const nounCount = jd.match(TOOL_NOUN_PATTERN)?.length ?? 0;
-  if (verbCount > nounCount) total += 2;
-  if (IMPACT_SCALE.test(jd)) total += 2;
-  return Math.min(10, total);
-}
-
 const SALARY_RANGE = /\$\s?(\d{1,3}(?:,\d{3})*)(k)?\s*(?:-|–|—|to)\s*\$?\s?(\d{1,3}(?:,\d{3})*)(k)?/gi;
 const SALARY_SINGLE = /\$\s?(\d{2,3}(?:,\d{3})?)(k)?/gi;
 
@@ -420,9 +422,8 @@ function extractMaxStatedSalary(text: string): number | null {
   return values.length ? Math.max(...values) : null;
 }
 
-function scoreComp(jobDescription: string, structuredCompRange?: string): number {
-  const max = extractMaxStatedSalary(structuredCompRange ?? jobDescription);
-  if (max === null) return 8; // neutral — absent band is never a knockout
+function scoreComp(max: number | null): number {
+  if (max === null) return 7; // silence ties the lowest passing disclosed tier
   if (max >= 350_000) return 12;
   if (max >= 300_000) return 11;
   if (max >= 260_000) return 9;
@@ -446,7 +447,7 @@ function scoreCompany(company: string): number {
 
 function scoreLocation(geo: GeoVerdict, jobDescription: string): { pts: number; unknown: boolean } {
   const jd = jobDescription.toLowerCase();
-  if (geo === 'unknown') return { pts: 5, unknown: true };
+  if (geo === 'unknown') return { pts: 4, unknown: true };
   // geo === 'us' at this point (non_us already gated out before signals run)
   if (/\bboulder\b|\bcolorado\b|\bdenver\b/.test(jd) || (/\bremote\b/.test(jd) && /\bus\b|\bunited states\b/.test(jd) && /\bremote[- ]eligible\b/.test(jd))) {
     return { pts: 8, unknown: false };
@@ -487,7 +488,7 @@ export function evaluateRoleFit(input: RoleFitInput, company: string): RoleFitRe
       score: 0,
       gateFailed: gates.failed,
       gateEvidence: gates.evidence,
-      breakdown: { level: 0, scope: 0, strategy: 0, impact: 0, comp: 0, company: 0, location: 0, domain: 0 },
+      breakdown: { level: 0, scope: 0, strategy: 0, comp: 0, company: 0, location: 0, domain: 0 },
       locationUnknown: false,
     };
   }
@@ -496,13 +497,12 @@ export function evaluateRoleFit(input: RoleFitInput, company: string): RoleFitRe
   const level = scoreLevel(gates.normalized);
   const scope = scoreScope(jobDescription);
   const strategy = scoreStrategy(jobDescription);
-  const impact = scoreImpact(jobDescription);
-  const comp = scoreComp(jobDescription, input.compRange);
+  const comp = scoreComp(gates.maxStatedSalary);
   const companyPts = scoreCompany(company);
   const { pts: location, unknown: locationUnknown } = scoreLocation(gates.geo, jobDescription);
   const domain = scoreDomain(jobDescription);
 
-  const breakdown: SignalBreakdown = { level, scope, strategy, impact, comp, company: companyPts, location, domain };
+  const breakdown: SignalBreakdown = { level, scope, strategy, comp, company: companyPts, location, domain };
   const score = Object.values(breakdown).reduce((a, b) => a + b, 0);
 
   return {

@@ -60,6 +60,8 @@ interface ScoreResumeResponse {
   recommendation: 'full_generation_recommended' | 'marginal_improvement' | 'strong_fit';
 }
 
+type ReadinessCurrentScore = ScoreResumeResponse['currentScore'];
+
 interface JobKnockoutInfo {
   knockedOut: boolean;
   hardReasons: GateFailedReason[];
@@ -70,15 +72,21 @@ interface ScoreJobResponse {
   company: string;
   title: string;
   url: string;
-  currentScore: { total: number; breakdown: SignalBreakdown };
+  roleFit: {
+    total: number;
+    gateFailed: GateFailedReason[];
+    gateEvidence: Record<string, string>;
+    breakdown: SignalBreakdown;
+    locationUnknown: boolean;
+  };
+  currentScore: ReadinessCurrentScore;
   maxPossibleScore: number;
   gapAnalysis: string;
-  // ENG-1564: 'knocked_out' means a hybrid knockout gate (G1-G4, see
-  // role-fit-scorer.ts) rejected this role before scoring ran —
-  // currentScore/maxPossibleScore are both 0 in that case, not a genuine low
-  // fit score. See `knockout` for the reasons.
+  // A knockout is a role-fit decision; currentScore remains the independently
+  // computed readiness score for the same JD/resume pair.
   recommendation: 'full_generation_recommended' | 'marginal_improvement' | 'strong_fit' | 'knocked_out';
   knockout?: JobKnockoutInfo;
+  resumeGap: { achievable: number | null; closeable: number | null; structural: number | null };
 }
 
 export interface GenerateCoverLetterInput {

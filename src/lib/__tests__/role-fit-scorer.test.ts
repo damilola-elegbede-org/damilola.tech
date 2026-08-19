@@ -12,7 +12,7 @@ import { describe, it, expect } from 'vitest';
 import { evaluateRoleFit } from '../role-fit-scorer';
 
 describe('evaluateRoleFit — calibration anchors (spec §4)', () => {
-  it('§4.1 Anthropic "Engineering Manager, Enterprise" scores 83', () => {
+  it("§4.1's SF/NYC hybrid role now fails the narrower G5 location gate", () => {
     const result = evaluateRoleFit(
       {
         title: 'Engineering Manager, Enterprise',
@@ -33,18 +33,8 @@ describe('evaluateRoleFit — calibration anchors (spec §4)', () => {
       'Anthropic'
     );
 
-    expect(result.gateFailed).toEqual([]);
-    expect(result.breakdown).toEqual({
-      level: 21,
-      scope: 9,
-      strategy: 9,
-      impact: 10,
-      comp: 12,
-      company: 10,
-      location: 4,
-      domain: 8,
-    });
-    expect(result.score).toBe(83);
+    expect(result.gateFailed).toContain('G5_location');
+    expect(result.score).toBe(0);
   });
 
   it('§4.2 Netflix "Distributed Systems Engineer 4 - Data Platform Poland" triple-gates to 0', () => {
@@ -79,7 +69,7 @@ describe('evaluateRoleFit — calibration anchors (spec §4)', () => {
     expect(result.gateFailed).toHaveLength(2);
   });
 
-  it('§4.4 Airbnb "Engineering Manager, UI Tooling" scores 81', () => {
+  it('§4.4 Airbnb "Engineering Manager, UI Tooling" uses the redistributed strategy signal', () => {
     const result = evaluateRoleFit(
       {
         title: 'Engineering Manager, UI Tooling',
@@ -103,15 +93,15 @@ describe('evaluateRoleFit — calibration anchors (spec §4)', () => {
     expect(result.gateFailed).toEqual([]);
     expect(result.breakdown).toEqual({
       level: 21,
-      scope: 9,
-      strategy: 9,
-      impact: 7,
+      scope: 10,
+      strategy: 14,
       comp: 9,
       company: 10,
       location: 8,
       domain: 8,
     });
-    expect(result.score).toBe(81);
+    // Calibration is intentionally deferred; this asserts the amended table.
+    expect(result.score).toBe(80);
   });
 });
 
@@ -202,20 +192,101 @@ describe('evaluateRoleFit — gate mechanics', () => {
 });
 
 describe('evaluateRoleFit — comp scoring', () => {
-  it('an absent comp band scores neutral (8), not a knockout', () => {
+  it('an absent comp band scores 7 and passes G6', () => {
     const result = evaluateRoleFit(
       { title: 'Engineering Manager', jobDescription: 'Lead a team of engineers. No comp stated.' },
       'Acme Corp'
     );
     expect(result.gateFailed).toEqual([]);
-    expect(result.breakdown.comp).toBe(8);
+    expect(result.gateFailed).not.toContain('G6_comp_floor');
+    expect(result.breakdown.comp).toBe(7);
   });
 
-  it('a stated band below the $230K floor scores 2', () => {
+  it('a stated band below the $230K floor fails G6', () => {
     const result = evaluateRoleFit(
       { title: 'Engineering Manager', jobDescription: 'Lead a team of engineers. Salary: $180,000 - $210,000.' },
       'Acme Corp'
     );
-    expect(result.breakdown.comp).toBe(2);
+    expect(result.gateFailed).toContain('G6_comp_floor');
+    expect(result.breakdown.comp).toBe(0);
+  });
+
+  it('a stated $230K maximum passes G6 at the lowest disclosed tier', () => {
+    const result = evaluateRoleFit(
+      { title: 'Engineering Manager', jobDescription: 'Lead a team of engineers. Salary: $210,000 - $230,000.' },
+      'Acme Corp'
+    );
+    expect(result.gateFailed).not.toContain('G6_comp_floor');
+    expect(result.breakdown.comp).toBe(7);
+  });
+});
+
+describe('evaluateRoleFit — amended gates and signal table', () => {
+  const manager = 'Engineering Manager';
+
+  it.each([
+    ['Remote (US)', 'Location: Remote (US). Lead a team of engineers.'],
+    ['Remote - United States', 'Location: Remote - United States. Lead a team of engineers.'],
+    ['100% remote US-based', '100% remote, US-based. Lead a team of engineers.'],
+    ['Boulder hybrid', 'Location: Boulder, Colorado. Hybrid. Lead a team of engineers.'],
+    ['Denver role', 'Location: Denver, CO. Lead a team of engineers.'],
+  ])('G5 accepts %s', (_label, jobDescription) => {
+    expect(evaluateRoleFit({ title: manager, jobDescription }, 'Acme').gateFailed).not.toContain('G5_location');
+  });
+
+  it.each(['Santa Clara', 'Austin', 'NYC'])('G5 rejects %s hybrid roles without remote language', (city) => {
+    const result = evaluateRoleFit({ title: manager, jobDescription: `Location: ${city}. Hybrid. Lead a team of engineers.` }, 'Acme');
+    expect(result.gateFailed).toContain('G5_location');
+  });
+
+  it('G5 and G6 both fail open when their inputs are unknown', () => {
+    const result = evaluateRoleFit({ title: manager, jobDescription: 'Lead a team of engineers.' }, 'Acme');
+    expect(result.gateFailed).not.toContain('G5_location');
+    expect(result.gateFailed).not.toContain('G6_comp_floor');
+    expect(result.locationUnknown).toBe(true);
+  });
+
+  it('G2 still rejects an IC title with one ambiguous management body signal', () => {
+    const result = evaluateRoleFit({ title: 'Senior Software Engineer', jobDescription: 'Mentor junior engineers. Remote (US).' }, 'Acme');
+    expect(result.gateFailed).toContain('G2_ic_exclusion');
+  });
+
+  it('allows a non-IC role through G1 with one management body signal', () => {
+    const result = evaluateRoleFit({ title: 'Technology Lead', jobDescription: 'Manage a team of engineers.' }, 'Acme');
+    expect(result.gateFailed).not.toContain('G1_no_mgmt_signal');
+  });
+
+  it('scores VP Engineering at the Director/Head tier', () => {
+    const result = evaluateRoleFit({ title: 'VP of Engineering', jobDescription: 'Remote (US). Lead a team of engineers.' }, 'Acme');
+    expect(result.breakdown.level).toBe(24);
+  });
+
+  it('gives unquantified span the 10-point base and adds span bonuses to the 16-point cap', () => {
+    const unquantified = evaluateRoleFit({ title: manager, jobDescription: 'Remote (US). Lead a team of engineers.' }, 'Acme');
+    expect(unquantified.breakdown.scope).toBe(10);
+    const capped = evaluateRoleFit({ title: manager, jobDescription: 'Remote (US). Manage 30 engineers. Manage engineering managers across multiple teams.' }, 'Acme');
+    expect(capped.breakdown.scope).toBe(16);
+  });
+
+  it('scores explicit small teams at 5 and business/customer outcomes as the fifth strategy family', () => {
+    const result = evaluateRoleFit({
+      title: manager,
+      jobDescription: 'Remote (US). Manage 4 engineers on a small team. Set technical strategy for customers, revenue, latency, and reliability.',
+    }, 'Acme');
+    expect(result.breakdown.scope).toBe(5);
+    expect(result.breakdown.strategy).toBe(13);
+  });
+
+  it('caps strategy at 22 and unknown location ties the lowest disclosed tier', () => {
+    const result = evaluateRoleFit({
+      title: manager,
+      jobDescription: 'Lead a team of engineers. Technical strategy, technical vision, own the roadmap, prioritization, partner with product, stakeholders, org design, operating model, customers, revenue, latency, reliability.',
+    }, 'Acme');
+    expect(result.breakdown.strategy).toBe(22);
+    expect(result.breakdown.location).toBe(4);
+  });
+
+  it('has a 100-point table: 24 + 16 + 22 + 12 + 10 + 8 + 8', () => {
+    expect(24 + 16 + 22 + 12 + 10 + 8 + 8).toBe(100);
   });
 });

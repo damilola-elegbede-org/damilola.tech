@@ -53,9 +53,15 @@ vi.mock('@/lib/api-audit', () => ({
 // Mock score-core (to isolate route logic)
 const mockExtractTextContent = vi.fn();
 const mockParseJsonResponse = vi.fn();
+const mockBuildScoringInput = vi.fn();
+const mockBuildScorePayload = vi.fn();
+const mockBuildGapAnalysisPrompt = vi.fn();
 vi.mock('@/lib/score-core', () => ({
   extractTextContent: (...args: unknown[]) => mockExtractTextContent(...args),
   parseJsonResponse: (...args: unknown[]) => mockParseJsonResponse(...args),
+  buildScoringInput: (...args: unknown[]) => mockBuildScoringInput(...args),
+  buildScorePayload: (...args: unknown[]) => mockBuildScorePayload(...args),
+  buildGapAnalysisPrompt: (...args: unknown[]) => mockBuildGapAnalysisPrompt(...args),
   scoringClient: {
     messages: { create: (...args: unknown[]) => mockCreate(...args) },
   },
@@ -72,7 +78,7 @@ const defaultRoleFitResult = {
   score: 75,
   gateFailed: [] as string[],
   gateEvidence: {} as Record<string, string>,
-  breakdown: { level: 21, scope: 9, strategy: 9, impact: 10, comp: 9, company: 9, location: 6, domain: 2 },
+  breakdown: { level: 21, scope: 10, strategy: 14, comp: 9, company: 9, location: 6, domain: 2 },
   locationUnknown: false,
 };
 
@@ -116,6 +122,16 @@ describe('POST /api/v1/score-job', () => {
       extractedUrl: 'https://example.com/jobs/senior-engineering-manager',
     });
     mockEvaluateRoleFit.mockReturnValue(defaultRoleFitResult);
+    mockBuildScoringInput.mockReturnValue({ readinessScore: { total: 75 } });
+    mockBuildScorePayload.mockReturnValue({
+      total: 75,
+      breakdown: { roleRelevance: 30, claritySkimmability: 20, businessImpact: 15, presentationQuality: 10 },
+      matchedKeywords: ['TypeScript'],
+      missingKeywords: ['Kubernetes'],
+      matchRate: 50,
+      keywordDensity: 3,
+    });
+    mockBuildGapAnalysisPrompt.mockReturnValue('Readiness prompt');
     mockCreate.mockResolvedValue(mockAnthropicResponse);
     mockExtractTextContent.mockReturnValue('{"gapAnalysis":"Strong fit.","maxPossibleScore":88,"recommendation":"marginal_improvement"}');
     mockParseJsonResponse.mockReturnValue({
@@ -249,7 +265,7 @@ describe('POST /api/v1/score-job', () => {
         score: 0,
         gateFailed: ['G1_no_mgmt_signal'],
         gateEvidence: { G1_no_mgmt_signal: 'no management-title match' },
-        breakdown: { level: 0, scope: 0, strategy: 0, impact: 0, comp: 0, company: 0, location: 0, domain: 0 },
+        breakdown: { level: 0, scope: 0, strategy: 0, comp: 0, company: 0, location: 0, domain: 0 },
         locationUnknown: false,
       });
 
@@ -258,16 +274,21 @@ describe('POST /api/v1/score-job', () => {
       const data = await response.json() as {
         success: boolean;
         data: {
-          currentScore: { total: number };
+          roleFit: { total: number };
+          currentScore: { total: number; breakdown: { roleRelevance: number } };
           recommendation: string;
           knockout: { knockedOut: boolean; hardReasons: string[] };
+          resumeGap: { achievable: null; closeable: null; structural: null };
         };
       };
 
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
       expect(data.data.recommendation).toBe('knocked_out');
-      expect(data.data.currentScore.total).toBe(0);
+      expect(data.data.roleFit.total).toBe(0);
+      expect(data.data.currentScore.total).toBe(75);
+      expect(data.data.currentScore.breakdown.roleRelevance).toBe(30);
+      expect(data.data.resumeGap).toEqual({ achievable: null, closeable: null, structural: null });
       expect(data.data.knockout).toEqual(expect.objectContaining({
         knockedOut: true,
         hardReasons: expect.arrayContaining(['G1_no_mgmt_signal']),
@@ -307,6 +328,12 @@ describe('POST /api/v1/score-job', () => {
       expect(data.data.title).toBe('Senior Engineering Manager');
       expect(data.data.url).toBe('https://example.com/jobs/senior-engineering-manager');
       expect(data.data.currentScore).toBeDefined();
+      expect(data.data.roleFit).toEqual(expect.objectContaining({ total: 75, breakdown: defaultRoleFitResult.breakdown }));
+      expect(data.data.currentScore).toEqual(expect.objectContaining({
+        total: 75,
+        breakdown: expect.objectContaining({ roleRelevance: 30 }),
+      }));
+      expect(data.data.resumeGap).toEqual({ achievable: null, closeable: null, structural: null });
       expect(data.data.maxPossibleScore).toBeDefined();
       expect(data.data.gapAnalysis).toBe('Strong fit.');
       expect(data.data.recommendation).toBe('marginal_improvement');
@@ -336,7 +363,9 @@ describe('POST /api/v1/score-job', () => {
     });
 
     it('returns recommendation strong_fit when gap < 5', async () => {
-      mockEvaluateRoleFit.mockReturnValue({ ...defaultRoleFitResult, score: 85 });
+      mockBuildScorePayload.mockReturnValue({
+        total: 85, breakdown: {}, matchedKeywords: [], missingKeywords: [], matchRate: 0, keywordDensity: 0,
+      });
       mockParseJsonResponse.mockReturnValue({
         gapAnalysis: 'Excellent.',
         maxPossibleScore: 87,
@@ -350,7 +379,9 @@ describe('POST /api/v1/score-job', () => {
     });
 
     it('returns recommendation full_generation_recommended when gap > 15', async () => {
-      mockEvaluateRoleFit.mockReturnValue({ ...defaultRoleFitResult, score: 50 });
+      mockBuildScorePayload.mockReturnValue({
+        total: 50, breakdown: {}, matchedKeywords: [], missingKeywords: [], matchRate: 0, keywordDensity: 0,
+      });
       mockParseJsonResponse.mockReturnValue({
         gapAnalysis: 'Large gap.',
         maxPossibleScore: 90,

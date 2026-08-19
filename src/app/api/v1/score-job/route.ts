@@ -17,6 +17,9 @@ import {
   scoringClient,
   extractTextContent,
   parseJsonResponse,
+  buildGapAnalysisPrompt,
+  buildScorePayload,
+  buildScoringInput,
 } from '@/lib/score-core';
 import { evaluateRoleFit } from '@/lib/role-fit-scorer';
 
@@ -146,14 +149,16 @@ export async function POST(req: Request) {
         })
       : resolvedInput.text;
 
-    // ENG-1564: hybrid knockout-gate + weighted signal scorer, replacing the
-    // keyword-density calculateReadinessScore() path for score-job only
-    // (score-resume/resume-generator keep the old scorer — see role-fit-scorer.ts
-    // header). Knocked-out roles skip the Opus call entirely (cost + latency
+    // ENG-1564: hybrid knockout-gate + weighted signal scorer runs alongside
+    // the readiness scorer. Knocked-out roles skip the Opus call entirely (cost + latency
     // win, on top of being the correct semantics — a role D can't take
     // regardless of fit quality shouldn't consume an Opus call to prove it
     // scores well).
     const roleFit = evaluateRoleFit({ title: normalizedTitle, jobDescription: scoringText }, normalizedCompany);
+    // Role fit decides whether D would take the role; readiness measures how
+    // well the current resume matches it. They deliberately remain separate.
+    const { readinessScore } = buildScoringInput(scoringText);
+    const currentScore = buildScorePayload(readinessScore);
 
     if (roleFit.gateFailed.length > 0) {
       logApiAccess('api_score_job', authResult.apiKey, {
@@ -163,7 +168,7 @@ export async function POST(req: Request) {
         inputType: resolvedInput.inputType,
         extractedUrl: resolvedInput.extractedUrl,
         emptyShell: resolvedInput.isEmptyShell === true,
-        currentScore: 0,
+        currentScore: currentScore.total,
         maxPossibleScore: 0,
         recommendation: 'knocked_out',
         knockoutReasons: roleFit.gateFailed,
@@ -175,10 +180,14 @@ export async function POST(req: Request) {
         company: normalizedCompany,
         title: normalizedTitle,
         url: normalizedUrl,
-        currentScore: {
-          total: 0,
+        roleFit: {
+          total: roleFit.score,
+          gateFailed: roleFit.gateFailed,
+          gateEvidence: roleFit.gateEvidence,
           breakdown: roleFit.breakdown,
+          locationUnknown: roleFit.locationUnknown,
         },
+        currentScore,
         maxPossibleScore: 0,
         gapAnalysis: `Knocked out before scoring: ${roleFit.gateFailed.join(', ')}.`,
         recommendation: 'knocked_out',
@@ -187,27 +196,12 @@ export async function POST(req: Request) {
           hardReasons: roleFit.gateFailed,
           gateEvidence: roleFit.gateEvidence,
         },
+        resumeGap: { achievable: null, closeable: null, structural: null },
         ...(resolvedInput.isEmptyShell ? { emptyShellFallback: true } : {}),
       });
     }
 
-    const currentScore = { total: roleFit.score, breakdown: roleFit.breakdown };
-
-    const basePrompt = [
-      'Analyze this role-fit score against the job description and return JSON only.',
-      '',
-      `Current score: ${currentScore.total}/100`,
-      `Signal breakdown: ${JSON.stringify(currentScore.breakdown)}`,
-      roleFit.locationUnknown ? 'Note: location could not be resolved from the posting (scored neutral).' : '',
-      '',
-      'Return exactly this JSON schema:',
-      '{"gapAnalysis":"2-3 short paragraphs","maxPossibleScore":0-100,"recommendation":"full_generation_recommended|marginal_improvement|strong_fit"}',
-      '',
-      'Recommendation logic:',
-      '- full_generation_recommended when gap > 15 points',
-      '- marginal_improvement when gap is 5-15 points',
-      '- strong_fit when gap < 5 points',
-    ].filter(Boolean).join('\n');
+    const basePrompt = buildGapAnalysisPrompt(currentScore);
     const userContent = interviewPrepMode
       ? `${basePrompt}\n\nAdditionally, return exactly 5 "interviewPrepQuestions" in the JSON. Each must use behavioral framing — start with "Tell me about a time..." or "How would you approach...". Base questions on the top gap areas identified above.\n\nUpdated JSON schema: {"gapAnalysis":"...","maxPossibleScore":0-100,"recommendation":"...","interviewPrepQuestions":["Q1","Q2","Q3","Q4","Q5"]}\n\n<job_description>${xmlEscape(scoringText)}</job_description>`
       : `${basePrompt}\n\n<job_description>${xmlEscape(scoringText)}</job_description>`;
@@ -271,12 +265,20 @@ export async function POST(req: Request) {
       company: normalizedCompany,
       title: normalizedTitle,
       url: normalizedUrl,
+      roleFit: {
+        total: roleFit.score,
+        gateFailed: roleFit.gateFailed,
+        gateEvidence: roleFit.gateEvidence,
+        breakdown: roleFit.breakdown,
+        locationUnknown: roleFit.locationUnknown,
+      },
       currentScore,
       maxPossibleScore,
       gapAnalysis,
       recommendation,
       // Not knocked out here (the gateFailed branch returns earlier).
       knockout: { knockedOut: false, hardReasons: [], gateEvidence: {} },
+      resumeGap: { achievable: null, closeable: null, structural: null },
       ...(resolvedInput.isEmptyShell ? { emptyShellFallback: true } : {}),
       ...(interviewPrepQuestions ? { interviewPrepQuestions } : {}),
     });
