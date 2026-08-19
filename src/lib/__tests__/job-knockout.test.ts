@@ -31,7 +31,7 @@ describe('evaluateJobKnockout', () => {
         jobDescription: 'We are looking for a Staff Software Engineer to join our platform team.',
       });
       expect(result.knockedOut).toBe(true);
-      expect(result.hardReasons).toContain('ic_only_title');
+      expect(result.hardReasons).toContain('no_management_scope_signal');
     });
 
     it('knocks out a Principal Engineer title', () => {
@@ -40,7 +40,7 @@ describe('evaluateJobKnockout', () => {
         jobDescription: 'Own the technical direction for our infra platform as an individual contributor.',
       });
       expect(result.knockedOut).toBe(true);
-      expect(result.hardReasons).toContain('ic_only_title');
+      expect(result.hardReasons).toContain('no_management_scope_signal');
     });
 
     it('knocks out a Distinguished Engineer title', () => {
@@ -49,7 +49,7 @@ describe('evaluateJobKnockout', () => {
         jobDescription: 'A senior technical leadership role, individual contributor track.',
       });
       expect(result.knockedOut).toBe(true);
-      expect(result.hardReasons).toContain('ic_only_title');
+      expect(result.hardReasons).toContain('no_management_scope_signal');
     });
 
     it('does not knock out a straight Engineering Manager title (scope floor)', () => {
@@ -57,7 +57,7 @@ describe('evaluateJobKnockout', () => {
         title: 'Engineering Manager',
         jobDescription: 'Lead a team of 8 engineers building our checkout platform.',
       });
-      expect(result.hardReasons).not.toContain('ic_only_title');
+      expect(result.hardReasons).not.toContain('no_management_scope_signal');
     });
 
     it('does not knock out Director of Engineering', () => {
@@ -96,29 +96,29 @@ describe('evaluateJobKnockout', () => {
     it('knocks out titles with no management signal, regardless of IC keyword (inverted default)', () => {
       expect(
         evaluateJobKnockout({ title: 'Staff Platform Engineer', jobDescription: '' }).hardReasons
-      ).toContain('ic_only_title');
+      ).toContain('no_management_scope_signal');
       expect(
         evaluateJobKnockout({ title: 'Principal Data Engineer', jobDescription: '' }).hardReasons
-      ).toContain('ic_only_title');
+      ).toContain('no_management_scope_signal');
       expect(
         evaluateJobKnockout({ title: 'Distinguished Systems Engineer', jobDescription: '' }).hardReasons
-      ).toContain('ic_only_title');
+      ).toContain('no_management_scope_signal');
     });
 
     it('knocks out non-Engineer-track titles with no management signal (inverted default)', () => {
       expect(
         evaluateJobKnockout({ title: 'Staff Software Architect', jobDescription: '' }).hardReasons
-      ).toContain('ic_only_title');
+      ).toContain('no_management_scope_signal');
       expect(
         evaluateJobKnockout({ title: 'Principal Product Manager', jobDescription: '' }).hardReasons
-      ).toContain('ic_only_title');
+      ).toContain('no_management_scope_signal');
     });
 
     it('does not knock out Director/Engineering title variants with non-canonical word order or punctuation', () => {
       for (const title of ['Engineering Director', 'Director, Engineering', 'Director of Software Engineering']) {
         expect(
           evaluateJobKnockout({ title, jobDescription: '' }).hardReasons
-        ).not.toContain('ic_only_title');
+        ).not.toContain('no_management_scope_signal');
       }
     });
 
@@ -127,7 +127,7 @@ describe('evaluateJobKnockout', () => {
         title: 'Engineering Lead',
         jobDescription: 'Lead a small team, hands-on and people management mixed.',
       });
-      expect(result.hardReasons).toContain('ic_only_title');
+      expect(result.hardReasons).toContain('no_management_scope_signal');
     });
 
     it('knocks out a numbered IC level with no management/VP signal', () => {
@@ -136,7 +136,7 @@ describe('evaluateJobKnockout', () => {
         jobDescription: 'Build and operate our distributed data platform.',
       });
       expect(result.knockedOut).toBe(true);
-      expect(result.hardReasons).toContain('ic_only_title');
+      expect(result.hardReasons).toContain('no_management_scope_signal');
     });
 
     it('knocks out a non-technical title with no management/VP signal', () => {
@@ -145,7 +145,7 @@ describe('evaluateJobKnockout', () => {
         jobDescription: 'Provide administrative support to the Ads Platform Engineering org.',
       });
       expect(result.knockedOut).toBe(true);
-      expect(result.hardReasons).toContain('ic_only_title');
+      expect(result.hardReasons).toContain('no_management_scope_signal');
     });
 
     it('does not knock out an Engineering Manager title even for a non-US / international role', () => {
@@ -408,7 +408,7 @@ describe('evaluateJobKnockout', () => {
       });
       expect(result.knockedOut).toBe(true);
       expect(result.hardReasons).toEqual(
-        expect.arrayContaining(['ic_only_title', 'onsite_only_no_remote_path', 'clearance_required'])
+        expect.arrayContaining(['no_management_scope_signal', 'onsite_only_no_remote_path', 'clearance_required'])
       );
     });
 
@@ -432,7 +432,7 @@ describe('evaluateJobKnockout', () => {
         jobDescription: 'Lead the platform engineering team.',
       });
       expect(result.knockedOut).toBe(true);
-      expect(result.hardReasons).toContain('ic_only_title');
+      expect(result.hardReasons).toContain('no_management_scope_signal');
     });
   });
 });

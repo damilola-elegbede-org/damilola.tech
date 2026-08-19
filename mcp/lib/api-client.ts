@@ -1,3 +1,9 @@
+import type {
+  HardKnockoutReason,
+  SoftPenaltyReason,
+  StretchFlag,
+} from '@/lib/job-knockout';
+
 interface AssessFitResponse {
   assessment: string;
   model: string;
@@ -60,9 +66,9 @@ interface ScoreResumeResponse {
 
 interface JobKnockoutInfo {
   knockedOut: boolean;
-  hardReasons: string[];
-  softPenalties: string[];
-  stretchFlags: string[];
+  hardReasons: HardKnockoutReason[];
+  softPenalties: SoftPenaltyReason[];
+  stretchFlags: StretchFlag[];
 }
 
 interface ScoreJobResponse extends Omit<ScoreResumeResponse, 'recommendation'> {

@@ -224,6 +224,65 @@ describe('POST /api/v1/score-job', () => {
   });
 
   describe('success', () => {
+    it('returns a zero-score knockout without calling AI and audits its reasons', async () => {
+      const knockoutBody = {
+        ...validBody,
+        title: 'Software Engineer',
+      };
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest(knockoutBody));
+      const data = await response.json() as {
+        success: boolean;
+        data: {
+          currentScore: { total: number };
+          recommendation: string;
+          knockout: { knockedOut: boolean; hardReasons: string[] };
+        };
+      };
+
+      expect(response.status).toBe(200);
+      expect(data.success).toBe(true);
+      expect(data.data.recommendation).toBe('knocked_out');
+      expect(data.data.currentScore.total).toBe(0);
+      expect(data.data.knockout).toEqual(expect.objectContaining({
+        knockedOut: true,
+        hardReasons: expect.arrayContaining(['no_management_scope_signal']),
+      }));
+      expect(mockCreate).not.toHaveBeenCalled();
+      expect(mockLogApiAccess).toHaveBeenCalledWith(
+        'api_score_job',
+        mockValidApiKey.apiKey,
+        expect.objectContaining({
+          recommendation: 'knocked_out',
+          knockoutReasons: ['no_management_scope_signal'],
+        }),
+        '127.0.0.1'
+      );
+    });
+
+    it('includes soft penalties in the knockout object for a role that is scored', async () => {
+      mockResolveJobDescriptionInput.mockResolvedValue({
+        text: 'Senior Engineering Manager role. Base salary is $220,000.',
+        inputType: 'url',
+        extractedUrl: validBody.url,
+      });
+
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest(validBody));
+      const data = await response.json() as {
+        data: { knockout: { knockedOut: boolean; softPenalties: string[] } };
+      };
+
+      expect(response.status).toBe(200);
+      expect(data.data.knockout).toEqual({
+        knockedOut: false,
+        hardReasons: [],
+        softPenalties: ['comp_below_floor'],
+        stretchFlags: [],
+      });
+      expect(mockCreate).toHaveBeenCalledTimes(1);
+    });
+
     it('returns 200 with company, title, url, and scoring fields', async () => {
       const { POST } = await import('@/app/api/v1/score-job/route');
       const response = await POST(makeRequest(validBody));

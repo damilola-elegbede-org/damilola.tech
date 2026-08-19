@@ -1203,7 +1203,7 @@ Score a job posting against Damilola's resume. Returns a readiness score, keywor
 | `strong_fit` | Gap < 5 points |
 | `knocked_out` | Rejected by the knockout gate before scoring ran — see `knockout` below. `currentScore.total` and `maxPossibleScore` are both `0` and are not a genuine low readiness score. |
 
-**Knockout gate (ENG-1564):** applied before scoring. A role is knocked out (skips scoring entirely) when the posting text indicates an IC-only title (Staff/Principal/Distinguished with no management scope), a fully on-site role with no remote/hybrid path, or a clearance requirement. Every response — knocked out or not — includes a `knockout` object:
+**Knockout gate (ENG-1564):** applied before scoring. A role is knocked out (skips scoring entirely) when its title has no recognized management or VP signal, the posting describes a fully on-site role with no remote/hybrid path, or it has a clearance requirement. Recognized management signals are `engineering manager`, `em`, `director` followed by optional `of` and up to one domain word before `engineering`, `engineering director`, `head of engineering`, `head of platform`, `senior engineering manager`/`sr. engineering manager`, `group engineering manager`, `senior manager`, and `sr. manager`; VP signals are `vp` and `vice president`. Every response — knocked out or not — includes a `knockout` object:
 
 ```json
 "knockout": {
@@ -1214,7 +1214,7 @@ Score a job posting against Damilola's resume. Returns a readiness score, keywor
 }
 ```
 
-`hardReasons` (any of `ic_only_title`, `onsite_only_no_remote_path`, `clearance_required`) drive `knockedOut`. `softPenalties` (currently only `comp_below_floor`, base salary under $230K) are informational and do not affect `knockedOut` or the score. `stretchFlags` (currently only `vp_stretch`) flag a role worth a second look without penalizing it.
+`hardReasons` (any of `no_management_scope_signal`, `onsite_only_no_remote_path`, `clearance_required`) drive `knockedOut`. `softPenalties` (currently only `comp_below_floor`, base salary under $230K) are informational and do not affect `knockedOut` or the score. `stretchFlags` (currently only `vp_stretch`) flag a role worth a second look without penalizing it.
 
 When the job posting is client-side-rendered and text cannot be extracted, the response includes `"emptyShellFallback": true` and scoring is based on title, company, and URL slug keywords only.
 

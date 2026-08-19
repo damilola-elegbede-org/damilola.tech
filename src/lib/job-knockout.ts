@@ -41,7 +41,7 @@ export interface JobKnockoutInput {
 }
 
 export type HardKnockoutReason =
-  | 'ic_only_title'
+  | 'no_management_scope_signal'
   | 'onsite_only_no_remote_path'
   | 'clearance_required';
 
@@ -236,7 +236,7 @@ export function evaluateJobKnockout(input: JobKnockoutInput): JobKnockoutResult 
   const stretchFlags: StretchFlag[] = [];
 
   const { isIcOnly, isVpStretch } = classifyTitle(title);
-  if (isIcOnly) hardReasons.push('ic_only_title');
+  if (isIcOnly) hardReasons.push('no_management_scope_signal');
   if (isVpStretch) stretchFlags.push('vp_stretch');
 
   if (checkOnsiteOnly(jobDescription)) hardReasons.push('onsite_only_no_remote_path');
