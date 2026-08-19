@@ -156,6 +156,21 @@ describe('evaluateRoleFit — gate mechanics', () => {
     );
     expect(result.gateFailed).toContain('G3_function_exclusion');
   });
+
+  it('a comma-qualified management title is not G1-rejected (ENG-1564 Codex P1)', () => {
+    // "Manager, Software Engineering" splits into head="manager" — the
+    // G1_TITLE_PATTERN's "manager,?\s*(software|...)" alternative must be
+    // tested against the full normalized title, not head alone, or this
+    // genuine management title is silently zero-scored.
+    const result = evaluateRoleFit(
+      {
+        title: 'Manager, Software Engineering',
+        jobDescription: 'Lead a team of engineers building our core platform.',
+      },
+      'Acme Corp'
+    );
+    expect(result.gateFailed).not.toContain('G1_no_mgmt_signal');
+  });
 });
 
 describe('evaluateRoleFit — comp scoring', () => {

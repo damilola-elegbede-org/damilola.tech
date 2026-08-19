@@ -272,11 +272,16 @@ function evaluateGates(input: RoleFitInput): GateResult {
   const failed: GateFailedReason[] = [];
   const evidence: Record<string, string> = {};
 
-  const hasG1TitleMatch = G1_TITLE_PATTERN.test(head);
-  const g1Ok = g1Passes(head, jobDescription);
+  // Tested against the pre-split normalized title, not just `head` — G1_TITLE_PATTERN's
+  // own `manager,?\s*(software|...)` alternative exists to match comma-qualified titles
+  // like "Manager, Software Engineering", but the head/tail split (line 79) already moved
+  // everything after the first comma into `tail` by this point, so testing against `head`
+  // alone made that alternative permanently dead code (ENG-1564 Codex P1 finding).
+  const hasG1TitleMatch = G1_TITLE_PATTERN.test(normalized);
+  const g1Ok = g1Passes(normalized, jobDescription);
   if (!g1Ok) {
     failed.push('G1_no_mgmt_signal');
-    evidence.G1_no_mgmt_signal = `no management-title match in head="${head}" and body fallback signals < 2`;
+    evidence.G1_no_mgmt_signal = `no management-title match in title="${normalized}" and body fallback signals < 2`;
   }
 
   // G2 short-circuits on a G1 title match — never IC-rejects a management title.
