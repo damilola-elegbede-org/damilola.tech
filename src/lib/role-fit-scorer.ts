@@ -271,10 +271,24 @@ function locationSources(tail: string, jobDescription: string, structuredLocatio
   return [structuredLocation ?? '', tail, jobDescription.slice(0, 1500)].join(' ').toLowerCase();
 }
 
-/** G5 accepts explicitly US-scoped remote work, not generic remote language. */
+/**
+ * G5 accepts explicitly US-scoped, genuinely remote work — not a hybrid role that merely
+ * mentions "remote-eligible"/"remote-friendly" alongside a US token. D's ruling names this
+ * exact case: a role anchored hybrid in Santa Clara or Austin does not pass, even when the
+ * JD separately states "US" and describes itself as remote-eligible for the right candidate.
+ */
 function isRemoteUS(jobDescription: string, tail: string, structuredLocation?: string): boolean {
   const source = locationSources(tail, jobDescription, structuredLocation);
-  return /\bremote\b/.test(source) && /\b(?:us|usa|united states|us-based)\b|\bu\.s\.(?=\W|$)/.test(source);
+  const hasUsToken = /\b(?:us|usa|united states|us-based)\b|\bu\.s\.(?=\W|$)/.test(source);
+  if (!hasUsToken) return false;
+
+  const hasStrongRemoteSignal = /\bfully remote\b|\b100%\s*remote\b|\bremote[- ]first\b|\bremote\s*\(us\)|\bus[- ]remote\b|\bremote\s*-\s*(?:us|united states)\b/.test(source);
+  if (hasStrongRemoteSignal) return true;
+
+  const isHedgedOrHybrid = /\bhybrid\b|\bremote[- ]eligible\b|\bremote[- ]friendly\b|\bremote[- ]optional\b/.test(source);
+  if (isHedgedOrHybrid) return false;
+
+  return /\bremote\b/.test(source);
 }
 
 function isBoulderColorado(jobDescription: string, tail: string, structuredLocation?: string): boolean {

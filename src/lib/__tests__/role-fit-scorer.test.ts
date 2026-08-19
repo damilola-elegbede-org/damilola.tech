@@ -239,6 +239,16 @@ describe('evaluateRoleFit — amended gates and signal table', () => {
     expect(result.gateFailed).toContain('G5_location');
   });
 
+  it('G5 rejects a Santa Clara hybrid role even when it separately states a US token and hedges as remote-eligible', () => {
+    // D's named case: hybrid-at-a-non-Boulder-US-hub does not pass just because the JD also
+    // says "US" somewhere and describes itself as remote-eligible for the right candidate.
+    const jobDescription =
+      'This hybrid role is based in our Santa Clara, CA office. We are a US company. ' +
+      'Remote-eligible for the right candidate. Lead a team of engineers.';
+    const result = evaluateRoleFit({ title: manager, jobDescription }, 'Acme');
+    expect(result.gateFailed).toContain('G5_location');
+  });
+
   it('G5 and G6 both fail open when their inputs are unknown', () => {
     const result = evaluateRoleFit({ title: manager, jobDescription: 'Lead a team of engineers.' }, 'Acme');
     expect(result.gateFailed).not.toContain('G5_location');
