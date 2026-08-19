@@ -72,8 +72,8 @@ const mockValidApiKey = {
 };
 
 const validBody = {
-  url: 'https://example.com/jobs/senior-engineer',
-  title: 'Senior Software Engineer',
+  url: 'https://example.com/jobs/senior-engineering-manager',
+  title: 'Senior Engineering Manager',
   company: 'Acme Corp',
 };
 
@@ -111,14 +111,14 @@ describe('POST /api/v1/score-job', () => {
     mockRequireApiKey.mockResolvedValue(mockValidApiKey);
     mockCheckGenericRateLimit.mockResolvedValue({ limited: false, remaining: 9 });
     mockResolveJobDescriptionInput.mockResolvedValue({
-      text: 'Senior Software Engineer at Acme Corp. TypeScript, Node.js required.',
+      text: 'Senior Engineering Manager at Acme Corp. TypeScript, Node.js required.',
       inputType: 'url',
-      extractedUrl: 'https://example.com/jobs/senior-engineer',
+      extractedUrl: 'https://example.com/jobs/senior-engineering-manager',
     });
     mockResolvePreFetchedJobDescription.mockReturnValue({
-      text: 'Senior Software Engineer at Acme Corp. TypeScript, Node.js required. Responsibilities include API design.',
+      text: 'Senior Engineering Manager at Acme Corp. TypeScript, Node.js required. Responsibilities include API design.',
       inputType: 'content',
-      extractedUrl: 'https://example.com/jobs/senior-engineer',
+      extractedUrl: 'https://example.com/jobs/senior-engineering-manager',
     });
     mockBuildScoringInput.mockReturnValue({ readinessScore: { total: 75, breakdown: {}, details: {} } });
     mockBuildScorePayload.mockReturnValue(mockScore);
@@ -251,6 +251,65 @@ describe('POST /api/v1/score-job', () => {
   });
 
   describe('success', () => {
+    it('returns a zero-score knockout without calling AI and audits its reasons', async () => {
+      const knockoutBody = {
+        ...validBody,
+        title: 'Software Engineer',
+      };
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest(knockoutBody));
+      const data = await response.json() as {
+        success: boolean;
+        data: {
+          currentScore: { total: number };
+          recommendation: string;
+          knockout: { knockedOut: boolean; hardReasons: string[] };
+        };
+      };
+
+      expect(response.status).toBe(200);
+      expect(data.success).toBe(true);
+      expect(data.data.recommendation).toBe('knocked_out');
+      expect(data.data.currentScore.total).toBe(0);
+      expect(data.data.knockout).toEqual(expect.objectContaining({
+        knockedOut: true,
+        hardReasons: expect.arrayContaining(['no_management_scope_signal']),
+      }));
+      expect(mockCreate).not.toHaveBeenCalled();
+      expect(mockLogApiAccess).toHaveBeenCalledWith(
+        'api_score_job',
+        mockValidApiKey.apiKey,
+        expect.objectContaining({
+          recommendation: 'knocked_out',
+          knockoutReasons: ['no_management_scope_signal'],
+        }),
+        '127.0.0.1'
+      );
+    });
+
+    it('includes soft penalties in the knockout object for a role that is scored', async () => {
+      mockResolveJobDescriptionInput.mockResolvedValue({
+        text: 'Senior Engineering Manager role. Base salary is $220,000.',
+        inputType: 'url',
+        extractedUrl: validBody.url,
+      });
+
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest(validBody));
+      const data = await response.json() as {
+        data: { knockout: { knockedOut: boolean; softPenalties: string[] } };
+      };
+
+      expect(response.status).toBe(200);
+      expect(data.data.knockout).toEqual({
+        knockedOut: false,
+        hardReasons: [],
+        softPenalties: ['comp_below_floor'],
+        stretchFlags: [],
+      });
+      expect(mockCreate).toHaveBeenCalledTimes(1);
+    });
+
     it('returns 200 with company, title, url, and scoring fields', async () => {
       const { POST } = await import('@/app/api/v1/score-job/route');
       const response = await POST(makeRequest(validBody));
@@ -259,8 +318,8 @@ describe('POST /api/v1/score-job', () => {
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
       expect(data.data.company).toBe('Acme Corp');
-      expect(data.data.title).toBe('Senior Software Engineer');
-      expect(data.data.url).toBe('https://example.com/jobs/senior-engineer');
+      expect(data.data.title).toBe('Senior Engineering Manager');
+      expect(data.data.url).toBe('https://example.com/jobs/senior-engineering-manager');
       expect(data.data.currentScore).toBeDefined();
       expect(data.data.maxPossibleScore).toBeDefined();
       expect(data.data.gapAnalysis).toBe('Strong fit.');
@@ -271,7 +330,7 @@ describe('POST /api/v1/score-job', () => {
       const { POST } = await import('@/app/api/v1/score-job/route');
       await POST(makeRequest(validBody));
       expect(mockResolveJobDescriptionInput).toHaveBeenCalledWith(
-        'https://example.com/jobs/senior-engineer',
+        'https://example.com/jobs/senior-engineering-manager',
         expect.any(String)
       );
     });
@@ -284,7 +343,7 @@ describe('POST /api/v1/score-job', () => {
         mockValidApiKey.apiKey,
         expect.objectContaining({
           company: 'Acme Corp',
-          title: 'Senior Software Engineer',
+          title: 'Senior Engineering Manager',
         }),
         '127.0.0.1'
       );
@@ -339,7 +398,7 @@ describe('POST /api/v1/score-job', () => {
       }));
       expect(mockResolvePreFetchedJobDescription).toHaveBeenCalledWith(
         'Plain text responsibilities and qualifications for the role.',
-        'https://example.com/jobs/senior-engineer'
+        'https://example.com/jobs/senior-engineering-manager'
       );
     });
 

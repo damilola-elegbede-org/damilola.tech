@@ -21,6 +21,7 @@ import {
   extractTextContent,
   parseJsonResponse,
 } from '@/lib/score-core';
+import { evaluateJobKnockout } from '@/lib/job-knockout';
 
 export const runtime = 'nodejs';
 
@@ -148,6 +149,48 @@ export async function POST(req: Request) {
         })
       : resolvedInput.text;
 
+    // ENG-1564: hard/soft must-have gate, applied BEFORE scoring. Knocked-out
+    // roles skip the scoring call entirely (cost + latency win, on top of
+    // being the correct semantics — a role D can't take regardless of fit
+    // quality shouldn't consume an Opus call to prove it scores well).
+    const knockout = evaluateJobKnockout({ title: normalizedTitle, jobDescription: scoringText });
+
+    if (knockout.knockedOut) {
+      logApiAccess('api_score_job', authResult.apiKey, {
+        company: normalizedCompany,
+        title: normalizedTitle,
+        url: normalizedUrl,
+        inputType: resolvedInput.inputType,
+        extractedUrl: resolvedInput.extractedUrl,
+        emptyShell: resolvedInput.isEmptyShell === true,
+        currentScore: 0,
+        maxPossibleScore: 0,
+        recommendation: 'knocked_out',
+        knockoutReasons: knockout.hardReasons,
+      }, ip).catch((error) => {
+        console.warn('[api/v1/score-job] Failed to log audit:', error);
+      });
+
+      return apiSuccess({
+        company: normalizedCompany,
+        title: normalizedTitle,
+        url: normalizedUrl,
+        currentScore: {
+          total: 0,
+          breakdown: { roleRelevance: 0, claritySkimmability: 0, businessImpact: 0, presentationQuality: 0 },
+          matchedKeywords: [],
+          missingKeywords: [],
+          matchRate: 0,
+          keywordDensity: 0,
+        },
+        maxPossibleScore: 0,
+        gapAnalysis: `Knocked out before scoring: ${knockout.hardReasons.join(', ')}.`,
+        recommendation: 'knocked_out',
+        knockout,
+        ...(resolvedInput.isEmptyShell ? { emptyShellFallback: true } : {}),
+      });
+    }
+
     const { readinessScore } = buildScoringInput(scoringText);
     const currentScore = buildScorePayload(readinessScore);
 
@@ -219,6 +262,11 @@ export async function POST(req: Request) {
       maxPossibleScore,
       gapAnalysis,
       recommendation,
+      // Not knocked out here (the knockedOut branch returns earlier), but
+      // still surfaced so callers can read soft penalties (e.g. comp below
+      // floor) without a second round-trip. Score-adjustment on soft
+      // penalties is not implemented yet — tracked as ENG-1564 follow-up.
+      knockout,
       ...(resolvedInput.isEmptyShell ? { emptyShellFallback: true } : {}),
       ...(interviewPrepQuestions ? { interviewPrepQuestions } : {}),
     });
