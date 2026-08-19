@@ -2,12 +2,19 @@
  * Job Knockout Gate — Unit Tests
  *
  * Rules per Clara Nova's DD ruling (Linear ENG-1564, 2026-08-10, Slack #clara-dara):
- *  - Hard knockouts: IC-only titles, fully on-site with zero remote/hybrid path,
+ *  - Hard knockouts: fully on-site with zero remote/hybrid path,
  *    clearance-required roles, and out-of-scope (below EM) management level.
  *  - Soft penalty (not a knockout): base comp below $230K.
  *  - In-lane titles: Director of Eng, Head of Eng/Platform, Sr EM, Group EM,
- *    manager-of-managers Sr Manager. Stretch: VP Eng. Hard-out: any IC title
- *    (Staff/Principal/Distinguished).
+ *    manager-of-managers Sr Manager. Stretch: VP Eng.
+ *
+ * Title default inverted per D's ruling, 2026-08-18 (Linear ENG-1564 comment,
+ * 2026-08-19): the narrow explicit-IC-word list let numbered IC levels
+ * ("Distributed Systems Engineer 4") and non-technical titles ("Admin
+ * Assistant") pass through unflagged into the scorer, outranking genuine
+ * EM-fit roles. Design (b) — any title that does not carry an explicit
+ * management/VP signal is knocked out, not just titles matching an explicit
+ * IC-level keyword.
  *
  * Applied BEFORE scoring — this is the one place keyword matching is
  * evidence-backed to earn its keep (ConFit v2 hybrid design, ACL 2025).
@@ -107,12 +114,54 @@ describe('evaluateJobKnockout', () => {
       ).toContain('ic_only_title');
     });
 
-    it('does not hard-knock an unclear/ambiguous title on title alone', () => {
+    it('knocks out an unclear/ambiguous title with no explicit management signal (inverted default)', () => {
       const result = evaluateJobKnockout({
         title: 'Engineering Lead',
         jobDescription: 'Lead a small team, hands-on and people management mixed.',
       });
-      expect(result.hardReasons).not.toContain('ic_only_title');
+      expect(result.hardReasons).toContain('ic_only_title');
+    });
+
+    it('knocks out a numbered IC level with no management/VP signal', () => {
+      const result = evaluateJobKnockout({
+        title: 'Distributed Systems Engineer 4 - Data Platform',
+        jobDescription: 'Build and operate our distributed data platform.',
+      });
+      expect(result.knockedOut).toBe(true);
+      expect(result.hardReasons).toContain('ic_only_title');
+    });
+
+    it('knocks out a non-technical title with no management/VP signal', () => {
+      const result = evaluateJobKnockout({
+        title: 'Admin Assistant, Ads Platform Engineering',
+        jobDescription: 'Provide administrative support to the Ads Platform Engineering org.',
+      });
+      expect(result.knockedOut).toBe(true);
+      expect(result.hardReasons).toContain('ic_only_title');
+    });
+
+    it('does not knock out an Engineering Manager title even for a non-US / international role', () => {
+      const result = evaluateJobKnockout({
+        title: 'Engineering Manager, Enterprise',
+        jobDescription: 'Lead the Enterprise engineering team.',
+      });
+      expect(result.knockedOut).toBe(false);
+    });
+
+    it('does not knock out Group Engineering Manager', () => {
+      const result = evaluateJobKnockout({
+        title: 'Group Engineering Manager',
+        jobDescription: 'Own outcomes across 3 engineering teams via their managers.',
+      });
+      expect(result.knockedOut).toBe(false);
+    });
+
+    it('does not knock out a manager-of-managers Senior Manager title', () => {
+      const result = evaluateJobKnockout({
+        title: 'Senior Manager, Platform Engineering',
+        jobDescription: 'Manage a team of engineering managers.',
+      });
+      expect(result.knockedOut).toBe(false);
     });
   });
 
@@ -369,12 +418,13 @@ describe('evaluateJobKnockout', () => {
       expect(result.hardReasons).toEqual([]);
     });
 
-    it('handles a missing title without throwing', () => {
+    it('handles a missing title without throwing (inverted default knocks it out — no management signal)', () => {
       const result = evaluateJobKnockout({
         title: '',
         jobDescription: 'Lead the platform engineering team.',
       });
-      expect(result.knockedOut).toBe(false);
+      expect(result.knockedOut).toBe(true);
+      expect(result.hardReasons).toContain('ic_only_title');
     });
   });
 });

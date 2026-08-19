@@ -69,8 +69,8 @@ const mockValidApiKey = {
 };
 
 const validBody = {
-  url: 'https://example.com/jobs/senior-engineer',
-  title: 'Senior Software Engineer',
+  url: 'https://example.com/jobs/senior-engineering-manager',
+  title: 'Senior Engineering Manager',
   company: 'Acme Corp',
 };
 
@@ -108,14 +108,14 @@ describe('POST /api/v1/score-job', () => {
     mockRequireApiKey.mockResolvedValue(mockValidApiKey);
     mockCheckGenericRateLimit.mockResolvedValue({ limited: false, remaining: 9 });
     mockResolveJobDescriptionInput.mockResolvedValue({
-      text: 'Senior Software Engineer at Acme Corp. TypeScript, Node.js required.',
+      text: 'Senior Engineering Manager at Acme Corp. TypeScript, Node.js required.',
       inputType: 'url',
-      extractedUrl: 'https://example.com/jobs/senior-engineer',
+      extractedUrl: 'https://example.com/jobs/senior-engineering-manager',
     });
     mockResolvePreFetchedJobDescription.mockReturnValue({
-      text: 'Senior Software Engineer at Acme Corp. TypeScript, Node.js required. Responsibilities include API design.',
+      text: 'Senior Engineering Manager at Acme Corp. TypeScript, Node.js required. Responsibilities include API design.',
       inputType: 'content',
-      extractedUrl: 'https://example.com/jobs/senior-engineer',
+      extractedUrl: 'https://example.com/jobs/senior-engineering-manager',
     });
     mockBuildScoringInput.mockReturnValue({ readinessScore: { total: 75, breakdown: {}, details: {} } });
     mockBuildScorePayload.mockReturnValue(mockScore);
@@ -232,8 +232,8 @@ describe('POST /api/v1/score-job', () => {
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
       expect(data.data.company).toBe('Acme Corp');
-      expect(data.data.title).toBe('Senior Software Engineer');
-      expect(data.data.url).toBe('https://example.com/jobs/senior-engineer');
+      expect(data.data.title).toBe('Senior Engineering Manager');
+      expect(data.data.url).toBe('https://example.com/jobs/senior-engineering-manager');
       expect(data.data.currentScore).toBeDefined();
       expect(data.data.maxPossibleScore).toBeDefined();
       expect(data.data.gapAnalysis).toBe('Strong fit.');
@@ -244,7 +244,7 @@ describe('POST /api/v1/score-job', () => {
       const { POST } = await import('@/app/api/v1/score-job/route');
       await POST(makeRequest(validBody));
       expect(mockResolveJobDescriptionInput).toHaveBeenCalledWith(
-        'https://example.com/jobs/senior-engineer',
+        'https://example.com/jobs/senior-engineering-manager',
         expect.any(String)
       );
     });
@@ -257,7 +257,7 @@ describe('POST /api/v1/score-job', () => {
         mockValidApiKey.apiKey,
         expect.objectContaining({
           company: 'Acme Corp',
-          title: 'Senior Software Engineer',
+          title: 'Senior Engineering Manager',
         }),
         '127.0.0.1'
       );
@@ -312,7 +312,7 @@ describe('POST /api/v1/score-job', () => {
       }));
       expect(mockResolvePreFetchedJobDescription).toHaveBeenCalledWith(
         'Plain text responsibilities and qualifications for the role.',
-        'https://example.com/jobs/senior-engineer'
+        'https://example.com/jobs/senior-engineering-manager'
       );
     });
 

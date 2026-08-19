@@ -11,14 +11,22 @@
  *
  * Rules per Clara Nova's DD ruling (fit-criteria owner; Dara owns
  * implementation) — Linear ENG-1564 comment, 2026-08-10:
- *  - Hard knockout: IC-only title (Staff/Principal/Distinguished, no
- *    management scope) — no exceptions.
  *  - Hard knockout: fully on-site with zero remote/hybrid path. NOT
  *    "not Denver" alone — an SF/Seattle 25%-hybrid req stays in-lane.
  *  - Hard knockout: clearance-required (D holds none, not pursuing one).
  *  - Scope floor: EM / Sr EM / Director Eng. A straight EM req is in-lane.
  *    VP Eng is a stretch, flagged but not knocked out.
  *  - Soft penalty (NOT a knockout): base comp below $230K.
+ *
+ *  - Hard knockout: title-default inverted (D ruling, 2026-08-18; Linear
+ *    ENG-1564 comment 2026-08-19). The original design required an explicit
+ *    IC-level keyword (Staff/Principal/Distinguished) to knock a title out,
+ *    which let numbered IC levels ("Distributed Systems Engineer 4") and
+ *    non-technical titles ("Admin Assistant") pass through unflagged into
+ *    the scorer — both outranked genuine EM-fit roles on live telemetry
+ *    (edb-snapshot.json, n=137, max score 61 vs digest bar 80). Design (b):
+ *    any title with no explicit management/VP signal is knocked out, not
+ *    just titles matching an explicit IC keyword.
  *
  * This module is intentionally scoped to the knockout gate only. It does
  * not touch src/lib/readiness-scorer.ts (shared with /score-resume,
@@ -57,15 +65,6 @@ const MANAGEMENT_TITLE_PATTERN =
   /\b(engineering manager|em\b|director[- ]?(of)?\s*engineering|head of (engineering|platform)|senior engineering manager|sr\.?\s*engineering manager|group engineering manager|senior manager|sr\.?\s*manager)\b/i;
 
 const VP_TITLE_PATTERN = /\bvp\b|\bvice president\b/i;
-
-// Hard-out per Clara's ruling: "any IC title (Staff/Principal/Distinguished)".
-// The level word itself is the IC signal — Clara's ruling doesn't scope it to
-// "...Engineer" titles specifically, and titles like "Staff Software
-// Architect" or "Principal Product Manager" are exactly as IC-only as "Staff
-// Software Engineer". classifyTitle() below exempts any title that also
-// carries a management/VP signal (e.g. "Staff Engineering Manager"), so this
-// intentionally does not require an "Engineer" suffix.
-const IC_LEVEL_PATTERN = /\b(staff|principal|distinguished)\b|\bindividual contributor\b/i;
 
 const ONSITE_ONLY_PATTERN =
   /\b(100%\s*on[- ]?site|fully\s+on[- ]?site|fully\s+in[- ]?office|on[- ]?site\s+(only|required|five days|5 days)|no\s+remote\s+work|not\s+a\s+remote\s+(position|role)|in[- ]?office\s+(only|five days|5 days))\b/i;
@@ -132,11 +131,12 @@ function classifyTitle(title: string): {
 } {
   const isManagement = MANAGEMENT_TITLE_PATTERN.test(title);
   const isVpStretch = !isManagement && VP_TITLE_PATTERN.test(title);
-  // IC-only fires only when the title carries an IC signal and no
-  // management/VP signal — a title like "Staff Engineering Manager" (rare,
-  // some orgs use it for a senior IC-adjacent management role) should not
-  // be knocked out just because "staff" appears somewhere in the string.
-  const isIcOnly = IC_LEVEL_PATTERN.test(title) && !isManagement && !isVpStretch;
+  // Inverted default (design (b), D ruling 2026-08-18): any title that
+  // doesn't carry an explicit management/VP signal is IC-only, regardless of
+  // whether it also carries an explicit IC-level keyword. A title like
+  // "Staff Engineering Manager" is exempt because it matches
+  // MANAGEMENT_TITLE_PATTERN, not because it lacks an IC keyword.
+  const isIcOnly = !isManagement && !isVpStretch;
   return { isManagement, isIcOnly, isVpStretch };
 }
 
