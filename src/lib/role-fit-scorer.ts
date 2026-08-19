@@ -259,6 +259,7 @@ function resolveGeography(
 interface GateResult {
   failed: GateFailedReason[];
   evidence: Record<string, string>;
+  normalized: string;
   head: string;
   tail: string;
   geo: GeoVerdict;
@@ -301,24 +302,24 @@ function evaluateGates(input: RoleFitInput): GateResult {
     evidence.G4_geography = `tail="${tail}" resolves non-US with no US token present`;
   }
 
-  return { failed, evidence, head, tail, geo };
+  return { failed, evidence, normalized, head, tail, geo };
 }
 
 // ---------------------------------------------------------------------------
 // §3 — Stage B weighted signal table
 // ---------------------------------------------------------------------------
 
-function scoreLevel(head: string): number {
-  if (/\b(director|sr\.? director|senior director|head of engineering|head of platform engineering)\b/.test(head)) {
+function scoreLevel(title: string): number {
+  if (/\b(director|sr\.? director|senior director|head of engineering|head of platform engineering)\b/.test(title)) {
     return 24;
   }
-  if (/\b(senior engineering manager|sr\.?\s*manager,?\s*(software|engineering|platform|infrastructure)|group engineering manager|em ?2|m ?2)\b/.test(head)) {
+  if (/\b(senior engineering manager|sr\.?\s*manager,?\s*(software|engineering|platform|infrastructure)|group engineering manager|em ?2|m ?2)\b/.test(title)) {
     return 23;
   }
-  if (/\b(engineering manager|manager,?\s*software engineering)\b/.test(head)) {
+  if (/\b(engineering manager|manager,?\s*software engineering)\b/.test(title)) {
     return 21;
   }
-  if (/\bvp\s*(of\s*)?engineering|vice president,?\s*(of\s*)?engineering\b/.test(head)) {
+  if (/\bvp\s*(of\s*)?engineering|vice president,?\s*(of\s*)?engineering\b/.test(title)) {
     return 16;
   }
   return 12; // management signal present only via body fallback (G1 already confirmed it)
@@ -492,7 +493,7 @@ export function evaluateRoleFit(input: RoleFitInput, company: string): RoleFitRe
   }
 
   const jobDescription = input.jobDescription ?? '';
-  const level = scoreLevel(gates.head);
+  const level = scoreLevel(gates.normalized);
   const scope = scoreScope(jobDescription);
   const strategy = scoreStrategy(jobDescription);
   const impact = scoreImpact(jobDescription);

@@ -184,6 +184,21 @@ describe('evaluateRoleFit — gate mechanics', () => {
     );
     expect(result.gateFailed).not.toContain('G1_no_mgmt_signal');
   });
+
+  it('a comma-qualified management title scores the management level, not the fallback (CodeRabbit finding, ENG-1564)', () => {
+    // scoreLevel used to receive gates.head ("manager") instead of the full
+    // normalized title, so the "manager,?\s*software engineering" alternative
+    // could never match and the role silently fell back to the 12-point
+    // body-fallback tier instead of the 21-point engineering-manager tier.
+    const result = evaluateRoleFit(
+      {
+        title: 'Manager, Software Engineering',
+        jobDescription: 'Lead a team of engineers building our core platform.',
+      },
+      'Acme Corp'
+    );
+    expect(result.breakdown.level).toBe(21);
+  });
 });
 
 describe('evaluateRoleFit — comp scoring', () => {
