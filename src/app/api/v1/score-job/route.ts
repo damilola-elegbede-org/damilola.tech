@@ -15,13 +15,10 @@ import {
 } from '@/lib/job-description-input';
 import {
   scoringClient,
-  buildScorePayload,
-  buildScoringInput,
-  buildGapAnalysisPrompt,
   extractTextContent,
   parseJsonResponse,
 } from '@/lib/score-core';
-import { evaluateJobKnockout } from '@/lib/job-knockout';
+import { evaluateRoleFit } from '@/lib/role-fit-scorer';
 
 export const runtime = 'nodejs';
 
@@ -149,13 +146,16 @@ export async function POST(req: Request) {
         })
       : resolvedInput.text;
 
-    // ENG-1564: hard/soft must-have gate, applied BEFORE scoring. Knocked-out
-    // roles skip the scoring call entirely (cost + latency win, on top of
-    // being the correct semantics — a role D can't take regardless of fit
-    // quality shouldn't consume an Opus call to prove it scores well).
-    const knockout = evaluateJobKnockout({ title: normalizedTitle, jobDescription: scoringText });
+    // ENG-1564: hybrid knockout-gate + weighted signal scorer, replacing the
+    // keyword-density calculateReadinessScore() path for score-job only
+    // (score-resume/resume-generator keep the old scorer — see role-fit-scorer.ts
+    // header). Knocked-out roles skip the Opus call entirely (cost + latency
+    // win, on top of being the correct semantics — a role D can't take
+    // regardless of fit quality shouldn't consume an Opus call to prove it
+    // scores well).
+    const roleFit = evaluateRoleFit({ title: normalizedTitle, jobDescription: scoringText }, normalizedCompany);
 
-    if (knockout.knockedOut) {
+    if (roleFit.gateFailed.length > 0) {
       logApiAccess('api_score_job', authResult.apiKey, {
         company: normalizedCompany,
         title: normalizedTitle,
@@ -166,7 +166,7 @@ export async function POST(req: Request) {
         currentScore: 0,
         maxPossibleScore: 0,
         recommendation: 'knocked_out',
-        knockoutReasons: knockout.hardReasons,
+        knockoutReasons: roleFit.gateFailed,
       }, ip).catch((error) => {
         console.warn('[api/v1/score-job] Failed to log audit:', error);
       });
@@ -177,24 +177,37 @@ export async function POST(req: Request) {
         url: normalizedUrl,
         currentScore: {
           total: 0,
-          breakdown: { roleRelevance: 0, claritySkimmability: 0, businessImpact: 0, presentationQuality: 0 },
-          matchedKeywords: [],
-          missingKeywords: [],
-          matchRate: 0,
-          keywordDensity: 0,
+          breakdown: roleFit.breakdown,
         },
         maxPossibleScore: 0,
-        gapAnalysis: `Knocked out before scoring: ${knockout.hardReasons.join(', ')}.`,
+        gapAnalysis: `Knocked out before scoring: ${roleFit.gateFailed.join(', ')}.`,
         recommendation: 'knocked_out',
-        knockout,
+        knockout: {
+          knockedOut: true,
+          hardReasons: roleFit.gateFailed,
+          gateEvidence: roleFit.gateEvidence,
+        },
         ...(resolvedInput.isEmptyShell ? { emptyShellFallback: true } : {}),
       });
     }
 
-    const { readinessScore } = buildScoringInput(scoringText);
-    const currentScore = buildScorePayload(readinessScore);
+    const currentScore = { total: roleFit.score, breakdown: roleFit.breakdown };
 
-    const basePrompt = buildGapAnalysisPrompt(currentScore);
+    const basePrompt = [
+      'Analyze this role-fit score against the job description and return JSON only.',
+      '',
+      `Current score: ${currentScore.total}/100`,
+      `Signal breakdown: ${JSON.stringify(currentScore.breakdown)}`,
+      roleFit.locationUnknown ? 'Note: location could not be resolved from the posting (scored neutral).' : '',
+      '',
+      'Return exactly this JSON schema:',
+      '{"gapAnalysis":"2-3 short paragraphs","maxPossibleScore":0-100,"recommendation":"full_generation_recommended|marginal_improvement|strong_fit"}',
+      '',
+      'Recommendation logic:',
+      '- full_generation_recommended when gap > 15 points',
+      '- marginal_improvement when gap is 5-15 points',
+      '- strong_fit when gap < 5 points',
+    ].filter(Boolean).join('\n');
     const userContent = interviewPrepMode
       ? `${basePrompt}\n\nAdditionally, return exactly 5 "interviewPrepQuestions" in the JSON. Each must use behavioral framing — start with "Tell me about a time..." or "How would you approach...". Base questions on the top gap areas identified above.\n\nUpdated JSON schema: {"gapAnalysis":"...","maxPossibleScore":0-100,"recommendation":"...","interviewPrepQuestions":["Q1","Q2","Q3","Q4","Q5"]}\n\n<job_description>${xmlEscape(scoringText)}</job_description>`
       : `${basePrompt}\n\n<job_description>${xmlEscape(scoringText)}</job_description>`;
@@ -262,11 +275,8 @@ export async function POST(req: Request) {
       maxPossibleScore,
       gapAnalysis,
       recommendation,
-      // Not knocked out here (the knockedOut branch returns earlier), but
-      // still surfaced so callers can read soft penalties (e.g. comp below
-      // floor) without a second round-trip. Score-adjustment on soft
-      // penalties is not implemented yet — tracked as ENG-1564 follow-up.
-      knockout,
+      // Not knocked out here (the gateFailed branch returns earlier).
+      knockout: { knockedOut: false, hardReasons: [], gateEvidence: {} },
       ...(resolvedInput.isEmptyShell ? { emptyShellFallback: true } : {}),
       ...(interviewPrepQuestions ? { interviewPrepQuestions } : {}),
     });

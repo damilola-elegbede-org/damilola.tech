@@ -1,8 +1,4 @@
-import type {
-  HardKnockoutReason,
-  SoftPenaltyReason,
-  StretchFlag,
-} from '@/lib/job-knockout';
+import type { GateFailedReason, SignalBreakdown } from '@/lib/role-fit-scorer';
 
 interface AssessFitResponse {
   assessment: string;
@@ -66,19 +62,21 @@ interface ScoreResumeResponse {
 
 interface JobKnockoutInfo {
   knockedOut: boolean;
-  hardReasons: HardKnockoutReason[];
-  softPenalties: SoftPenaltyReason[];
-  stretchFlags: StretchFlag[];
+  hardReasons: GateFailedReason[];
+  gateEvidence: Record<string, string>;
 }
 
-interface ScoreJobResponse extends Omit<ScoreResumeResponse, 'recommendation'> {
+interface ScoreJobResponse {
   company: string;
   title: string;
   url: string;
-  // ENG-1564: 'knocked_out' means the knockout gate rejected this role before
-  // scoring ran (IC-only title, fully on-site with no remote path, or
-  // clearance-required) — currentScore/maxPossibleScore are both 0 in that
-  // case, not a genuine low readiness score. See `knockout` for the reasons.
+  currentScore: { total: number; breakdown: SignalBreakdown };
+  maxPossibleScore: number;
+  gapAnalysis: string;
+  // ENG-1564: 'knocked_out' means a hybrid knockout gate (G1-G4, see
+  // role-fit-scorer.ts) rejected this role before scoring ran —
+  // currentScore/maxPossibleScore are both 0 in that case, not a genuine low
+  // fit score. See `knockout` for the reasons.
   recommendation: 'full_generation_recommended' | 'marginal_improvement' | 'strong_fit' | 'knocked_out';
   knockout?: JobKnockoutInfo;
 }
