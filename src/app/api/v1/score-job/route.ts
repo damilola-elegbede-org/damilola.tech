@@ -70,7 +70,14 @@ export async function POST(req: Request) {
       return Errors.badRequest('Request body too large.');
     }
 
-    const rateLimit = await checkGenericRateLimit(RATE_LIMIT_CONFIGS.resumeGenerator, ip);
+    // ENG-1800: meter authenticated callers under their own tier, keyed by API
+    // key id. requireApiKey has already run above, so every caller here is a
+    // known first-party client — metering them in the anonymous IP-keyed
+    // `resumeGenerator` bucket put a batch client inside an abuse limit.
+    const rateLimit = await checkGenericRateLimit(
+      RATE_LIMIT_CONFIGS.scoreJobAuthenticated,
+      authResult.apiKey.id
+    );
     if (rateLimit.limited) {
       return Errors.rateLimited(rateLimit.retryAfter || 60);
     }

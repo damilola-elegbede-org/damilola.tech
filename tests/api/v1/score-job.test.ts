@@ -14,7 +14,10 @@ const mockCheckGenericRateLimit = vi.fn();
 vi.mock('@/lib/rate-limit', () => ({
   getClientIp: vi.fn().mockReturnValue('127.0.0.1'),
   checkGenericRateLimit: (...args: unknown[]) => mockCheckGenericRateLimit(...args),
-  RATE_LIMIT_CONFIGS: { resumeGenerator: {} },
+  RATE_LIMIT_CONFIGS: {
+    resumeGenerator: { key: 'resume-generator', limit: 100, windowSeconds: 3600 },
+    scoreJobAuthenticated: { key: 'score-job-authenticated', limit: 600, windowSeconds: 3600 },
+  },
 }));
 
 // Mock job-description-input
@@ -220,6 +223,30 @@ describe('POST /api/v1/score-job', () => {
       const { POST } = await import('@/app/api/v1/score-job/route');
       const response = await POST(makeRequest(validBody));
       expect(response.status).toBe(429);
+    });
+
+    // ENG-1800. score-job requires an API key (requireApiKey runs first), yet it
+    // was metered under `resumeGenerator` — a 100/hr bucket keyed by IP and shared
+    // with four other endpoints. A first-party authenticated batch client sat under
+    // an anonymous abuse limit and hit 429 partway through every full run.
+    it('meters under the authenticated score-job tier, not the shared resumeGenerator bucket', async () => {
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      await POST(makeRequest(validBody));
+
+      expect(mockCheckGenericRateLimit).toHaveBeenCalledTimes(1);
+      const [config] = mockCheckGenericRateLimit.mock.calls[0] as [{ key: string }];
+      expect(config.key).toBe('score-job-authenticated');
+    });
+
+    it('keys the limit on the API key id, so one caller cannot exhaust another', async () => {
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      await POST(makeRequest(validBody));
+
+      const [, identifier] = mockCheckGenericRateLimit.mock.calls[0] as [unknown, string];
+      // 'key-1' is mockValidApiKey.apiKey.id; '127.0.0.1' is the mocked client IP.
+      // Keying on IP is what let the whole fleet share one bucket from one machine.
+      expect(identifier).toBe('key-1');
+      expect(identifier).not.toBe('127.0.0.1');
     });
   });
 
