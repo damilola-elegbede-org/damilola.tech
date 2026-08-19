@@ -149,6 +149,19 @@ describe('evaluateRoleFit — gate mechanics', () => {
     expect(result.locationUnknown).toBe(true);
   });
 
+  it('a non-US location still gates G4 despite "Join us" in the body (CodeRabbit r3812945256)', () => {
+    const result = evaluateRoleFit(
+      {
+        title: 'Engineering Manager',
+        location: 'Warsaw, Poland',
+        jobDescription:
+          'Join us and help build great things. direct reports, people leadership, performance review, hiring plan.',
+      },
+      'Acme Corp'
+    );
+    expect(result.gateFailed).toContain('G4_geography');
+  });
+
   it('program manager without an engineering-management token is gated out', () => {
     const result = evaluateRoleFit(
       { title: 'Technical Program Manager, Platform', jobDescription: 'Coordinate cross-team programs.' },
