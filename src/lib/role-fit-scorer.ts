@@ -416,6 +416,9 @@ const IMPACT_CUSTOMER = /\bcustomers\b|\brevenue\b|\bbusiness impact\b|\bp&l\b|\
 const IMPACT_METRICS = /\blatency\b|\breliability\b|\buptime\b|\bdora\b|\bdeveloper velocity\b|\badoption rate\b|\bsla\b/;
 const SALARY_RANGE = /\$\s?(\d{1,3}(?:,\d{3})*)(k)?\s*(?:-|–|—|to)\s*\$?\s?(\d{1,3}(?:,\d{3})*)(k)?/gi;
 const SALARY_SINGLE = /\$\s?(\d{2,3}(?:,\d{3})?)(k)?/gi;
+const SALARY_RANGE_ISO_AT_START = /\b(\d{1,3}(?:,\d{3})*)(k)?\s*(?:USD|CAD|EUR|GBP)\b\s*(?:-|–|—|to)\s*(\d{1,3}(?:,\d{3})*)(k)?(?:\s*(?:USD|CAD|EUR|GBP)\b)?/gi;
+const SALARY_RANGE_ISO_AT_END = /\b(\d{1,3}(?:,\d{3})*)(k)?(?:\s*(?:USD|CAD|EUR|GBP)\b)?\s*(?:-|–|—|to)\s*(\d{1,3}(?:,\d{3})*)(k)?\s*(?:USD|CAD|EUR|GBP)\b/gi;
+const SALARY_SINGLE_ISO = /\b(\d{2,3}(?:,\d{3})?)(k)?\s*(?:USD|CAD|EUR|GBP)\b/gi;
 
 function parseAmount(digits: string, hasK: boolean): number | null {
   const numeric = Number(digits.replace(/,/g, ''));
@@ -425,25 +428,29 @@ function parseAmount(digits: string, hasK: boolean): number | null {
   return null;
 }
 
-function extractMaxStatedSalary(text: string): number | null {
+export function extractMaxStatedSalary(text: string): number | null {
   const values: number[] = [];
-  for (const [, sd, sk, ed, ek] of text.matchAll(SALARY_RANGE)) {
-    const startHasK = Boolean(sk);
-    const endRaw = Number(ed.replace(/,/g, ''));
-    const endHasK = Boolean(ek) || (startHasK && endRaw < 1000);
-    const s = parseAmount(sd, startHasK);
-    const e = parseAmount(ed, endHasK);
-    if (s !== null) values.push(s);
-    if (e !== null) values.push(e);
+  for (const pattern of [SALARY_RANGE, SALARY_RANGE_ISO_AT_START, SALARY_RANGE_ISO_AT_END]) {
+    for (const [, sd, sk, ed, ek] of text.matchAll(pattern)) {
+      const startHasK = Boolean(sk);
+      const endRaw = Number(ed.replace(/,/g, ''));
+      const endHasK = Boolean(ek) || (startHasK && endRaw < 1000);
+      const s = parseAmount(sd, startHasK);
+      const e = parseAmount(ed, endHasK);
+      if (s !== null) values.push(s);
+      if (e !== null) values.push(e);
+    }
   }
-  for (const [, d, k] of text.matchAll(SALARY_SINGLE)) {
-    const v = parseAmount(d, Boolean(k));
-    if (v !== null) values.push(v);
+  for (const pattern of [SALARY_SINGLE, SALARY_SINGLE_ISO]) {
+    for (const [, d, k] of text.matchAll(pattern)) {
+      const v = parseAmount(d, Boolean(k));
+      if (v !== null) values.push(v);
+    }
   }
   return values.length ? Math.max(...values) : null;
 }
 
-function scoreComp(max: number | null): number {
+export function scoreComp(max: number | null): number {
   if (max === null) return 7; // silence ties the lowest passing disclosed tier
   if (max >= 350_000) return 12;
   if (max >= 300_000) return 11;
