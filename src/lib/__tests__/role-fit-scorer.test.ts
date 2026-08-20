@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { evaluateRoleFit } from '../role-fit-scorer';
+import { evaluateRoleFit, extractMaxStatedSalary, scoreComp } from '../role-fit-scorer';
 
 describe('evaluateRoleFit — calibration anchors (spec §4)', () => {
   it("§4.1's SF/NYC hybrid role now fails the narrower G5 location gate", () => {
@@ -192,6 +192,43 @@ describe('evaluateRoleFit — gate mechanics', () => {
 });
 
 describe('evaluateRoleFit — comp scoring', () => {
+  it('parses NVIDIA-style ISO-suffixed salary ranges and awards the disclosed top tier', () => {
+    const salary = extractMaxStatedSalary('The base salary range is 224,000 USD - 356,500 USD.');
+
+    expect(salary).toBe(356_500);
+    expect(scoreComp(salary)).toBe(12);
+  });
+
+  it.each([
+    ['$224,000 - $356,500', 356_500],
+    ['$180k - $220k', 220_000],
+    ['$250,000', 250_000],
+  ])('preserves existing dollar-form parsing for %s', (text, expected) => {
+    expect(extractMaxStatedSalary(text)).toBe(expected);
+  });
+
+  it.each([
+    'Founded in 2019',
+    '2024 - 2025',
+    'JR1995883',
+    '40 engineers',
+    '50,000 employees',
+    '10,000 GPUs',
+    '25,000 hours',
+    '$999',
+  ])('does not treat non-salary text as compensation: %s', (text) => {
+    expect(extractMaxStatedSalary(text)).toBeNull();
+  });
+
+  it.each([
+    ['224,000 USD - 356,500 USD', 356_500],
+    ['224,000 USD - 356,500', 356_500],
+    ['224,000 - 356,500 USD', 356_500],
+    ['250,000 CAD', 250_000],
+  ])('accepts ISO markers on either range endpoint: %s', (text, expected) => {
+    expect(extractMaxStatedSalary(text)).toBe(expected);
+  });
+
   it('an absent comp band scores 7 and passes G6', () => {
     const result = evaluateRoleFit(
       { title: 'Engineering Manager', jobDescription: 'Lead a team of engineers. No comp stated.' },
