@@ -301,6 +301,92 @@ describe('evaluateRoleFit — amended gates and signal table', () => {
   });
 });
 
+describe('evaluateRoleFit — strategy phrase families (ENG-1971)', () => {
+  const manager = 'Engineering Manager';
+  const scoreStrategy = (jobDescription: string) =>
+    evaluateRoleFit({ title: manager, jobDescription }, 'Acme').breakdown.strategy;
+
+  it('recognises the JR1995883 strategy language without requiring literal legacy phrases', () => {
+    const jobDescription = `
+      Define and lead strategic technical initiatives, setting short- and long-term goals for your team.
+      Make technical design decisions and project plans.
+      Collaborate with research, hardware, and software teams.
+    `;
+
+    expect(scoreStrategy(jobDescription)).toBeGreaterThanOrEqual(9);
+  });
+
+  // Measured on 20 real NVIDIA JDs fetched from the Workday detail endpoint.
+  // The first broadening pass took IMPACT_METRICS to 19/20 (95%) on bare
+  // \bperformance\b and family 2 to 12/20 (60%) on bare \bplanning\b. A
+  // detector that fires on 95% of postings is a constant: it carries no
+  // information and silently adds a flat +5 to nearly every score, which would
+  // have been baked straight into the ENG-1972 thresholds. These pin the
+  // generic words OUT so a future "just add the obvious synonym" edit cannot
+  // quietly re-inflate the signal.
+  it.each([
+    ['bare "performance"', 'You will join a high-performance team and receive performance reviews.'],
+    ['bare "planning"', 'Attend sprint planning and other planning meetings.'],
+    ['bare "optimize"', 'Optimize your own workflow and learning.'],
+    ['bare "efficiency"', 'We value efficiency in everything we do.'],
+  ])('does not let %s alone act as a strategy or metrics signal', (_label, jobDescription) => {
+    expect(scoreStrategy(jobDescription)).toBe(0);
+  });
+
+  it('still credits performance work when it is stated as an outcome, not an adjective', () => {
+    // JR1995883's actual subject: "GPU accelerated AI performance optimizations".
+    expect(scoreStrategy('Drive performance optimizations across training and inference.')).toBeGreaterThan(0);
+  });
+
+  it('recognises paraphrased strategic-initiative language', () => {
+    expect(scoreStrategy('Define and lead strategic technical initiatives.')).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ['strategy / vision', 'Define strategic technical initiatives and set long-term goals.', 3],
+    ['roadmap / planning', 'Document technical design decisions and project plans.', 3],
+    ['cross-functional collaboration', 'Collaborate with research, hardware, and software teams.', 3],
+    ['org / process design', 'Define the operating model and team topology.', 3],
+  ])('scores the %s family independently', (_family, jobDescription, expected) => {
+    expect(scoreStrategy(jobDescription)).toBe(expected);
+  });
+
+  it.each([
+    ['strategy / vision', 'Implement APIs, review pull requests, and fix production bugs.'],
+    ['roadmap / planning', 'Implement APIs, review pull requests, and fix production bugs.'],
+    ['cross-functional collaboration', 'Implement APIs, review pull requests, and fix production bugs.'],
+    ['org / process design', 'Implement APIs, review pull requests, and fix production bugs.'],
+  ])('does not make the %s family a constant on a JD without its concepts', (_family, jobDescription) => {
+    expect(scoreStrategy(jobDescription)).toBe(0);
+  });
+
+  it('keeps a plainly IC implementation role low overall', () => {
+    const result = evaluateRoleFit(
+      {
+        title: 'Senior Software Engineer',
+        jobDescription: 'Implement APIs, review pull requests, and fix production bugs.',
+      },
+      'Acme'
+    );
+
+    expect(result.gateFailed).toContain('G2_ic_exclusion');
+    expect(result.score).toBe(0);
+  });
+
+  it('recognises performance-optimisation work as a metric outcome', () => {
+    const strategyOnly = scoreStrategy('Define strategic technical initiatives.');
+    const performanceOptimisation = scoreStrategy(
+      'Define strategic technical initiatives to optimize deep learning training and inference throughput.'
+    );
+
+    expect(performanceOptimisation).toBe(strategyOnly + 5);
+  });
+
+  it('does not infer a metric outcome when metric language is absent', () => {
+    expect(scoreStrategy('Define strategic technical initiatives for the platform.')).toBe(3);
+  });
+});
+
 describe('evaluateRoleFit — company remote posture', () => {
   const manager = 'Engineering Manager';
   const nonNegotiableSantaClara =
