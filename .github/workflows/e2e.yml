@@ -16,6 +16,7 @@ jobs:
     name: E2E (${{ matrix.project }})
     if: (github.event.deployment_status.state == 'success' && startsWith(github.event.deployment_status.environment, 'Production')) || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
