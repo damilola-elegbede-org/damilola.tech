@@ -25,6 +25,7 @@ jobs:
   consulting-e2e:
     name: Consulting E2E (PR gate)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:

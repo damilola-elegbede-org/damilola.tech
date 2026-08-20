@@ -15,13 +15,13 @@ import {
 } from '@/lib/job-description-input';
 import {
   scoringClient,
-  buildScorePayload,
-  buildScoringInput,
-  buildGapAnalysisPrompt,
   extractTextContent,
   parseJsonResponse,
+  buildGapAnalysisPrompt,
+  buildScorePayload,
+  buildScoringInput,
 } from '@/lib/score-core';
-import { evaluateJobKnockout } from '@/lib/job-knockout';
+import { evaluateRoleFit } from '@/lib/role-fit-scorer';
 
 export const runtime = 'nodejs';
 
@@ -149,13 +149,18 @@ export async function POST(req: Request) {
         })
       : resolvedInput.text;
 
-    // ENG-1564: hard/soft must-have gate, applied BEFORE scoring. Knocked-out
-    // roles skip the scoring call entirely (cost + latency win, on top of
-    // being the correct semantics — a role D can't take regardless of fit
-    // quality shouldn't consume an Opus call to prove it scores well).
-    const knockout = evaluateJobKnockout({ title: normalizedTitle, jobDescription: scoringText });
+    // ENG-1564: hybrid knockout-gate + weighted signal scorer runs alongside
+    // the readiness scorer. Knocked-out roles skip the Opus call entirely (cost + latency
+    // win, on top of being the correct semantics — a role D can't take
+    // regardless of fit quality shouldn't consume an Opus call to prove it
+    // scores well).
+    const roleFit = evaluateRoleFit({ title: normalizedTitle, jobDescription: scoringText }, normalizedCompany);
+    // Role fit decides whether D would take the role; readiness measures how
+    // well the current resume matches it. They deliberately remain separate.
+    const { readinessScore } = buildScoringInput(scoringText);
+    const currentScore = buildScorePayload(readinessScore);
 
-    if (knockout.knockedOut) {
+    if (roleFit.gateFailed.length > 0) {
       logApiAccess('api_score_job', authResult.apiKey, {
         company: normalizedCompany,
         title: normalizedTitle,
@@ -163,10 +168,10 @@ export async function POST(req: Request) {
         inputType: resolvedInput.inputType,
         extractedUrl: resolvedInput.extractedUrl,
         emptyShell: resolvedInput.isEmptyShell === true,
-        currentScore: 0,
+        currentScore: currentScore.total,
         maxPossibleScore: 0,
         recommendation: 'knocked_out',
-        knockoutReasons: knockout.hardReasons,
+        knockoutReasons: roleFit.gateFailed,
       }, ip).catch((error) => {
         console.warn('[api/v1/score-job] Failed to log audit:', error);
       });
@@ -175,24 +180,26 @@ export async function POST(req: Request) {
         company: normalizedCompany,
         title: normalizedTitle,
         url: normalizedUrl,
-        currentScore: {
-          total: 0,
-          breakdown: { roleRelevance: 0, claritySkimmability: 0, businessImpact: 0, presentationQuality: 0 },
-          matchedKeywords: [],
-          missingKeywords: [],
-          matchRate: 0,
-          keywordDensity: 0,
+        roleFit: {
+          total: roleFit.score,
+          gateFailed: roleFit.gateFailed,
+          gateEvidence: roleFit.gateEvidence,
+          breakdown: roleFit.breakdown,
+          locationUnknown: roleFit.locationUnknown,
         },
+        currentScore,
         maxPossibleScore: 0,
-        gapAnalysis: `Knocked out before scoring: ${knockout.hardReasons.join(', ')}.`,
+        gapAnalysis: `Knocked out before scoring: ${roleFit.gateFailed.join(', ')}.`,
         recommendation: 'knocked_out',
-        knockout,
+        knockout: {
+          knockedOut: true,
+          hardReasons: roleFit.gateFailed,
+          gateEvidence: roleFit.gateEvidence,
+        },
+        resumeGap: { achievable: null, closeable: null, structural: null },
         ...(resolvedInput.isEmptyShell ? { emptyShellFallback: true } : {}),
       });
     }
-
-    const { readinessScore } = buildScoringInput(scoringText);
-    const currentScore = buildScorePayload(readinessScore);
 
     const basePrompt = buildGapAnalysisPrompt(currentScore);
     const userContent = interviewPrepMode
@@ -258,15 +265,20 @@ export async function POST(req: Request) {
       company: normalizedCompany,
       title: normalizedTitle,
       url: normalizedUrl,
+      roleFit: {
+        total: roleFit.score,
+        gateFailed: roleFit.gateFailed,
+        gateEvidence: roleFit.gateEvidence,
+        breakdown: roleFit.breakdown,
+        locationUnknown: roleFit.locationUnknown,
+      },
       currentScore,
       maxPossibleScore,
       gapAnalysis,
       recommendation,
-      // Not knocked out here (the knockedOut branch returns earlier), but
-      // still surfaced so callers can read soft penalties (e.g. comp below
-      // floor) without a second round-trip. Score-adjustment on soft
-      // penalties is not implemented yet — tracked as ENG-1564 follow-up.
-      knockout,
+      // Not knocked out here (the gateFailed branch returns earlier).
+      knockout: { knockedOut: false, hardReasons: [], gateEvidence: {} },
+      resumeGap: { achievable: null, closeable: null, structural: null },
       ...(resolvedInput.isEmptyShell ? { emptyShellFallback: true } : {}),
       ...(interviewPrepQuestions ? { interviewPrepQuestions } : {}),
     });

@@ -1,8 +1,4 @@
-import type {
-  HardKnockoutReason,
-  SoftPenaltyReason,
-  StretchFlag,
-} from '@/lib/job-knockout';
+import type { GateFailedReason, SignalBreakdown } from '@/lib/role-fit-scorer';
 
 interface AssessFitResponse {
   assessment: string;
@@ -64,23 +60,33 @@ interface ScoreResumeResponse {
   recommendation: 'full_generation_recommended' | 'marginal_improvement' | 'strong_fit';
 }
 
+type ReadinessCurrentScore = ScoreResumeResponse['currentScore'];
+
 interface JobKnockoutInfo {
   knockedOut: boolean;
-  hardReasons: HardKnockoutReason[];
-  softPenalties: SoftPenaltyReason[];
-  stretchFlags: StretchFlag[];
+  hardReasons: GateFailedReason[];
+  gateEvidence: Record<string, string>;
 }
 
-interface ScoreJobResponse extends Omit<ScoreResumeResponse, 'recommendation'> {
+interface ScoreJobResponse {
   company: string;
   title: string;
   url: string;
-  // ENG-1564: 'knocked_out' means the knockout gate rejected this role before
-  // scoring ran (IC-only title, fully on-site with no remote path, or
-  // clearance-required) — currentScore/maxPossibleScore are both 0 in that
-  // case, not a genuine low readiness score. See `knockout` for the reasons.
+  roleFit: {
+    total: number;
+    gateFailed: GateFailedReason[];
+    gateEvidence: Record<string, string>;
+    breakdown: SignalBreakdown;
+    locationUnknown: boolean;
+  };
+  currentScore: ReadinessCurrentScore;
+  maxPossibleScore: number;
+  gapAnalysis: string;
+  // A knockout is a role-fit decision; currentScore remains the independently
+  // computed readiness score for the same JD/resume pair.
   recommendation: 'full_generation_recommended' | 'marginal_improvement' | 'strong_fit' | 'knocked_out';
   knockout?: JobKnockoutInfo;
+  resumeGap: { achievable: number | null; closeable: number | null; structural: number | null };
 }
 
 export interface GenerateCoverLetterInput {
