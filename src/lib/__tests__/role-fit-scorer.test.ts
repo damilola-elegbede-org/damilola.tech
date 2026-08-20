@@ -191,6 +191,161 @@ describe('evaluateRoleFit — gate mechanics', () => {
   });
 });
 
+describe('evaluateRoleFit — G1 comma-qualified Director/VP titles (ENG-1974)', () => {
+  // "Tested directly against the deployed regex" list from the ENG-1974
+  // defect report — all 11 previously scored roleFit.total = 0 on a comma.
+  const FORMERLY_FAILING_TITLES = [
+    'VP, Infrastructure Engineering',
+    'VP, Engineering',
+    'VP, Platform Engineering',
+    'SVP, Engineering',
+    'Director, Engineering',
+    'Director, Software Engineering (Infrastructure)',
+    'Director, Platform Engineering',
+    'Director, Data Engineering',
+    'Director, Infrastructure',
+    'Senior Director, Engineering',
+    'Evals Infrastructure Tech Lead / Manager',
+  ];
+
+  it.each(FORMERLY_FAILING_TITLES)('"%s" now clears G1 on title alone (AC1)', (title) => {
+    const result = evaluateRoleFit({ title, jobDescription: '' }, 'Acme Corp');
+    expect(result.gateFailed).not.toContain('G1_no_mgmt_signal');
+  });
+
+  // AC2 — the forms that already worked must keep working.
+  const ALREADY_PASSING_TITLES = [
+    'VP of Engineering',
+    'VP Engineering',
+    'Vice President, Engineering',
+    'Director of Engineering',
+    'Engineering Director',
+  ];
+
+  it.each(ALREADY_PASSING_TITLES)('"%s" still clears G1 (AC2 regression)', (title) => {
+    const result = evaluateRoleFit({ title, jobDescription: '' }, 'Acme Corp');
+    expect(result.gateFailed).not.toContain('G1_no_mgmt_signal');
+  });
+
+  // AC2 — the department-word list stays scoped to engineering; a director
+  // or manager title outside that scope must not start passing G1 just
+  // because the comma-qualified alternative widened.
+  it('"Director, Corporate Accounting" is still G1-rejected (AC2 negative)', () => {
+    const result = evaluateRoleFit(
+      { title: 'Director, Corporate Accounting', jobDescription: '' },
+      'Acme Corp'
+    );
+    expect(result.gateFailed).toContain('G1_no_mgmt_signal');
+  });
+
+  it('"Senior Manager, Revenue Operations" is still G1-rejected (AC2 negative)', () => {
+    const result = evaluateRoleFit(
+      { title: 'Senior Manager, Revenue Operations', jobDescription: '' },
+      'Acme Corp'
+    );
+    expect(result.gateFailed).toContain('G1_no_mgmt_signal');
+  });
+
+  // AC3 — the two verbatim postings that triggered this issue, scored
+  // end-to-end against the real JD shape (salary + Boulder location).
+  it('HubSpot "VP, Infrastructure Engineering" scores above zero end-to-end (AC3)', () => {
+    const result = evaluateRoleFit(
+      {
+        title: 'VP, Infrastructure Engineering',
+        location: 'Boulder, CO',
+        jobDescription: `
+          Lead our infrastructure and platform engineering organization.
+          Base salary: 401,895-643,005 USD.
+        `,
+      },
+      'HubSpot'
+    );
+    expect(result.gateFailed).toEqual([]);
+    expect(result.score).toBeGreaterThan(0);
+  });
+
+  it('ServiceTitan "Director, Software Engineering (Infrastructure)" scores above zero end-to-end (AC3)', () => {
+    const result = evaluateRoleFit(
+      {
+        title: 'Director, Software Engineering (Infrastructure)',
+        location: 'Boulder, CO',
+        jobDescription: `
+          Own our infrastructure engineering platform organization.
+          Base salary: 246,500-369,700 USD Zone 2.
+        `,
+      },
+      'ServiceTitan'
+    );
+    expect(result.gateFailed).toEqual([]);
+    expect(result.score).toBeGreaterThan(0);
+  });
+
+  // AC4 — body-fallback fixtures. Each JD string independently satisfies
+  // g1Passes with a title that does not itself match G1_TITLE_PATTERN.
+  const BODY_FALLBACK_JDS = [
+    'Lead and develop a high-performing engineering organization with leadership depth and succession planning.',
+    'Significant executive engineering leadership experience leading large, multi-layer organizations.',
+    'Strong track record developing engineering leaders, building inclusive organizations.',
+    'Lead and develop a global SRE team providing 24/7 coverage.',
+    'Minimum 7 years leading 50+ engineer teams.',
+  ];
+
+  it.each(BODY_FALLBACK_JDS)('body text "%s" clears G1 via fallback with a non-matching title (AC4)', (jobDescription) => {
+    const result = evaluateRoleFit({ title: 'Software Engineer', jobDescription }, 'Acme Corp');
+    expect(result.gateFailed).not.toContain('G1_no_mgmt_signal');
+  });
+
+  // AC5 — scoreLevel and G1_TITLE_PATTERN must agree: every title G1 admits
+  // as a Director/VP management signal scores the Director/VP level (24),
+  // never the 12-point "fallback only" tier.
+  const DIRECTOR_VP_LEVEL_AGREEMENT = [
+    'VP, Infrastructure Engineering',
+    'VP, Engineering',
+    'SVP, Engineering',
+    'Director, Engineering',
+    'Director, Infrastructure',
+    'Senior Director, Engineering',
+  ];
+
+  it.each(DIRECTOR_VP_LEVEL_AGREEMENT)('"%s" scores level 24, matching its G1 pass (AC5)', (title) => {
+    const result = evaluateRoleFit(
+      { title, jobDescription: 'Own the platform organization.' },
+      'Acme Corp'
+    );
+    expect(result.gateFailed).not.toContain('G1_no_mgmt_signal');
+    expect(result.breakdown.level).toBe(24);
+  });
+
+  // G1/G2 must move together (carried forward from the ENG-1564 pivot
+  // comment this issue cites): widening the G1 body-fallback must not leak
+  // into G2's short-circuit. A genuine Staff/Principal IC title stays
+  // G2-rejected even when its JD body happens to contain one of the new
+  // executive-register phrases.
+  it('a Principal IC title is still G2-rejected even when its body clears the widened G1 fallback', () => {
+    const result = evaluateRoleFit(
+      {
+        title: 'Principal Software Engineer',
+        jobDescription: 'Lead and develop a global infrastructure team spanning three regions.',
+      },
+      'Acme Corp'
+    );
+    expect(result.gateFailed).not.toContain('G1_no_mgmt_signal');
+    expect(result.gateFailed).toContain('G2_ic_exclusion');
+  });
+
+  it('a Staff IC title is still G2-rejected even when its body clears the widened G1 fallback', () => {
+    const result = evaluateRoleFit(
+      {
+        title: 'Staff Software Engineer',
+        jobDescription: 'Strong track record developing engineering leaders, building inclusive organizations.',
+      },
+      'Acme Corp'
+    );
+    expect(result.gateFailed).not.toContain('G1_no_mgmt_signal');
+    expect(result.gateFailed).toContain('G2_ic_exclusion');
+  });
+});
+
 describe('evaluateRoleFit — comp scoring', () => {
   it('parses NVIDIA-style ISO-suffixed salary ranges and awards the disclosed top tier', () => {
     const salary = extractMaxStatedSalary('The base salary range is 224,000 USD - 356,500 USD.');
