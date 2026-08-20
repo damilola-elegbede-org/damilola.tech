@@ -54,6 +54,7 @@ export interface RoleFitResult {
   gateEvidence: Record<string, string>;
   breakdown: SignalBreakdown;
   locationUnknown: boolean;
+  remoteNegotiable: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -295,7 +296,7 @@ function isBoulderColorado(jobDescription: string, tail: string, structuredLocat
   return /\bboulder\b|\bcolorado\b|\bdenver\b/.test(locationSources(tail, jobDescription, structuredLocation));
 }
 
-function evaluateGates(input: RoleFitInput): GateResult {
+function evaluateGates(input: RoleFitInput, companyRemotePosture: CompanyRemotePosture): GateResult {
   const normalized = normalizeTitle(input.title ?? '');
   const { head, tail } = splitHeadTail(normalized);
   const jobDescription = input.jobDescription ?? '';
@@ -332,7 +333,13 @@ function evaluateGates(input: RoleFitInput): GateResult {
     evidence.G4_geography = `tail="${tail}" resolves non-US with no US token present`;
   }
 
-  if (geo === 'us' && !isRemoteUS(jobDescription, tail, input.location) && !isBoulderColorado(jobDescription, tail, input.location)) {
+  if (
+    geo === 'us' &&
+    companyRemotePosture !== 'remote-ok' &&
+    companyRemotePosture !== 'hub-flex' &&
+    !isRemoteUS(jobDescription, tail, input.location) &&
+    !isBoulderColorado(jobDescription, tail, input.location)
+  ) {
     failed.push('G5_location');
     evidence.G5_location = `tail="${tail}" is US-based but not Remote-US or Boulder/Denver/Colorado`;
   }
@@ -452,6 +459,37 @@ function scoreComp(max: number | null): number {
 const ASCENT_TARGETS = ['anthropic', 'netflix', 'nvidia', 'airbnb', 'vercel', 'sprout social'];
 const FRONTIER_TIER = ['openai', 'stripe', 'databricks', 'figma'];
 
+type CompanyRemotePosture = 'remote-ok' | 'hub-flex' | 'office-first' | 'unknown';
+
+interface CompanyRemotePostureRecord {
+  posture: Exclude<CompanyRemotePosture, 'unknown'>;
+  source: string;
+  checkedOn: string;
+}
+
+// Evidence-backed company posture is deliberately distinct from a posting's
+// location tag: some companies under-tag negotiable remote work in their JDs.
+const COMPANY_REMOTE_POSTURE: Record<string, CompanyRemotePostureRecord> = {
+  nvidia: { posture: 'remote-ok', source: 'No RTO mandate; manager/team location discretion', checkedOn: '2026-08-19' },
+  airbnb: { posture: 'remote-ok', source: 'Company remote-work policy', checkedOn: '2026-08-19' },
+  'sprout social': { posture: 'remote-ok', source: 'Company remote-work policy', checkedOn: '2026-08-19' },
+  vercel: { posture: 'hub-flex', source: 'Hub-flex work model', checkedOn: '2026-08-19' },
+  anthropic: { posture: 'office-first', source: 'Office-first work model', checkedOn: '2026-08-19' },
+  netflix: { posture: 'office-first', source: 'Office-first work model', checkedOn: '2026-08-19' },
+};
+
+const POSTURE_MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000;
+
+function resolveCompanyRemotePosture(company: string): CompanyRemotePosture {
+  const c = company.toLowerCase();
+  const entry = Object.entries(COMPANY_REMOTE_POSTURE).find(([name]) => c.includes(name))?.[1];
+  if (!entry) return 'unknown';
+
+  const checkedOn = Date.parse(`${entry.checkedOn}T00:00:00.000Z`);
+  if (!Number.isFinite(checkedOn) || Date.now() - checkedOn > POSTURE_MAX_AGE_MS) return 'unknown';
+  return entry.posture;
+}
+
 function scoreCompany(company: string): number {
   const c = company.toLowerCase();
   if (ASCENT_TARGETS.some((t) => c.includes(t))) return 10;
@@ -459,7 +497,14 @@ function scoreCompany(company: string): number {
   return 7; // conservative default for an unclassified public/large company
 }
 
-function scoreLocation(geo: GeoVerdict, jobDescription: string): { pts: number; unknown: boolean } {
+function scoreLocation(
+  geo: GeoVerdict,
+  jobDescription: string,
+  companyRemotePosture: CompanyRemotePosture
+): { pts: number; unknown: boolean } {
+  if (companyRemotePosture === 'remote-ok') return { pts: 8, unknown: false };
+  if (companyRemotePosture === 'hub-flex') return { pts: 6, unknown: false };
+
   const jd = jobDescription.toLowerCase();
   if (geo === 'unknown') return { pts: 4, unknown: true };
   // geo === 'us' at this point (non_us already gated out before signals run)
@@ -495,7 +540,8 @@ function scoreDomain(jobDescription: string): number {
 // ---------------------------------------------------------------------------
 
 export function evaluateRoleFit(input: RoleFitInput, company: string): RoleFitResult {
-  const gates = evaluateGates(input);
+  const companyRemotePosture = resolveCompanyRemotePosture(company);
+  const gates = evaluateGates(input, companyRemotePosture);
 
   if (gates.failed.length > 0) {
     return {
@@ -504,6 +550,7 @@ export function evaluateRoleFit(input: RoleFitInput, company: string): RoleFitRe
       gateEvidence: gates.evidence,
       breakdown: { level: 0, scope: 0, strategy: 0, comp: 0, company: 0, location: 0, domain: 0 },
       locationUnknown: false,
+      remoteNegotiable: false,
     };
   }
 
@@ -513,7 +560,11 @@ export function evaluateRoleFit(input: RoleFitInput, company: string): RoleFitRe
   const strategy = scoreStrategy(jobDescription);
   const comp = scoreComp(gates.maxStatedSalary);
   const companyPts = scoreCompany(company);
-  const { pts: location, unknown: locationUnknown } = scoreLocation(gates.geo, jobDescription);
+  const { pts: location, unknown: locationUnknown } = scoreLocation(
+    gates.geo,
+    jobDescription,
+    companyRemotePosture
+  );
   const domain = scoreDomain(jobDescription);
 
   const breakdown: SignalBreakdown = { level, scope, strategy, comp, company: companyPts, location, domain };
@@ -525,5 +576,6 @@ export function evaluateRoleFit(input: RoleFitInput, company: string): RoleFitRe
     gateEvidence: {},
     breakdown,
     locationUnknown,
+    remoteNegotiable: companyRemotePosture === 'remote-ok' || companyRemotePosture === 'hub-flex',
   };
 }

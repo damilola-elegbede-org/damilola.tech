@@ -8,7 +8,7 @@
  * exactly, not approximately.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { evaluateRoleFit } from '../role-fit-scorer';
 
 describe('evaluateRoleFit — calibration anchors (spec §4)', () => {
@@ -298,5 +298,61 @@ describe('evaluateRoleFit — amended gates and signal table', () => {
 
   it('has a 100-point table: 24 + 16 + 22 + 12 + 10 + 8 + 8', () => {
     expect(24 + 16 + 22 + 12 + 10 + 8 + 8).toBe(100);
+  });
+});
+
+describe('evaluateRoleFit — company remote posture', () => {
+  const manager = 'Engineering Manager';
+  const nonNegotiableSantaClara =
+    'Location: Santa Clara, CA. Hybrid and in-office. Lead a team of engineers.';
+
+  it.each([
+    ['NVIDIA', 'remote-ok', 8],
+    ['Vercel', 'hub-flex', 6],
+  ])('%s posture overrides a posted Santa Clara hybrid location', (company, _posture, locationScore) => {
+    const result = evaluateRoleFit(
+      { title: manager, jobDescription: nonNegotiableSantaClara },
+      company
+    );
+
+    expect(result.gateFailed).not.toContain('G5_location');
+    expect(result.breakdown.location).toBe(locationScore);
+    expect(result.remoteNegotiable).toBe(true);
+  });
+
+  it('does not make an office-first company remotely negotiable', () => {
+    const result = evaluateRoleFit(
+      { title: manager, jobDescription: nonNegotiableSantaClara },
+      'Anthropic'
+    );
+
+    expect(result.gateFailed).toContain('G5_location');
+    expect(result.remoteNegotiable).toBe(false);
+  });
+
+  it('expires stale posture evidence and falls back to the posted location', () => {
+    const dateNow = vi.spyOn(Date, 'now').mockReturnValue(
+      new Date('2027-02-16T00:00:00.000Z').getTime()
+    );
+
+    try {
+      const result = evaluateRoleFit(
+        { title: manager, jobDescription: nonNegotiableSantaClara },
+        'NVIDIA'
+      );
+
+      expect(result.gateFailed).toContain('G5_location');
+      expect(result.remoteNegotiable).toBe(false);
+
+      const postedRemoteResult = evaluateRoleFit(
+        { title: manager, jobDescription: 'Location: United States. Fully remote. Lead a team of engineers.' },
+        'NVIDIA'
+      );
+      expect(postedRemoteResult.gateFailed).not.toContain('G5_location');
+      expect(postedRemoteResult.breakdown.location).toBe(6);
+      expect(postedRemoteResult.remoteNegotiable).toBe(false);
+    } finally {
+      dateNow.mockRestore();
+    }
   });
 });

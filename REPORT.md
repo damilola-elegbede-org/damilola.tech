@@ -57,3 +57,47 @@ G5's deterministic text matching can still have false positives or negatives on 
 ## Out of scope found
 
 Left untouched: the `scoreDomain` out-of-vertical `let best = 2` floor; the Trident/Python rejection ledger; real `resumeGap` computation (only the required typed null stub ships); `SCORE_DIGEST`, `SCORE_HIGH`, and all calibration thresholds; VP Engineering's continued eligibility as a passing role; the existing non-remote scoring dock; `.claude/`, `CLAUDE.md`, `.env*`, identity/credential files, and `career-data/`. The pre-existing untracked `BRIEF.md` was also left untouched and will not be committed.
+
+## Root cause / spec
+
+D's 2026-08-19 ruling recognizes that NVIDIA has no return-to-office mandate even though its postings materially under-tag remote work, so a scorer that relies only on posted site text wrongly rejects or penalizes negotiable roles. The scorer now has dated, evidence-backed company remote postures: current `remote-ok` and `hub-flex` records alter G5 and location scoring as ruled, while stale or unlisted records resolve to `unknown` and retain the existing posted-text behavior.
+
+## Fix
+
+Added the `COMPANY_REMOTE_POSTURE` registry and 180-day `Date.now()` freshness resolver in `src/lib/role-fit-scorer.ts` beside `ASCENT_TARGETS`/`FRONTIER_TIER` (lines 462-491). `evaluateRoleFit` resolves posture once and supplies it to G5 and signal 7: remote-ok/hub-flex bypass G5, score 8/6 respectively, and expose `remoteNegotiable` only for scored roles; office-first/unknown retain the prior code path (lines 299-346, 500-587). G6 logic was not changed. Added four mutation-sensitive posture tests in `src/lib/__tests__/role-fit-scorer.test.ts` (lines 303-358), including a mocked evaluation date 181 days after the record to prove stale gate and score fallback.
+
+## Tests
+
+Baseline command: `npx vitest run`
+
+```text
+Test Files  148 passed (148)
+     Tests  2813 passed | 12 skipped (2825)
+Duration  10.30s
+```
+
+Focused command: `npx vitest run src/lib/__tests__/role-fit-scorer.test.ts`
+
+```text
+Test Files  1 passed (1)
+     Tests  35 passed (35)
+Duration  298ms
+```
+
+Final full-suite command: `npx vitest run`
+
+```text
+Test Files  148 passed (148)
+     Tests  2817 passed | 12 skipped (2829)
+Duration  9.85s
+```
+
+Before/after: 148/148 passing files; 2,813 to 2,817 passed tests; 12 skipped; 0 failures in both runs.
+
+## Residual risk
+
+The posture records are intentionally static fleet research and expire after 180 days; their source notes should be refreshed with the underlying evidence before the next expiry. I did not touch or verify downstream digest rendering, which must consume the newly exposed `remoteNegotiable` field separately.
+
+## Out of scope found
+
+Left untouched: all G1-G4 logic other than the narrowly posture-gated G5 decision, all existing location phrase matching, G6 compensation-floor logic, all other signals, and downstream digest rendering. The full suite emits existing React `act(...)` and mocked-URL warnings, but it completed successfully with no test failures.
