@@ -547,14 +547,21 @@ function scoreCompany(company: string): number {
 function scoreLocation(
   geo: GeoVerdict,
   jobDescription: string,
+  tail: string,
+  structuredLocation: string | undefined,
   companyRemotePosture: CompanyRemotePosture
 ): { pts: number; unknown: boolean } {
   if (companyRemotePosture === 'remote-ok') return { pts: 8, unknown: false };
   if (companyRemotePosture === 'hub-flex') return { pts: 6, unknown: false };
 
-  const jd = jobDescription.toLowerCase();
   if (geo === 'unknown') return { pts: 4, unknown: true };
-  // geo === 'us' at this point (non_us already gated out before signals run)
+  // geo === 'us' at this point (non_us already gated out before signals run).
+  // Same source as the G4/G5 gates' isBoulderColorado()/isRemoteUS() — a
+  // structured location or title tail naming Boulder/Denver was previously
+  // invisible here (ENG-1975): only the gates consulted it, so a role like
+  // "Director, Infrastructure" with location "Boulder, CO" passed G4/G5 but
+  // still scored the 6-point unspecified-hub tier instead of the 8-point one.
+  const jd = locationSources(tail, jobDescription, structuredLocation);
   if (/\bboulder\b|\bcolorado\b|\bdenver\b/.test(jd) || (/\bremote\b/.test(jd) && /\bus\b|\bunited states\b/.test(jd) && /\bremote[- ]eligible\b/.test(jd))) {
     return { pts: 8, unknown: false };
   }
@@ -610,6 +617,8 @@ export function evaluateRoleFit(input: RoleFitInput, company: string): RoleFitRe
   const { pts: location, unknown: locationUnknown } = scoreLocation(
     gates.geo,
     jobDescription,
+    gates.tail,
+    input.location,
     companyRemotePosture
   );
   const domain = scoreDomain(jobDescription);
