@@ -88,8 +88,15 @@ function splitHeadTail(normalizedTitle: string): HeadTail {
 // G1 — management signal required
 // ---------------------------------------------------------------------------
 
+// Director/VP/SVP comma-qualified forms ("Director, Engineering", "VP,
+// Infrastructure Engineering", "SVP, Engineering") are the two most common
+// senior-leadership title conventions in tech and previously had no comma
+// alternative — only the spelled-out "vice president,? ... engineering" form
+// did (ENG-1974). Department word list mirrors the existing "manager,?" alt
+// so a non-engineering director ("Director, Corporate Accounting") still
+// does not match.
 const G1_TITLE_PATTERN =
-  /\b(engineering manager|senior engineering manager|sr\.?\s*engineering manager|group engineering manager|engineering director|director of engineering|manager,?\s*(software|engineering|platform|infrastructure|data|ml|machine learning|security|developer|devops|site reliability|technical)|head of\s*(engineering|software|platform|infrastructure|technology|developer)|vp\s*(of\s*)?engineering|vice president,?\s*(of\s*)?engineering|tech(nical)? lead manager|engineering lead|head of technical)\b/;
+  /\b(engineering manager|senior engineering manager|sr\.?\s*engineering manager|group engineering manager|engineering director|director of engineering|manager,?\s*(software|engineering|platform|infrastructure|data|ml|machine learning|security|developer|devops|site reliability|technical)|(director|senior director|sr\.?\s*director|svp|vp),?\s*(of\s*)?(software|engineering|platform|infrastructure|data|ml|machine learning|security|developer|devops|site reliability|technical)|head of\s*(engineering|software|platform|infrastructure|technology|developer)|vp\s*(of\s*)?engineering|vice president,?\s*(of\s*)?engineering|tech(nical)? lead\s*-?\s*manager|engineering lead|head of technical)\b/;
 
 const G1_BODY_SIGNALS = [
   'direct reports',
@@ -106,16 +113,39 @@ const G1_BODY_SIGNALS = [
   'career development of',
   'grow and develop engineers',
   'manage engineering managers',
+  'succession planning',
+  'multi-layer organization',
+];
+
+// Executive-register phrasing that the literal G1_BODY_SIGNALS substrings
+// either can't express (a variable headcount number, a team noun) or would
+// false-positive on as a plain substring (ENG-1974). "engineering leaders"
+// as a bare `.includes()` needle also matches inside "engineering
+// leadership" — "leadership" contains "leaders" as its first seven
+// characters — so it needs a word boundary a plain substring can't give it.
+const G1_BODY_PATTERNS: RegExp[] = [
+  // "Lead and develop a global SRE team", "lead a distributed platform team"
+  /\blead(?:ing)?\s+(?:and\s+develop\s+)?(?:a\s+)?(?:global\s+|regional\s+|distributed\s+)?\S+\s+team\b/i,
+  // "leading 50+ engineers", "leading 50+ engineer teams"
+  /\bleading\s+\d+\+\s+engineers?\b/i,
+  // "developing engineering leaders" — NOT "engineering leadership"
+  /\bengineering leaders\b/i,
 ];
 
 function countMatches(haystack: string, needles: string[]): number {
   return needles.filter((n) => haystack.includes(n)).length;
 }
 
+function g1BodySignalCount(jobDescription: string): number {
+  const body = jobDescription.toLowerCase();
+  const literal = countMatches(body, G1_BODY_SIGNALS);
+  const pattern = G1_BODY_PATTERNS.filter((p) => p.test(jobDescription)).length;
+  return literal + pattern;
+}
+
 function g1Passes(head: string, jobDescription: string): boolean {
   if (G1_TITLE_PATTERN.test(head)) return true;
-  const body = jobDescription.toLowerCase();
-  return countMatches(body, G1_BODY_SIGNALS) >= 1;
+  return g1BodySignalCount(jobDescription) >= 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -156,7 +186,7 @@ function g3Rejects(head: string, jobDescription: string): boolean {
     // Preserved unless the title also carries a G1 management-of-engineers
     // token AND the body clears the G1 body fallback (>=1 signal).
     const hasG1Title = G1_TITLE_PATTERN.test(head);
-    const bodySignals = countMatches(jobDescription.toLowerCase(), G1_BODY_SIGNALS);
+    const bodySignals = g1BodySignalCount(jobDescription);
     if (!(hasG1Title && bodySignals >= 1)) return true;
   }
   return false;
@@ -358,7 +388,17 @@ function evaluateGates(input: RoleFitInput, companyRemotePosture: CompanyRemoteP
 // ---------------------------------------------------------------------------
 
 function scoreLevel(title: string): number {
-  if (/\b(director|sr\.? director|senior director|head of engineering|head of platform engineering|vp\s*(of\s*)?engineering|vice president,?\s*(of\s*)?engineering)\b/.test(title)) {
+  // Bare "director" already catches every comma-qualified director form
+  // ("Director, Engineering", "Director, Infrastructure") as a standalone
+  // word match. VP/SVP needed the same comma+department alternative
+  // G1_TITLE_PATTERN gained (ENG-1974) — without it, "VP, Infrastructure
+  // Engineering" passed G1 as a management title but scored the 12-point
+  // fallback tier here, contradicting its own gate result.
+  if (
+    /\b(director|sr\.? director|senior director|head of engineering|head of platform engineering|vp\s*(of\s*)?engineering|vice president,?\s*(of\s*)?engineering|(svp|vp),?\s*(of\s*)?(software|engineering|platform|infrastructure|data|ml|machine learning|security|developer|devops|site reliability|technical))\b/.test(
+      title
+    )
+  ) {
     return 24;
   }
   if (/\b(senior engineering manager|sr\.?\s*manager,?\s*(software|engineering|platform|infrastructure)|group engineering manager|em ?2|m ?2)\b/.test(title)) {
