@@ -393,9 +393,9 @@ function scoreScope(jobDescription: string): number {
 }
 
 const STRATEGY_FAMILIES: RegExp[] = [
-  /\btechnical strategy\b|\btechnical vision\b|\bset direction\b|\blong-term architecture\b|\bwhere we invest\b/,
-  /\bown the roadmap\b|\bprioriti[sz]ation\b|\bplanning cycles\b|\bquarterly planning\b|\btradeoffs\b/,
-  /\bpartner with product\b|\bpartner with design\b|\bdata science\b|\bgo-to-market\b|\bpeer leaders\b|\bstakeholders\b/,
+  /\bstrateg\w+\b.{0,40}\b(?:initiatives?|direction|priorit\w*|goals?)\b|\blong-?term goals?\b|\bset .{0,15}\bvision\b|\btechnical strategy\b|\btechnical vision\b|\blong-term architecture\b|\bwhere we invest\b/,
+  /\bproject plans?\b|\broadmap\b|\bprioriti[sz]\w*\b|\bplanning cycles?\b|\bquarterly planning\b|\bcapacity planning\b|\btradeoffs\b/,
+  /\bcollaborat\w*\s+with\b.{0,40}\b(?:teams?|research|hardware|software|product|design|science)\b|\bcross-functional\b|\bpartner with\b|\bdata science\b|\bgo-to-market\b|\bpeer leaders\b|\bstakeholders\b/,
   /\borg design\b|\boperating model\b|\bteam topology\b|\brestructur\w*\b|\bscale the org\b|\bdefine how the team works\b/,
 ];
 
@@ -413,7 +413,7 @@ function scoreStrategy(jobDescription: string): number {
 // keeps the two mutually exclusive on the same token instead of double
 // counting one mention across both sub-signals.
 const IMPACT_CUSTOMER = /\bcustomers\b|\brevenue\b|\bbusiness impact\b|\bp&l\b|\benterprise customers\b|\badoption\b(?!\s*rate)/;
-const IMPACT_METRICS = /\blatency\b|\breliability\b|\buptime\b|\bdora\b|\bdeveloper velocity\b|\badoption rate\b|\bsla\b/;
+const IMPACT_METRICS = /\blatency\b|\breliability\b|\buptime\b|\bdora\b|\bdeveloper velocity\b|\badoption rate\b|\bsla\b|\bthroughput\b|\bbenchmark\w*\b|\bperformance\s+(?:optimi\w+|regression|target|benchmark|tuning|profiling)\b|\b(?:optimi\w+|improv\w+|reduc\w+|increas\w+)\s+(?:\w+\s+){0,2}performance\b/;
 const SALARY_RANGE = /\$\s?(\d{1,3}(?:,\d{3})*)(k)?\s*(?:-|–|—|to)\s*\$?\s?(\d{1,3}(?:,\d{3})*)(k)?/gi;
 const SALARY_SINGLE = /\$\s?(\d{2,3}(?:,\d{3})?)(k)?/gi;
 const SALARY_RANGE_ISO_AT_START = /\b(\d{1,3}(?:,\d{3})*)(k)?\s*(?:USD|CAD|EUR|GBP)\b\s*(?:-|–|—|to)\s*(\d{1,3}(?:,\d{3})*)(k)?(?:\s*(?:USD|CAD|EUR|GBP)\b)?/gi;
