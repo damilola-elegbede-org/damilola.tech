@@ -346,6 +346,101 @@ describe('evaluateRoleFit — G1 comma-qualified Director/VP titles (ENG-1974)',
   });
 });
 
+describe('evaluateRoleFit — G1 admits a qualifier word between the comma and domain (ENG-1985)', () => {
+  // "Tested against the deployed regex" list from the ENG-1985 defect report.
+  // The domain word previously had to sit immediately after the comma —
+  // "Manager, Cloud Infrastructure" (a qualifier word in between) scored
+  // zero, one variant deeper than the same defect ENG-1974 fixed.
+  const FORMERLY_FAILING_TITLES = [
+    'Manager, CI/CD Infrastructure - Open Source Accelerated Computing',
+    'Manager, Cloud Infrastructure',
+    'Manager, AI Platform',
+    'Manager, Build and Release Engineering',
+    'Senior Manager, CI/CD Infrastructure',
+  ];
+
+  it.each(FORMERLY_FAILING_TITLES)('"%s" now clears G1 on title alone (AC1)', (title) => {
+    const result = evaluateRoleFit({ title, jobDescription: '' }, 'Acme Corp');
+    expect(result.gateFailed).not.toContain('G1_no_mgmt_signal');
+  });
+
+  // AC2 — the forms that already worked must keep working.
+  const ALREADY_PASSING_TITLES = [
+    'Manager, Software Engineering',
+    'Manager, Site Reliability Engineering',
+    'Manager, Data Platform Engineering',
+  ];
+
+  it.each(ALREADY_PASSING_TITLES)('"%s" still clears G1 (AC2 regression)', (title) => {
+    const result = evaluateRoleFit({ title, jobDescription: '' }, 'Acme Corp');
+    expect(result.gateFailed).not.toContain('G1_no_mgmt_signal');
+  });
+
+  // AC3 — the qualifier span must stay bounded: it must not admit an
+  // unrelated title by wandering far enough to find an unrelated domain word.
+  const NEGATIVE_FIXTURES = [
+    'Manager, Corporate Accounting',
+    'Senior Manager, Revenue Operations',
+    // "technical" is a domain word, but "Technical Program Management" is a
+    // TPM title, not an engineering-management one — this is the negative
+    // lookahead's job, not the qualifier span's.
+    'Manager, Technical Program Management',
+  ];
+
+  it.each(NEGATIVE_FIXTURES)('"%s" is still G1-rejected (AC3 negative)', (title) => {
+    const result = evaluateRoleFit({ title, jobDescription: '' }, 'Acme Corp');
+    expect(result.gateFailed).toContain('G1_no_mgmt_signal');
+  });
+
+  // AC4 — the verbatim posting that triggered this issue, scored end-to-end
+  // (no stated salary, so G6_comp_floor cannot fail it; Boulder location
+  // clears G5 on its own city name).
+  it('NVIDIA JR2017482 "Manager, CI/CD Infrastructure - Open Source Accelerated Computing" scores above zero end-to-end (AC4)', () => {
+    const result = evaluateRoleFit(
+      {
+        title: 'Manager, CI/CD Infrastructure - Open Source Accelerated Computing',
+        location: 'Boulder, CO',
+        jobDescription: 'Own our open source CI/CD infrastructure organization for accelerated computing.',
+      },
+      'NVIDIA'
+    );
+    expect(result.gateFailed).toEqual([]);
+    expect(result.score).toBeGreaterThan(0);
+  });
+
+  // AC5 — scoreLevel and G1_TITLE_PATTERN must agree: every title G1 admits
+  // via the qualifier span scores a real management-title level (21), never
+  // the 12-point "fallback only" tier — the same disagreement class ENG-1974
+  // fixed for the un-spanned VP/SVP case.
+  const LEVEL_AGREEMENT_FIXTURES = [
+    'Manager, CI/CD Infrastructure - Open Source Accelerated Computing',
+    'Manager, Cloud Infrastructure',
+    'Manager, AI Platform',
+    'Manager, Build and Release Engineering',
+    'Senior Manager, CI/CD Infrastructure',
+    'Manager, Software Engineering',
+    'Manager, Site Reliability Engineering',
+    'Manager, Data Platform Engineering',
+  ];
+
+  it.each(LEVEL_AGREEMENT_FIXTURES)('"%s" scores level 21, matching its G1 pass (AC5)', (title) => {
+    const result = evaluateRoleFit({ title, jobDescription: 'Own the platform organization.' }, 'Acme Corp');
+    expect(result.gateFailed).not.toContain('G1_no_mgmt_signal');
+    expect(result.breakdown.level).toBe(21);
+  });
+
+  // AC6 — the qualifier span is bounded (0-28 chars), not unbounded: a
+  // domain word separated from the comma by more than the bound must not
+  // match. Widening the bound until this fixture passes is exactly the
+  // mutation CodeRabbit/AC6 asks be checked — confirmed manually against a
+  // widened span during review, then restored to 28.
+  it('a domain word more than 28 characters past the comma does not clear G1 on title alone', () => {
+    const title = 'Manager, this qualifier phrase is deliberately much longer than the bound infrastructure';
+    const result = evaluateRoleFit({ title, jobDescription: '' }, 'Acme Corp');
+    expect(result.gateFailed).toContain('G1_no_mgmt_signal');
+  });
+});
+
 describe('evaluateRoleFit — comp scoring', () => {
   it('parses NVIDIA-style ISO-suffixed salary ranges and awards the disclosed top tier', () => {
     const salary = extractMaxStatedSalary('The base salary range is 224,000 USD - 356,500 USD.');

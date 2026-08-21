@@ -95,8 +95,29 @@ function splitHeadTail(normalizedTitle: string): HeadTail {
 // did (ENG-1974). Department word list mirrors the existing "manager,?" alt
 // so a non-engineering director ("Director, Corporate Accounting") still
 // does not match.
-const G1_TITLE_PATTERN =
-  /\b(engineering manager|senior engineering manager|sr\.?\s*engineering manager|group engineering manager|engineering director|director of engineering|manager,?\s*(software|engineering|platform|infrastructure|data|ml|machine learning|security|developer|devops|site reliability|technical)|(director|senior director|sr\.?\s*director|svp|vp),?\s*(of\s*)?(software|engineering|platform|infrastructure|data|ml|machine learning|security|developer|devops|site reliability|technical)|head of\s*(engineering|software|platform|infrastructure|technology|developer)|vp\s*(of\s*)?engineering|vice president,?\s*(of\s*)?engineering|tech(nical)? lead\s*-?\s*manager|engineering lead|head of technical)\b/;
+//
+// ENG-1985: the domain word had to sit IMMEDIATELY after the comma — "Manager,
+// Cloud Infrastructure" and "Manager, CI/CD Infrastructure" (a qualifier word
+// in between) scored zero, one variant deeper than the same defect ENG-1974
+// fixed. `G1_QUALIFIER_SPAN` admits a short, bounded span of qualifier words
+// between the comma and the domain token — bounded so it can't swallow an
+// unrelated title into a false match. `technical` excludes a following
+// "program management": "Manager, Technical Program Management" is a TPM
+// title, not an engineering-management one, and the bare word "technical"
+// would otherwise admit it.
+const G1_QUALIFIER_SPAN = '(?:[a-z0-9&/+ -]{0,28}\\s)?';
+const G1_DOMAIN_WORDS =
+  '(software|engineering|platform|infrastructure|data|ml|machine learning|security|developer|devops|site reliability|technical(?!\\s*program\\s*management))';
+const G1_TITLE_PATTERN = new RegExp(
+  '\\b(engineering manager|senior engineering manager|sr\\.?\\s*engineering manager|group engineering manager|engineering director|director of engineering' +
+    '|manager,?\\s*' +
+    G1_QUALIFIER_SPAN +
+    G1_DOMAIN_WORDS +
+    '|(director|senior director|sr\\.?\\s*director|svp|vp),?\\s*(of\\s*)?' +
+    G1_QUALIFIER_SPAN +
+    G1_DOMAIN_WORDS +
+    '|head of\\s*(engineering|software|platform|infrastructure|technology|developer)|vp\\s*(of\\s*)?engineering|vice president,?\\s*(of\\s*)?engineering|tech(nical)? lead\\s*-?\\s*manager|engineering lead|head of technical)\\b'
+);
 
 const G1_BODY_SIGNALS = [
   'direct reports',
@@ -387,6 +408,17 @@ function evaluateGates(input: RoleFitInput, companyRemotePosture: CompanyRemoteP
 // §3 — Stage B weighted signal table
 // ---------------------------------------------------------------------------
 
+const SCORE_LEVEL_T24 = new RegExp(
+  '\\b(director|sr\\.? director|senior director|head of engineering|head of platform engineering|vp\\s*(of\\s*)?engineering|vice president,?\\s*(of\\s*)?engineering|(svp|vp),?\\s*(of\\s*)?' +
+    G1_QUALIFIER_SPAN +
+    G1_DOMAIN_WORDS +
+    ')\\b'
+);
+const SCORE_LEVEL_T23 = new RegExp(
+  '\\b(senior engineering manager|sr\\.?\\s*manager,?\\s*' + G1_QUALIFIER_SPAN + G1_DOMAIN_WORDS + '|group engineering manager|em ?2|m ?2)\\b'
+);
+const SCORE_LEVEL_T21 = new RegExp('\\b(engineering manager|manager,?\\s*' + G1_QUALIFIER_SPAN + G1_DOMAIN_WORDS + ')\\b');
+
 function scoreLevel(title: string): number {
   // Bare "director" already catches every comma-qualified director form
   // ("Director, Engineering", "Director, Infrastructure") as a standalone
@@ -394,17 +426,20 @@ function scoreLevel(title: string): number {
   // G1_TITLE_PATTERN gained (ENG-1974) — without it, "VP, Infrastructure
   // Engineering" passed G1 as a management title but scored the 12-point
   // fallback tier here, contradicting its own gate result.
-  if (
-    /\b(director|sr\.? director|senior director|head of engineering|head of platform engineering|vp\s*(of\s*)?engineering|vice president,?\s*(of\s*)?engineering|(svp|vp),?\s*(of\s*)?(software|engineering|platform|infrastructure|data|ml|machine learning|security|developer|devops|site reliability|technical))\b/.test(
-      title
-    )
-  ) {
+  //
+  // ENG-1985: the manager/VP/SVP branches share G1_QUALIFIER_SPAN and
+  // G1_DOMAIN_WORDS with G1_TITLE_PATTERN so a title that passes the gate via
+  // a qualifier-spanned comma form (e.g. "Manager, Cloud Infrastructure")
+  // lands in the tier that reflects an actual title match here too, instead
+  // of falling to the 12-point body-fallback tier below it — the same
+  // gate/score disagreement ENG-1974 fixed for the un-spanned VP/SVP case.
+  if (SCORE_LEVEL_T24.test(title)) {
     return 24;
   }
-  if (/\b(senior engineering manager|sr\.?\s*manager,?\s*(software|engineering|platform|infrastructure)|group engineering manager|em ?2|m ?2)\b/.test(title)) {
+  if (SCORE_LEVEL_T23.test(title)) {
     return 23;
   }
-  if (/\b(engineering manager|manager,?\s*software engineering)\b/.test(title)) {
+  if (SCORE_LEVEL_T21.test(title)) {
     return 21;
   }
   return 12; // management signal present only via body fallback (G1 already confirmed it)
