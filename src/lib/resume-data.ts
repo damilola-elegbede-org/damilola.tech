@@ -6,7 +6,7 @@ export const resumeData: ResumeData = {
   tagline:
     "I build engineering organizations that deliver results, retain top talent, and develop leaders",
   brandingStatement:
-    "Strategic engineering leader with 15+ years scaling mission-critical infrastructure at Verily Life Sciences and Qualcomm. Designed a cloud transformation supporting 30+ production systems, enabling flagship product launches (L'Oréal LDP, T1D). Expert at building high-performance teams, driving GCP/AWS migrations, and establishing platform engineering practices that improve developer velocity and system reliability.",
+    "Strategic engineering leader with 15+ years scaling mission-critical infrastructure, currently leading Developer Experience and Developer Tools Engineering at Visa after building cloud platform and infrastructure teams at Verily Life Sciences and Qualcomm. Designed a cloud transformation supporting 30+ production systems, enabling flagship product launches (L'Oréal LDP, T1D). Expert at building high-performance teams, driving GCP/AWS migrations, and establishing platform engineering practices that improve developer velocity and system reliability.",
   email: "damilola.elegbede@gmail.com",
   linkedin: "https://linkedin.com/in/damilola-elegbede/",
   github: "https://github.com/damilola-elegbede",
@@ -35,7 +35,8 @@ export const resumeData: ResumeData = {
       endDate: "Present",
       highlights: [
         "Leading Developer Experience and Developer Tools Engineering at Visa, accountable for the platforms and tooling that shape engineering velocity across the company's product organizations.",
-        "Driving strategic investments in build infrastructure, CI/CD, and self-service developer platforms to improve cycle time, reliability, and engineering productivity at Visa's scale.",
+        "Driving strategic investments in CI/CD standardization, build infrastructure, and self-service developer platforms to improve cycle time, reliability, and engineering productivity at Visa's scale.",
+        "Leading GenAI efforts across Visa's developer tooling \u2014 MCP servers for GitHub, Jira, and Artifactory, plus a devtools support agent for engineering teams.",
       ],
     },
     {
