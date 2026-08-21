@@ -385,6 +385,9 @@ describe('evaluateRoleFit — G1 admits a qualifier word between the comma and d
     // TPM title, not an engineering-management one — this is the negative
     // lookahead's job, not the qualifier span's.
     'Manager, Technical Program Management',
+    // normalizeTitle collapses separators to "-", so the same exclusion must
+    // also reject the hyphenated form, not just the whitespace one.
+    'Manager, Technical Program-Management',
   ];
 
   it.each(NEGATIVE_FIXTURES)('"%s" is still G1-rejected (AC3 negative)', (title) => {

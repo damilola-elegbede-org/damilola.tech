@@ -107,7 +107,7 @@ function splitHeadTail(normalizedTitle: string): HeadTail {
 // would otherwise admit it.
 const G1_QUALIFIER_SPAN = '(?:[a-z0-9&/+ -]{0,28}\\s)?';
 const G1_DOMAIN_WORDS =
-  '(software|engineering|platform|infrastructure|data|ml|machine learning|security|developer|devops|site reliability|technical(?!\\s*program\\s*management))';
+  '(software|engineering|platform|infrastructure|data|ml|machine learning|security|developer|devops|site reliability|technical(?!\\s*program(?:\\s|-)*management))';
 const G1_TITLE_PATTERN = new RegExp(
   '\\b(engineering manager|senior engineering manager|sr\\.?\\s*engineering manager|group engineering manager|engineering director|director of engineering' +
     '|manager,?\\s*' +
