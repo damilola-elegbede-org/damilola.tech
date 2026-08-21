@@ -19,7 +19,7 @@
  * Run: npm run content:check-drift
  */
 
-import { readdir, readFile, lstat } from 'fs/promises';
+import { readdir, open } from 'fs/promises';
 import { join } from 'path';
 import { CONTENT_DIRS, isValidFilename } from '../src/lib/content-utils';
 
@@ -73,9 +73,14 @@ async function collectLocalFiles(): Promise<Map<string, string>> {
     for (const entry of entries) {
       if (!isValidFilename(entry)) continue;
       const full = join(dirPath, entry);
-      const stat = await lstat(full);
-      if (!stat.isFile()) continue;
-      files.set(entry, await readFile(full, 'utf-8'));
+      const handle = await open(full, 'r');
+      try {
+        const stat = await handle.stat();
+        if (!stat.isFile()) continue;
+        files.set(entry, await handle.readFile('utf-8'));
+      } finally {
+        await handle.close();
+      }
     }
   }
   return files;
