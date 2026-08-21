@@ -1,12 +1,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { existsSync } from 'fs';
+import { join } from 'path';
 import { checkBlobDrift } from '../../scripts/check-blob-drift';
+
+// See tests/lib/profile-current-role-sync.test.ts — skips without the
+// career-data submodule, which CI cannot fetch until CAREER_DATA_PAT is set.
+const CAREER_DATA_PRESENT = existsSync(
+  join(process.cwd(), 'career-data/data/resume-full.json'),
+);
 
 /**
  * The drift check is only useful if it can come back clean. A checker that
  * always reports drift gets ignored within a week, which is the same outcome as
  * having no checker at all — so both directions are pinned here.
  */
-describe('checkBlobDrift', () => {
+describe.skipIf(!CAREER_DATA_PRESENT)('checkBlobDrift', () => {
   const realFetch = global.fetch;
 
   function serve(handler: (filename: string) => { ok: boolean; body?: string }) {
