@@ -20,13 +20,42 @@ import {
   buildGapAnalysisPrompt,
   buildScorePayload,
   buildScoringInput,
+  buildResumeText,
 } from '@/lib/score-core';
-import { evaluateRoleFit } from '@/lib/role-fit-scorer';
+import {
+  evaluateFitGates,
+  assembleFitScore,
+  gatedFitResult,
+  FIT_SCORE_SURFACE,
+  type FitScoreResult,
+} from '@/lib/fit-score';
+import { scoreExperienceDimensions } from '@/lib/fit-experience';
 
 export const runtime = 'nodejs';
 
 const MAX_BODY_SIZE = 256 * 1024;
 const MAX_JOB_CONTENT_SIZE = 200 * 1024;
+
+/**
+ * The Fit Score as the API returns it. `threshold`/`surfaced` travel with the
+ * score so a consumer cannot drift from the scorer's own bar — ENG-1994 exists
+ * because the pipeline compared a field capped near 64 against a threshold of
+ * 80 for months without anything noticing.
+ */
+function buildFitScorePayload(fit: FitScoreResult) {
+  return {
+    total: fit.total,
+    threshold: FIT_SCORE_SURFACE,
+    surfaced: fit.gateFailed.length === 0 && fit.total >= FIT_SCORE_SURFACE,
+    gateFailed: fit.gateFailed,
+    gateEvidence: fit.gateEvidence,
+    breakdown: fit.breakdown,
+    flags: fit.flags,
+    titleTier: fit.titleTier,
+    remotePosture: fit.remotePosture,
+    experienceRaw: fit.experienceRaw,
+  };
+}
 
 function buildEmptyShellFallbackText({
   title,
@@ -153,21 +182,24 @@ export async function POST(req: Request) {
         })
       : resolvedInput.text;
 
-    // ENG-1564: hybrid knockout-gate + weighted signal scorer runs alongside
-    // the readiness scorer. Knocked-out roles skip the Opus call entirely (cost + latency
-    // win, on top of being the correct semantics — a role D can't take
-    // regardless of fit quality shouldn't consume an Opus call to prove it
-    // scores well).
-    const roleFit = evaluateRoleFit(
-      { title: normalizedTitle, jobDescription: scoringText, location: normalizedLocation as string | undefined },
-      normalizedCompany
-    );
-    // Role fit decides whether D would take the role; readiness measures how
-    // well the current resume matches it. They deliberately remain separate.
+    // ENG-1995: the Fit Score answers "should D apply". Gates are pure and run
+    // first — a role D can't take skips every model call, the experience
+    // component's three included, rather than paying to prove it would have
+    // scored well.
+    const fitInput = {
+      title: normalizedTitle,
+      jobDescription: scoringText,
+      location: normalizedLocation as string | undefined,
+    };
+    const fitGates = evaluateFitGates(fitInput, normalizedCompany);
+    // Fit decides whether D would take the role; readiness (currentScore)
+    // measures how well the current resume matches it. They deliberately remain
+    // separate, and only Fit ranks — ENG-1994.
     const { readinessScore } = buildScoringInput(scoringText);
     const currentScore = buildScorePayload(readinessScore);
 
-    if (roleFit.gateFailed.length > 0) {
+    if (fitGates.failed.length > 0) {
+      const fit = gatedFitResult(fitGates);
       logApiAccess('api_score_job', authResult.apiKey, {
         company: normalizedCompany,
         title: normalizedTitle,
@@ -176,9 +208,10 @@ export async function POST(req: Request) {
         extractedUrl: resolvedInput.extractedUrl,
         emptyShell: resolvedInput.isEmptyShell === true,
         currentScore: currentScore.total,
+        fitScore: fit.total,
         maxPossibleScore: 0,
         recommendation: 'knocked_out',
-        knockoutReasons: roleFit.gateFailed,
+        knockoutReasons: fit.gateFailed,
       }, ip).catch((error) => {
         console.warn('[api/v1/score-job] Failed to log audit:', error);
       });
@@ -187,21 +220,15 @@ export async function POST(req: Request) {
         company: normalizedCompany,
         title: normalizedTitle,
         url: normalizedUrl,
-        roleFit: {
-          total: roleFit.score,
-          gateFailed: roleFit.gateFailed,
-          gateEvidence: roleFit.gateEvidence,
-          breakdown: roleFit.breakdown,
-          locationUnknown: roleFit.locationUnknown,
-        },
+        fitScore: buildFitScorePayload(fit),
         currentScore,
         maxPossibleScore: 0,
-        gapAnalysis: `Knocked out before scoring: ${roleFit.gateFailed.join(', ')}.`,
+        gapAnalysis: `Knocked out before scoring: ${fit.gateFailed.join(', ')}.`,
         recommendation: 'knocked_out',
         knockout: {
           knockedOut: true,
-          hardReasons: roleFit.gateFailed,
-          gateEvidence: roleFit.gateEvidence,
+          hardReasons: fit.gateFailed,
+          gateEvidence: fit.gateEvidence,
         },
         resumeGap: { achievable: null, closeable: null, structural: null },
         ...(resolvedInput.isEmptyShell ? { emptyShellFallback: true } : {}),
@@ -212,6 +239,11 @@ export async function POST(req: Request) {
     const userContent = interviewPrepMode
       ? `${basePrompt}\n\nAdditionally, return exactly 5 "interviewPrepQuestions" in the JSON. Each must use behavioral framing — start with "Tell me about a time..." or "How would you approach...". Base questions on the top gap areas identified above.\n\nUpdated JSON schema: {"gapAnalysis":"...","maxPossibleScore":0-100,"recommendation":"...","interviewPrepQuestions":["Q1","Q2","Q3","Q4","Q5"]}\n\n<job_description>${xmlEscape(scoringText)}</job_description>`
       : `${basePrompt}\n\n<job_description>${xmlEscape(scoringText)}</job_description>`;
+
+    // The experience component's three dimension calls and the gap-analysis call
+    // are independent — run them concurrently so the Fit Score costs latency, not
+    // a serial round-trip per dimension on top of the existing one.
+    const experiencePromise = scoreExperienceDimensions(buildResumeText(), scoringText);
 
     const message = await scoringClient.messages.create({
       model: 'claude-opus-4-6',
@@ -234,6 +266,9 @@ export async function POST(req: Request) {
 
     const responseText = extractTextContent(message.content as Array<{ type: string; text?: string }>);
     const parsed = parseJsonResponse(responseText);
+
+    const experienceDimensions = await experiencePromise;
+    const fit = assembleFitScore(fitInput, fitGates, experienceDimensions);
 
     const gapAnalysis = typeof parsed.gapAnalysis === 'string' ? parsed.gapAnalysis : '';
     const _rawPrepQuestions = interviewPrepMode && Array.isArray(parsed.interviewPrepQuestions)
@@ -262,6 +297,7 @@ export async function POST(req: Request) {
       extractedUrl: resolvedInput.extractedUrl,
       emptyShell: resolvedInput.isEmptyShell === true,
       currentScore: currentScore.total,
+      fitScore: fit.total,
       maxPossibleScore,
       recommendation,
     }, ip).catch((error) => {
@@ -272,13 +308,15 @@ export async function POST(req: Request) {
       company: normalizedCompany,
       title: normalizedTitle,
       url: normalizedUrl,
-      roleFit: {
-        total: roleFit.score,
-        gateFailed: roleFit.gateFailed,
-        gateEvidence: roleFit.gateEvidence,
-        breakdown: roleFit.breakdown,
-        locationUnknown: roleFit.locationUnknown,
-      },
+      fitScore: buildFitScorePayload(fit),
+      experienceEvidence: experienceDimensions.map((d) => ({
+        dimension: d.dimension,
+        score: d.score,
+        band: d.band,
+        resumeQuote: d.resumeQuote,
+        jdQuote: d.jdQuote,
+        evidenceRejected: d.evidenceRejected,
+      })),
       currentScore,
       maxPossibleScore,
       gapAnalysis,

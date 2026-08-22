@@ -1,4 +1,10 @@
-import type { GateFailedReason, SignalBreakdown } from '@/lib/role-fit-scorer';
+import type {
+  GateFailedReason,
+  FitBreakdown,
+  FitFlag,
+  TitleTier,
+  CompanyRemotePosture,
+} from '@/lib/fit-score';
 
 interface AssessFitResponse {
   assessment: string;
@@ -72,12 +78,20 @@ interface ScoreJobResponse {
   company: string;
   title: string;
   url: string;
-  roleFit: {
+  // ENG-1995: the Fit Score ("should D apply") replaced the seven-signal
+  // roleFit table wholesale. `threshold`/`surfaced` travel with the score so a
+  // consumer cannot drift from the scorer's own bar.
+  fitScore: {
     total: number;
+    threshold: number;
+    surfaced: boolean;
     gateFailed: GateFailedReason[];
     gateEvidence: Record<string, string>;
-    breakdown: SignalBreakdown;
-    locationUnknown: boolean;
+    breakdown: FitBreakdown;
+    flags: FitFlag[];
+    titleTier: TitleTier;
+    remotePosture: CompanyRemotePosture;
+    experienceRaw: number | null;
   };
   currentScore: ReadinessCurrentScore;
   maxPossibleScore: number;
