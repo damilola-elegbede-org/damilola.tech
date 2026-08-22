@@ -243,10 +243,32 @@ export async function POST(req: Request) {
     // The corpus is required for both scores: Fit reads it as career evidence,
     // and ATS (Max) needs it so the ceiling can never assume fabrication.
     const corpus = await loadCareerCorpus(buildResumeText());
-    const [experienceDimensions, atsScore] = await Promise.all([
+    // ENG-2011: the ATS headroom assertion is correct and must stay loud — but
+    // its blast radius was the whole request, so a KNOWN-PENDING ATS defect
+    // took Fit down with it. Fit is independent, working, and the score that
+    // decides whether a role reaches D at all. Worse, the assertion fires only
+    // when the model happens to return gap 0, so whether a role scored at all
+    // was a coin flip.
+    //
+    // The ATS block is invalidated; the response is not.
+    const [experienceDimensions, atsSettled] = await Promise.all([
       scoreExperienceDimensions(corpus, scoringText),
-      scoreAts(scoringText, corpus),
+      scoreAts(scoringText, corpus).then(
+        (v) => ({ ok: true as const, v }),
+        (e: unknown) => ({ ok: false as const, e })
+      ),
     ]);
+
+    let atsScore: Awaited<ReturnType<typeof scoreAts>> | null = null;
+    let atsError: { code: string; message: string } | null = null;
+    if (atsSettled.ok) {
+      atsScore = atsSettled.v;
+    } else if (atsSettled.e instanceof AtsHeadroomUnverifiedError) {
+      atsError = { code: 'HEADROOM_INVARIANT', message: atsSettled.e.message };
+      console.error('[api/v1/score-job] ATS headroom unverified:', atsSettled.e.attributionFailures);
+    } else {
+      throw atsSettled.e;
+    }
     const fit = assembleFitScore(fitInput, fitGates, experienceDimensions);
 
 
@@ -282,23 +304,17 @@ export async function POST(req: Request) {
         totalWords: corpus.totalWords,
       },
       atsScore,
+      atsError,
       ...(interviewPrepMode ? { interviewPrepUnavailable: true } : {}),
       // Not knocked out here (the gateFailed branch returns earlier).
       knockout: { knockedOut: false, hardReasons: [], gateEvidence: {} },
       // AC6: shipped {null,null,null} on every response since ENG-1996. Now
       // derived by scoreAts from the rubric's addressable/structural split.
-      resumeGap: atsScore.resumeGap,
+      // Null when the ATS block was invalidated — the gap is an ATS property.
+      resumeGap: atsScore?.resumeGap ?? { achievable: null, closeable: null, structural: null },
       ...(resolvedInput.isEmptyShell ? { emptyShellFallback: true } : {}),
     });
   } catch (error) {
-    if (error instanceof AtsHeadroomUnverifiedError) {
-      // Distinct from a model outage on purpose. This is a deterministic
-      // verification failure — the ceiling lookup attributed nothing and the
-      // score cannot honestly claim "already maximal". A caller that cannot
-      // tell those apart will read a broken lookup as a finished résumé.
-      console.error('[api/v1/score-job] ATS headroom unverified:', error.attributionFailures);
-      return Errors.internalError(error.message);
-    }
     if (error instanceof CareerCorpusUnavailableError) {
       // Loud on purpose (A3). A Fit Score computed without the corpus is not a
       // worse score, it is a different question answered.
