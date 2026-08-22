@@ -547,23 +547,42 @@ export function resolveCompanyRemotePosture(company: string): CompanyRemotePostu
   return entry.posture;
 }
 
+/** A posting that says it is remote, without necessarily naming a country. */
+function statesRemote(jobDescription: string, tail: string, structuredLocation?: string): boolean {
+  const source = locationSources(tail, jobDescription, structuredLocation);
+  if (/\bhybrid\b|\bin-office\b|\bon-?site\b/.test(source)) return false;
+  return /\bremote\b/.test(source);
+}
+
 /**
  * Colorado always scores full marks regardless of posture. D lives in Boulder;
  * an on-site Boulder role is the best case, not a compromise. Posture only
  * decides roles outside Colorado.
  *
- * `unknown` scores 3 AND raises `posture_unknown` — it never silently takes a
- * middle value. Escalating that flag to D is the pipeline's job, not a pure
- * scoring function's.
+ * D's ruling, 2026-08-21: **a JD that says it is remote scores 15 on its own**,
+ * with no US token required, provided G4 has not resolved the role non-US.
+ * Measured on his own ideal-role fixture: "Remote friendly." with no country
+ * named scored 3/15 under the posture-only rule, which put a hand-built perfect
+ * role at 84 and dropped it to 74 the moment the experience component returned
+ * band 3 instead of band 4. A posting's own statement about remote work is
+ * evidence; company posture is what decides a posting that says nothing.
+ *
+ * `unknown` posture still scores 3 AND raises `posture_unknown` — it never
+ * silently takes a middle value. Escalating that flag to D is the pipeline's
+ * job, not a pure scoring function's.
  */
 export function scoreRemote(
   posture: CompanyRemotePosture,
   jobDescription: string,
   tail: string,
-  structuredLocation: string | undefined
+  structuredLocation: string | undefined,
+  geo: GeoVerdict = 'unknown'
 ): { pts: number; flag?: FitFlag } {
   if (isColorado(jobDescription, tail, structuredLocation)) return { pts: 15 };
   if (isRemoteUS(jobDescription, tail, structuredLocation)) return { pts: 15 };
+  // G4 gates non-US outright, so `geo` is 'us' or 'unknown' by the time a role
+  // is scored; the guard is belt-and-braces for a direct call.
+  if (geo !== 'non_us' && statesRemote(jobDescription, tail, structuredLocation)) return { pts: 15 };
   if (posture === 'remote-ok') return { pts: 12, flag: 'remote_negotiable' };
   if (posture === 'hub-flex') return { pts: 8 };
   if (posture === 'office-first') return { pts: 3 };
@@ -711,7 +730,7 @@ export function assembleFitScore(
   const experience = scoreExperienceMatch(experienceDimensions);
   const title = scoreTitle(gates.normalized);
   const comp = scoreComp(gates.maxStatedSalary);
-  const remote = scoreRemote(gates.posture, jobDescription, gates.tail, input.location);
+  const remote = scoreRemote(gates.posture, jobDescription, gates.tail, input.location, gates.geo);
 
   if (comp.flag) flags.push(comp.flag);
   if (remote.flag) flags.push(remote.flag);

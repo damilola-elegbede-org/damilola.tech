@@ -20,7 +20,6 @@ import {
   buildGapAnalysisPrompt,
   buildScorePayload,
   buildScoringInput,
-  buildResumeText,
 } from '@/lib/score-core';
 import {
   evaluateFitGates,
@@ -30,6 +29,7 @@ import {
   type FitScoreResult,
 } from '@/lib/fit-score';
 import { scoreExperienceDimensions } from '@/lib/fit-experience';
+import { loadCareerCorpus, CareerCorpusUnavailableError } from '@/lib/career-corpus';
 
 export const runtime = 'nodejs';
 
@@ -240,10 +240,16 @@ export async function POST(req: Request) {
       ? `${basePrompt}\n\nAdditionally, return exactly 5 "interviewPrepQuestions" in the JSON. Each must use behavioral framing — start with "Tell me about a time..." or "How would you approach...". Base questions on the top gap areas identified above.\n\nUpdated JSON schema: {"gapAnalysis":"...","maxPossibleScore":0-100,"recommendation":"...","interviewPrepQuestions":["Q1","Q2","Q3","Q4","Q5"]}\n\n<job_description>${xmlEscape(scoringText)}</job_description>`
       : `${basePrompt}\n\n<job_description>${xmlEscape(scoringText)}</job_description>`;
 
+    // ENG-1995 A1: Fit's experience component scores against the career-data
+    // corpus, not the resume. A3: a corpus that will not load is a hard failure —
+    // falling back to the resume would emit a plausible, lower score and nothing
+    // in the response would say why.
+    const corpus = await loadCareerCorpus();
+
     // The experience component's three dimension calls and the gap-analysis call
     // are independent — run them concurrently so the Fit Score costs latency, not
     // a serial round-trip per dimension on top of the existing one.
-    const experiencePromise = scoreExperienceDimensions(buildResumeText(), scoringText);
+    const experiencePromise = scoreExperienceDimensions(corpus, scoringText);
 
     const message = await scoringClient.messages.create({
       model: 'claude-opus-4-6',
@@ -309,14 +315,20 @@ export async function POST(req: Request) {
       title: normalizedTitle,
       url: normalizedUrl,
       fitScore: buildFitScorePayload(fit),
+      // A2: each award names the corpus file it came from and quotes it verbatim.
       experienceEvidence: experienceDimensions.map((d) => ({
         dimension: d.dimension,
         score: d.score,
         band: d.band,
-        resumeQuote: d.resumeQuote,
+        sourceFile: d.sourceFile,
+        corpusQuote: d.resumeQuote,
         jdQuote: d.jdQuote,
         evidenceRejected: d.evidenceRejected,
       })),
+      corpus: {
+        files: corpus.sources.map((s) => s.file),
+        totalWords: corpus.totalWords,
+      },
       currentScore,
       maxPossibleScore,
       gapAnalysis,
@@ -328,6 +340,12 @@ export async function POST(req: Request) {
       ...(interviewPrepQuestions ? { interviewPrepQuestions } : {}),
     });
   } catch (error) {
+    if (error instanceof CareerCorpusUnavailableError) {
+      // Loud on purpose (A3). A Fit Score computed without the corpus is not a
+      // worse score, it is a different question answered.
+      console.error('[api/v1/score-job] Career corpus unavailable:', error.missing);
+      return Errors.internalError(error.message);
+    }
     if (error instanceof JobDescriptionInputError) {
       return Errors.badRequest(error.message, { failure_mode: error.failureMode });
     }

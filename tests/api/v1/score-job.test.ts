@@ -85,6 +85,26 @@ vi.mock('@/lib/fit-experience', () => ({
   scoreExperienceDimensions: (...args: unknown[]) => mockScoreExperienceDimensions(...args),
 }));
 
+class FakeCorpusUnavailable extends Error {
+  constructor(public readonly missing: string[]) {
+    super(`Career corpus unavailable — could not load: ${missing.join(', ')}.`);
+  }
+}
+const mockLoadCareerCorpus = vi.fn();
+vi.mock('@/lib/career-corpus', () => ({
+  loadCareerCorpus: () => mockLoadCareerCorpus(),
+  CareerCorpusUnavailableError: FakeCorpusUnavailable,
+}));
+
+const fakeCorpus = {
+  sources: [
+    { file: 'anecdotes.md', text: 'a', words: 1 },
+    { file: 'star-stories.json', text: 'b', words: 1 },
+  ],
+  totalWords: 2,
+  document: 'corpus document',
+};
+
 const passingGates = {
   failed: [] as string[],
   evidence: {} as Record<string, string>,
@@ -116,6 +136,7 @@ const defaultExperienceDimensions = [
     jdQuote: 'lead platform engineering',
     evidenceRejected: false,
     optionOrder: [],
+    sourceFile: 'anecdotes.md',
   },
   {
     dimension: 'domain_evidence',
@@ -189,6 +210,7 @@ describe('POST /api/v1/score-job', () => {
       experienceRaw: null,
     }));
     mockScoreExperienceDimensions.mockResolvedValue(defaultExperienceDimensions);
+    mockLoadCareerCorpus.mockResolvedValue(fakeCorpus);
     mockBuildScoringInput.mockReturnValue({ readinessScore: { total: 75 } });
     mockBuildScorePayload.mockReturnValue({
       total: 75,
@@ -372,6 +394,16 @@ describe('POST /api/v1/score-job', () => {
       );
     });
 
+    it('fails loudly when the career corpus cannot be loaded, rather than scoring the resume — A3', async () => {
+      mockLoadCareerCorpus.mockRejectedValue(new FakeCorpusUnavailable(['verily-feedback.md']));
+
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest(validBody));
+
+      expect(response.status).toBe(500);
+      expect(mockScoreExperienceDimensions).not.toHaveBeenCalled();
+    });
+
     it('a scored (not knocked-out) role returns knockedOut: false with no reasons', async () => {
       const { POST } = await import('@/app/api/v1/score-job/route');
       const response = await POST(makeRequest(validBody));
@@ -405,10 +437,14 @@ describe('POST /api/v1/score-job', () => {
         experienceRaw: 9,
       }));
       expect(data.data.experienceEvidence).toEqual([
-        expect.objectContaining({ dimension: 'requirement_coverage', score: 3 }),
+        expect.objectContaining({ dimension: 'requirement_coverage', score: 3, sourceFile: 'anecdotes.md' }),
         expect.objectContaining({ dimension: 'domain_evidence', score: 3 }),
         expect.objectContaining({ dimension: 'leadership_evidence', score: 3 }),
       ]);
+      expect(data.data.corpus).toEqual({
+        files: ['anecdotes.md', 'star-stories.json'],
+        totalWords: 2,
+      });
       expect(data.data.currentScore).toEqual(expect.objectContaining({
         total: 75,
         breakdown: expect.objectContaining({ roleRelevance: 30 }),

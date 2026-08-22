@@ -1,6 +1,21 @@
 /**
  * Experience match — the Fit Score's 40-point component (ENG-1995).
  *
+ * ## What it scores against, and why it is not the résumé
+ *
+ * A1: this component reads the **career-data corpus**, not the one-page résumé.
+ * Fit asks "have I done this kind of work" — a fact about D's career, not about
+ * his formatting. The résumé path saw 21 highlight bullets; the corpus is
+ * ~14.3k words across six files. A role dropped because the one-pager omitted
+ * something he genuinely did is a false negative he never sees.
+ *
+ * A2: every award names the corpus file and quotes it verbatim. The rubric's own
+ * citation check clamps an uncited score to zero; `attributeCitation` extends
+ * that to "cited, and we can say which file" — a richer corpus must not become a
+ * licence to infer.
+ *
+ * A3: a corpus that will not load throws. It never falls back to the résumé.
+ *
  * This is the runner that `resume-rubric.ts` (ENG-1565) was built for and never
  * had: it turns the locked rubric into three model calls, one per dimension, and
  * feeds the graded results back through the rubric's own evidence-grounding.
@@ -32,13 +47,14 @@ import {
 } from '@/lib/resume-rubric';
 import { FIT_EXPERIENCE_DIMENSIONS } from '@/lib/fit-score';
 import { scoringClient, extractTextContent, parseJsonResponse } from '@/lib/score-core';
+import { attributeCitation, type CareerCorpus } from '@/lib/career-corpus';
 
 /** Same model the gap-analysis call already uses on this route. */
 export const FIT_EXPERIENCE_MODEL = 'claude-opus-4-6';
 const MAX_TOKENS = 400;
 
 const SYSTEM_PROMPT =
-  'You grade one rubric dimension at a time against verbatim evidence. Never infer a capability the resume does not state. Return JSON only.';
+  'You grade one rubric dimension at a time against verbatim evidence drawn from a career-data corpus. Never infer a capability the corpus does not state. Return JSON only.';
 
 /**
  * FNV-1a over the job description. Deterministic, dependency-free, and stable
@@ -76,6 +92,12 @@ export interface ExperienceMatchOptions {
   client?: DimensionMessageClient;
 }
 
+/** A graded dimension plus the corpus file its evidence came from (A2). */
+export interface CorpusDimensionResult extends DimensionResult {
+  /** Basename of the corpus file the quote was found in; null when unattributable. */
+  sourceFile: string | null;
+}
+
 /**
  * Grade the three Fit-path dimensions concurrently.
  *
@@ -85,12 +107,17 @@ export interface ExperienceMatchOptions {
  * failure is logged so a run that loses dimensions wholesale is visible.
  */
 export async function scoreExperienceDimensions(
-  resumeText: string,
+  corpus: CareerCorpus,
   jobDescription: string,
   options: ExperienceMatchOptions = {}
-): Promise<DimensionResult[]> {
+): Promise<CorpusDimensionResult[]> {
   const client = options.client ?? (scoringClient as unknown as DimensionMessageClient);
   const seed = seedFor(jobDescription);
+  // The rubric's own machinery is reused unchanged; the "resume" it grades
+  // against is the delimited corpus document, so `citationAppearsIn` verifies
+  // the quote against everything true rather than everything currently written
+  // down. `attributeCitation` then resolves WHICH file it came from.
+  const corpusText = corpus.document;
 
   const specs = FIT_EXPERIENCE_DIMENSIONS.map((key: DimensionKey) => {
     const spec = RUBRIC_DIMENSIONS.find((d) => d.key === key);
@@ -100,7 +127,7 @@ export async function scoreExperienceDimensions(
 
   return Promise.all(
     specs.map(async (spec) => {
-      const call = buildDimensionCall(spec, resumeText, jobDescription, seed);
+      const call = buildDimensionCall(spec, corpusText, jobDescription, seed);
       let reply: RawDimensionReply = {};
       try {
         const message = await client.messages.create({
@@ -127,7 +154,15 @@ export async function scoreExperienceDimensions(
         );
         reply = {};
       }
-      return scoreDimension(call, reply, resumeText, jobDescription);
+      const graded = scoreDimension(call, reply, corpusText, jobDescription);
+      const sourceFile = attributeCitation(graded.resumeQuote, corpus.sources);
+      // A2: cited-but-unattributable is not evidence. The rubric already
+      // clamped a quote it could not find at all; this clamps one we cannot
+      // pin to a named file.
+      if (graded.score > 0 && sourceFile === null) {
+        return { ...graded, score: 0, band: 'absent' as const, evidenceRejected: true, sourceFile: null };
+      }
+      return { ...graded, sourceFile };
     })
   );
 }

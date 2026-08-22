@@ -197,6 +197,23 @@ describe('component 4 — remote friendliness (15)', () => {
     expect(scoreRemote('office-first', 'Onsite in Austin.', '', undefined).pts).toBe(3);
   });
 
+  it("scores a JD that says it is remote at 15, with no country named — D's ruling", () => {
+    // Measured on his own ideal-role fixture: "Remote friendly." carries no US
+    // token, so posture-only scoring gave it 3/15 and put a hand-built perfect
+    // role at 84 — dropping to 74 the moment the model returned band 3.
+    expect(scoreRemote('unknown', 'Remote friendly.', '', undefined, 'unknown').pts).toBe(15);
+    expect(scoreRemote('office-first', 'This role is remote.', '', undefined, 'us').pts).toBe(15);
+  });
+
+  it('does not treat a hybrid or on-site posting as remote', () => {
+    expect(scoreRemote('unknown', 'Hybrid, 3 days in office. Remote-eligible.', '', undefined).pts).toBe(3);
+    expect(scoreRemote('unknown', 'Onsite in Austin, remote considered later.', '', undefined).pts).toBe(3);
+  });
+
+  it('does not award a JD-stated remote signal to a non-US role', () => {
+    expect(scoreRemote('unknown', 'Fully remote across Europe.', 'warsaw', undefined, 'non_us').pts).toBe(3);
+  });
+
   it('scores unknown 3 and flags it — never a silent middle value', () => {
     expect(scoreRemote('unknown', 'Onsite in Austin.', '', undefined)).toEqual({
       pts: 3,
