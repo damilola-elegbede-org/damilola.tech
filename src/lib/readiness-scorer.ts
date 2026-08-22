@@ -59,18 +59,27 @@ export interface ReadinessScore {
 export interface ResumeData {
   /** Candidate's current/target title */
   title?: string;
+  /** Positioning line (ENG-1993) */
+  tagline?: string;
   /** Years of experience */
   yearsExperience?: number;
   /** Skills listed in the resume */
   skills?: string[];
   /** Structured skills by category */
   skillsByCategory?: Array<{ category: string; items: string[] }>;
+  /** Tiered skill claims — expert/proficient/familiar (ENG-1993) */
+  skillsAssessment?: { expert: string[]; proficient: string[]; familiar: string[] };
+  /** Cross-role positioning tags, e.g. "Engineering Management" (ENG-1993) */
+  experienceTags?: string[];
   /** Team size managed */
   teamSize?: string;
   /** Experience entries */
   experiences?: Array<{
     title?: string;
     company?: string;
+    location?: string;
+    startDate?: string;
+    endDate?: string;
     highlights?: string[];
   }>;
   /** Education entries */

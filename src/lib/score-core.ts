@@ -107,25 +107,66 @@ export function parseJsonResponse(text: string): Record<string, unknown> {
 }
 
 /**
+ * Derives total years of experience from the earliest experience startDate to
+ * the latest endDate ("Present" counts as now). Returns undefined — never a
+ * stale guess — when a date can't be parsed, per ENG-1993 acceptance #3.
+ */
+export function deriveYearsExperience(
+  experiences: Array<{ startDate?: string; endDate?: string }>,
+  now: Date = new Date()
+): number | undefined {
+  const toDate = (value: string | undefined): Date | undefined => {
+    if (!value) return undefined;
+    if (value.trim().toLowerCase() === 'present') return now;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+  };
+
+  const starts = experiences.map((e) => toDate(e.startDate)).filter((d): d is Date => d !== undefined);
+  const ends = experiences.map((e) => toDate(e.endDate)).filter((d): d is Date => d !== undefined);
+  if (starts.length === 0 || ends.length !== experiences.length || starts.length !== experiences.length) {
+    return undefined;
+  }
+
+  const earliestStart = new Date(Math.min(...starts.map((d) => d.getTime())));
+  const latestEnd = new Date(Math.max(...ends.map((d) => d.getTime())));
+  const msPerYear = 365.25 * 24 * 60 * 60 * 1000;
+  const years = (latestEnd.getTime() - earliestStart.getTime()) / msPerYear;
+  return years > 0 ? Math.round(years) : undefined;
+}
+
+/**
  * The canonical resumeData singleton, narrowed to the shape the scorers take.
  *
  * Extracted from buildScoringInput so the Fit Score's experience component
  * (ENG-1995) can read the same resume text the readiness scorer sees, without
- * duplicating the narrowing. ENG-1993 is the ticket that fixes what this
- * narrowing DROPS — experienceTags, tiered skillsAssessment, tagline, and the
- * location/startDate/endDate on each experience — plus the two hardcoded values
- * below, which are Verily-era and cannot follow D.
+ * duplicating the narrowing.
+ *
+ * ENG-1993: experienceTags, tiered skillsAssessment, tagline, and each
+ * experience's location/startDate/endDate now pass through instead of being
+ * silently dropped. yearsExperience is derived from the date span (see
+ * deriveYearsExperience) instead of the hardcoded 15. teamSize has no
+ * structured source in resumeData today — asserting the old Verily-era
+ * '13 engineers' string would be a stale claim that can never follow D to
+ * Visa, so it is left undefined rather than guessed; deriving it needs a real
+ * data source, which is unaddressed scope (see the PR/issue comment).
  */
 export function buildScorerResumeData(): ScorerResumeData {
   return {
     title: resumeData.title,
-    yearsExperience: 15,
-    teamSize: '13 engineers',
+    tagline: resumeData.tagline,
+    yearsExperience: deriveYearsExperience(resumeData.experiences),
+    teamSize: undefined,
     skills: resumeData.skills.flatMap((s) => s.items),
     skillsByCategory: resumeData.skills,
+    skillsAssessment: resumeData.skillsAssessment,
+    experienceTags: resumeData.experienceTags,
     experiences: resumeData.experiences.map((e) => ({
       title: e.title,
       company: e.company,
+      location: e.location,
+      startDate: e.startDate,
+      endDate: e.endDate,
       highlights: e.highlights,
     })),
     education: resumeData.education?.map((e) => ({
