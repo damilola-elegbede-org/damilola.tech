@@ -13,7 +13,7 @@ import {
   type DimensionResult, type RawDimensionReply,
 } from '@/lib/resume-rubric';
 import { anchor } from '@/lib/resume-anchoring';
-import { attributeCitation, loadCareerCorpus, type CareerCorpus } from '@/lib/career-corpus';
+import { attributeCitation, loadCareerCorpus, RESUME_SOURCE_LABEL, type CareerCorpus } from '@/lib/career-corpus';
 
 /**
  * Shared Anthropic client configured with the extended cache TTL beta header.
@@ -182,10 +182,17 @@ export async function scoreAts(jobDescription: string, corpus?: CareerCorpus): P
   const calls = RUBRIC_DIMENSIONS.map((d) => buildDimensionCall(d, resumeText, jobDescription, seed));
   const dimensions = await Promise.all(calls.map((call) => callDimension(call, resumeText, jobDescription)));
   const addressable = RUBRIC_DIMENSIONS.filter((d) => d.ceiling === 'addressable');
+  // The ceiling answers "what could the résumé truthfully say if rewritten
+  // using career-corpus evidence" — a citation landing only in the résumé
+  // itself proves nothing beyond what `current` already scored, so it must
+  // not be accepted as ceiling support. The résumé stays in the model's
+  // context (it's still part of `careerCorpus.document`); only attribution
+  // excludes it.
+  const nonResumeSources = careerCorpus.sources.filter((s) => s.file !== RESUME_SOURCE_LABEL);
   const corpusScores = await Promise.all(addressable.map(async (dimension) => {
     const call = buildDimensionCall(dimension, careerCorpus.document, jobDescription, `${seed}:corpus`);
     const scored = await callDimension(call, careerCorpus.document, jobDescription);
-    return [dimension.key, attributeCitation(scored.resumeQuote, careerCorpus.sources) ? scored.score : 0] as const;
+    return [dimension.key, attributeCitation(scored.resumeQuote, nonResumeSources) ? scored.score : 0] as const;
   }));
   const support = new Map(corpusScores);
   const bounded = dimensions.map((d) => ({ ...d, ceilingScore: support.get(d.dimension) ?? d.score }));

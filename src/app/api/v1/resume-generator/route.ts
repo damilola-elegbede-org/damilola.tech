@@ -73,24 +73,34 @@ function normalizeChanges(changes: unknown, resumeText: string, jobDescription: 
     return [];
   }
 
+  // Anchors are evidence, not model assertions: `original` must be a whole
+  // résumé line verbatim, not merely a substring somewhere in the document —
+  // a fragment match would let an unrelated line "anchor" a claim.
+  const resumeLines = new Set(
+    resumeText.split('\n').map((line) => line.trim()).filter((line) => line.length > 0)
+  );
+
   return changes
     .filter((change) => change && typeof change === 'object')
     .map((change) => {
       const value = change as Record<string, unknown>;
       const original = typeof value.original === 'string' ? value.original.trim() : '';
+      const modified = typeof value.modified === 'string' ? value.modified.trim() : '';
       const jdRequirement = typeof value.jdRequirement === 'string' ? value.jdRequirement.trim() : '';
       return {
         section: typeof value.section === 'string' ? value.section : 'unknown',
         original,
-        modified: typeof value.modified === 'string' ? value.modified : '',
+        modified,
         reason: typeof value.reason === 'string' ? value.reason : '',
         relevanceSignals: [jdRequirement],
         impactPoints: 0,
       };
     })
-    // Anchors are evidence, not model assertions: both strings must be verbatim.
     .filter((change) => change.original.length > 0 && change.relevanceSignals[0].length > 0 &&
-      resumeText.includes(change.original) && jobDescription.includes(change.relevanceSignals[0]) &&
+      resumeLines.has(change.original) &&
+      // A rewrite must actually propose different text.
+      change.modified.length > 0 && change.modified !== change.original &&
+      jobDescription.includes(change.relevanceSignals[0]) &&
       sharesSpecificTerm(change.original, change.relevanceSignals[0]))
     .map((change, index, valid) => ({
       ...change,

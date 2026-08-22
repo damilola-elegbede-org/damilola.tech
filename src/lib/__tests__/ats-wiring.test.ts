@@ -1,12 +1,54 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/lib/career-corpus', () => ({
+  loadCareerCorpus: vi.fn().mockResolvedValue({
+    sources: [
+      { file: 'resume.txt', text: 'resume evidence text', words: 3 },
+      { file: 'technical-expertise.md', text: 'corpus evidence text', words: 3 },
+    ],
+    totalWords: 6,
+    document: '<<<source: resume.txt>>>\nresume evidence text\n<<<end: resume.txt>>>\n<<<source: technical-expertise.md>>>\ncorpus evidence text\n<<<end: technical-expertise.md>>>',
+  }),
+  attributeCitation: (quote: string | null, sources: Array<{ file: string }>) => (quote ? sources[0]?.file ?? null : null),
+  RESUME_SOURCE_LABEL: 'resume.txt',
+  CareerCorpusUnavailableError: class extends Error {},
+}));
+
+// Extracts a verbatim snippet from the prompt's own <resume> and
+// <job_description> blocks so the citation-grounding check in
+// resume-rubric's scoreDimension() passes for real, rather than stubbing it
+// out — this exercises the actual rubric + anchoring path.
+const mockCreate = vi.fn().mockImplementation(async ({ messages }: { messages: Array<{ content: string }> }) => {
+  const prompt = messages[0].content;
+  const resumeMatch = /<resume>([\s\S]*?)<\/resume>/.exec(prompt);
+  const jdMatch = /<job_description>([\s\S]*?)<\/job_description>/.exec(prompt);
+  const resumeQuote = (resumeMatch?.[1] ?? '').trim().slice(0, 40);
+  const jdQuote = (jdMatch?.[1] ?? '').trim().slice(0, 40);
+  return {
+    content: [{ type: 'text', text: JSON.stringify({ band: 'strong', resumeQuote, jdQuote }) }],
+  };
+});
+
+vi.mock('@anthropic-ai/sdk', () => ({
+  default: class MockAnthropic {
+    messages = { create: mockCreate };
+  },
+}));
 
 describe('ATS production wiring (ENG-1996 AC10)', () => {
-  it('reaches both the locked rubric and anchoring modules from production code', () => {
-    const core = readFileSync(resolve(process.cwd(), 'src/lib/score-core.ts'), 'utf8');
-    expect(core).toContain("from '@/lib/resume-rubric'");
-    expect(core).toContain("from '@/lib/resume-anchoring'");
-    expect(core).toContain('scoreAts(');
+  it('scoreAts() reaches the locked rubric and anchoring modules and returns a bounded score', async () => {
+    const { scoreAts } = await import('@/lib/score-core');
+    const result = await scoreAts('Job description requiring relevant experience.');
+
+    // Five locked dimensions, each in range [0, 4] per RUBRIC_BANDS, so
+    // current/max totals (score * 5) are bounded [0, 100] — this only holds
+    // if the real rubric assembly ran, not a stub.
+    expect(result.current.total).toBeGreaterThanOrEqual(0);
+    expect(result.current.total).toBeLessThanOrEqual(100);
+    expect(result.max.total).toBeGreaterThanOrEqual(result.current.total);
+    expect(result.current.breakdown).toHaveLength(5);
+    expect(result.gap).toBe(result.max.total - result.current.total);
+    expect(typeof result.gapLine).toBe('string');
+    expect(result.gapLine.length).toBeGreaterThan(0);
   });
 });
