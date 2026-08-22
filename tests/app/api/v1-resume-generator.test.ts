@@ -16,9 +16,11 @@ vi.mock('@anthropic-ai/sdk', () => ({ default: class { messages = { create: mock
 
 vi.mock('@/lib/career-corpus', () => ({
   loadCareerCorpus: vi.fn().mockResolvedValue({
-    sources: [{ file: 'resume.txt', text: 'resume evidence text', words: 3 }],
+    // "2020" is deliberately present: it is what made the old substring check
+    // accept a fabricated "20". A corpus without it tests nothing.
+    sources: [{ file: 'resume.txt', text: 'resume evidence text since 2020, cut costs 30 percent', words: 9 }],
     totalWords: 3,
-    document: '<<<source: resume.txt>>>\nresume evidence text\n<<<end: resume.txt>>>',
+    document: '<<<source: resume.txt>>>\nresume evidence text since 2020, cut costs 30 percent\n<<<end: resume.txt>>>',
   }),
   attributeCitation: () => 'resume.txt',
   RESUME_SOURCE_LABEL: 'resume.txt',
@@ -61,6 +63,44 @@ describe('v1 resume generator ATS contract', () => {
 
     expect(response.status).toBe(200);
     expect(body.data.proposedChanges).toEqual([]);
+  });
+
+  it('does not let a corpus year satisfy a fabricated number', async () => {
+    // The substring trap: the corpus contains "2020", so `includes("20")` was
+    // true and a fabricated "20%" sailed through the guard that claimed to stop
+    // it. Quantities are compared as tokens now.
+    mockScoreAts.mockResolvedValue(ats(6));
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: JSON.stringify({ proposedChanges: [{
+      section: 'experience',
+      original: 'Built CI/CD platform with Kubernetes and Terraform',
+      modified: 'Built CI/CD platform with Kubernetes and Terraform across 20 teams',
+      reason: 'quantify',
+      jdRequirement: 'CI/CD, build and release infrastructure',
+    }] }) }] });
+
+    const { POST } = await import('@/app/api/v1/resume-generator/route');
+    const body = await (await POST(request(IDEAL_JD))).json();
+
+    expect(body.data.proposedChanges).toEqual([]);
+    expect(body.data.unaddressableGap).toBe(6);
+  });
+
+  it('accepts a supported figure even when the sentence ends in a period', async () => {
+    // The other direction of the same bug: "cut costs 30." tokenised to "30."
+    // and a figure the corpus genuinely supports was rejected as fabricated.
+    mockScoreAts.mockResolvedValue(ats(6));
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: JSON.stringify({ proposedChanges: [{
+      section: 'experience',
+      original: 'Built CI/CD platform with Kubernetes and Terraform',
+      modified: 'Built CI/CD platform with Kubernetes and Terraform, cut costs 30.',
+      reason: 'quantify from corpus evidence',
+      jdRequirement: 'CI/CD, build and release infrastructure',
+    }] }) }] });
+
+    const { POST } = await import('@/app/api/v1/resume-generator/route');
+    const body = await (await POST(request(IDEAL_JD))).json();
+
+    expect(body.data.proposedChanges).toHaveLength(1);
   });
 
   it('keeps a rewrite whose numbers already exist in the line it edits', async () => {

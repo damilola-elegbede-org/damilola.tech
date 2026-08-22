@@ -9,7 +9,7 @@ import {
   RATE_LIMIT_CONFIGS,
 } from '@/lib/rate-limit';
 import { buildResumeText, scoreAts, type AtsScore } from '@/lib/score-core';
-import { loadCareerCorpus } from '@/lib/career-corpus';
+import { loadCareerCorpus, CareerCorpusUnavailableError } from '@/lib/career-corpus';
 import { getResumeGeneratorPrompt } from '@/lib/resume-generator-prompt';
 import type { ProposedChange } from '@/lib/types/resume-generation';
 import { JobDescriptionInputError, resolveJobDescriptionInput } from '@/lib/job-description-input';
@@ -83,14 +83,33 @@ function sharesSpecificTerm(resumeLine: string, requirement: string): boolean {
  * invented by the model, and the change is dropped rather than repaired — a
  * partially-invented rewrite is not worth the risk of D pasting it.
  */
-const QUANTITY = /\d[\d,.]*\s*%?/g;
+const QUANTITY = /\d[\d,]*(?:\.\d+)?\s*%?/g;
 
+/**
+ * "1,200" and "1200" are the same claim. A trailing sentence period is already
+ * excluded by QUANTITY's `(?:\.\d+)?` — it only consumes a dot followed by
+ * digits — so "cut costs 30." tokenises to "30" without extra stripping.
+ */
+function normalizeQuantity(raw: string): string {
+  return raw.replace(/,/g, '').replace(/\s+/g, '').toLowerCase();
+}
+
+function quantitySet(text: string): Set<string> {
+  return new Set([...text.matchAll(QUANTITY)].map((m) => normalizeQuantity(m[0])).filter(Boolean));
+}
+
+/**
+ * Compared as TOKENS, never as substrings.
+ *
+ * `corpus.includes("20")` is true for any corpus containing "2020", "120" or a
+ * ticket id — so a substring test would wave through almost every fabricated
+ * number while the comment above claimed it was blocking them. It also cut the
+ * other way: a sentence ending "cut costs 30." tokenised to "30." and a
+ * perfectly supported figure was rejected.
+ */
 function inventsAQuantity(modified: string, original: string, corpusText: string): boolean {
-  const known = `${original}\n${corpusText}`.replace(/,/g, '');
-  return [...modified.replace(/,/g, '').matchAll(QUANTITY)]
-    .map((m) => m[0].trim())
-    .filter((q) => q.length > 0)
-    .some((q) => !known.includes(q));
+  const known = quantitySet(`${original}\n${corpusText}`);
+  return [...quantitySet(modified)].some((q) => !known.has(q));
 }
 
 function normalizeChanges(changes: unknown, resumeText: string, jobDescription: string, gap: number, corpusText = ''): ProposedChange[] {
@@ -295,6 +314,14 @@ export async function POST(req: Request) {
 
     return apiSuccess(responseData);
   } catch (error) {
+    if (error instanceof CareerCorpusUnavailableError) {
+      // Same explicit handling score-job gives it. Without the corpus, ATS (Max)
+      // cannot bound its ceiling by real evidence — and a rewrite suggested
+      // against an unbounded ceiling is exactly the fabrication this route
+      // exists to prevent. "AI service error" would hide which of those it was.
+      console.error('[api/v1/resume-generator] Career corpus unavailable:', error.missing);
+      return Errors.internalError(error.message);
+    }
     if (error instanceof JobDescriptionInputError) {
       return Errors.badRequest(error.message);
     }
