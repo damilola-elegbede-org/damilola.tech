@@ -85,7 +85,11 @@ export const SKILL_SYNONYMS: Record<string, string[]> = {
   'jenkins': ['ci server', 'build automation'],
 
   // Programming languages
-  'python': ['py', 'python3', 'python2'],
+  // 'pythonic' is a word-form variant a word-boundary match cannot reach.
+  // ENG-2011 removed substring matching for single tokens ("rust" was matching
+  // inside "trust"); the few legitimate substring hits are recovered here as
+  // reviewable data rather than by re-admitting every false positive.
+  'python': ['py', 'python3', 'python2', 'pythonic'],
   'javascript': ['js', 'node', 'nodejs', 'typescript', 'ts', 'ecmascript'],
   'typescript': ['ts', 'node typescript'],
   'java': ['jvm', 'java8', 'java11', 'java17', 'spring', 'spring boot'],
@@ -275,6 +279,9 @@ export const KNOWN_PHRASES = new Set([
   'user research', 'customer experience', 'digital transformation',
   'technical strategy', 'technology roadmap', 'strategic planning',
   'open source',
+  'open-source',
+  'inner source',
+  'inner-source',
 
   // Compliance & Governance
   'regulatory compliance', 'risk management', 'audit compliance',
@@ -294,6 +301,27 @@ export const KNOWN_PHRASES = new Set([
 
 /** Sorted phrases longest-first for greedy extraction. */
 const SORTED_PHRASES = [...KNOWN_PHRASES].sort((a, b) => b.length - a.length);
+
+/**
+ * Fold the separators that split one concept into two spellings.
+ *
+ * ENG-2011: `KNOWN_PHRASES` held `open source` but not `open-source`, and phrase
+ * extraction did a raw `indexOf`. The NVIDIA JD writes it hyphenated in both
+ * places that matter, so the phrase never formed and decomposed into tokens —
+ * which then matched D's corpus on `open` ("open to new opportunities"),
+ * `source` ("demanded significant resources") and `contribution` ("cumulus
+ * contributions"). Five of eight tokens hit, none of them meaning what the
+ * requirement meant.
+ *
+ * That is fabrication happening BEFORE any model call, so no downstream guard
+ * can see it.
+ */
+export function normalizeSeparators(text: string): string {
+  return text
+    .replace(/[\u2010-\u2015\u2212]/g, '-')  // unicode dashes → ascii hyphen
+    .replace(/[-/]+/g, ' ')                   // hyphen and slash → space
+    .replace(/\s+/g, ' ');
+}
 
 /**
  * Technology keywords commonly found in JDs.
@@ -479,16 +507,17 @@ export function stemWord(word: string): string {
  * Returns found phrases and the remaining text with phrases removed.
  */
 export function extractPhrases(text: string): { phrases: string[]; remainder: string } {
-  let remaining = text.toLowerCase();
+  // Both sides normalised, so "open-source" and "open source" are one phrase.
+  let remaining = normalizeSeparators(text.toLowerCase());
   const phrases: string[] = [];
 
   for (const phrase of SORTED_PHRASES) {
-    const phraseLower = phrase;
+    const phraseLower = normalizeSeparators(phrase);
     // Find all occurrences of this phrase
     let searchFrom = 0;
     let idx = remaining.indexOf(phraseLower, searchFrom);
     while (idx !== -1) {
-      phrases.push(phraseLower);
+      phrases.push(phrase);
       // Replace occurrence with spaces to preserve positions and avoid overlapping matches
       remaining = remaining.slice(0, idx) + ' '.repeat(phraseLower.length) + remaining.slice(idx + phraseLower.length);
       searchFrom = idx + phraseLower.length;
@@ -955,22 +984,31 @@ export function matchKeywords(
 
   for (const keyword of keywords) {
     const keywordLower = keyword.toLowerCase();
-    const isShort = keywordLower.length <= 3 && !keywordLower.includes(' ');
     const isPhrase = keywordLower.includes(' ');
 
     // 1. Check exact match
+    //
+    // ENG-2011: word boundaries apply to EVERY single token, not just those of
+    // three characters or fewer. The length gate let any longer keyword match a
+    // raw substring, and the false positives are not hypothetical — measured
+    // against D's résumé and the NVIDIA JD:
+    //
+    //   "rust"  matched "...relationships and t[rust] through excellent..."
+    //   "scala" matched "...secure, [scala]ble ci/cd infrastructure..."
+    //
+    // "scalable" is in NVIDIA's opening line, so this was live for a fixture we
+    // score against. java/javascript, react/reactive and source/resource are the
+    // same shape and still latent.
+    //
+    // Substring matching survives only for multi-word phrases, where the space
+    // is its own boundary.
     let exactMatch = false;
     if (isPhrase) {
-      // Multi-word: check substring in resume
       exactMatch = resumeLower.includes(keywordLower);
-    } else if (isShort) {
-      // Short words: use word-boundary regex to avoid false positives
-      const escaped = keywordLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const boundaryPattern = new RegExp(`\\b${escaped}\\b`);
-      exactMatch = boundaryPattern.test(resumeLower);
     } else {
-      // Normal words: token set or substring
-      exactMatch = resumeTokens.has(keywordLower) || resumeLower.includes(keywordLower);
+      const escaped = keywordLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      exactMatch =
+        resumeTokens.has(keywordLower) || new RegExp(`\\b${escaped}\\b`).test(resumeLower);
     }
 
     if (exactMatch) {
@@ -1012,13 +1050,15 @@ export function matchKeywords(
     const allSynonyms = [...directSynonyms, ...additionalSynonyms];
     for (const syn of allSynonyms) {
       const synLower = syn.toLowerCase();
-      // Use boundary matching for short synonyms too
+      // ENG-2011: word boundaries on EVERY single-token synonym, same as the
+      // exact rung. The old length<=3 gate let a longer synonym substring-match
+      // — the identical defect, one rung down and just as invisible.
       let synMatch = false;
-      if (synLower.length <= 3 && !synLower.includes(' ')) {
+      if (synLower.includes(' ')) {
+        synMatch = resumeLower.includes(synLower);
+      } else {
         const escaped = synLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         synMatch = new RegExp(`\\b${escaped}\\b`).test(resumeLower);
-      } else {
-        synMatch = resumeLower.includes(synLower);
       }
       if (synMatch) {
         matched.push(keyword);

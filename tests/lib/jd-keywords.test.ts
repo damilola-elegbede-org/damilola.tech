@@ -781,14 +781,26 @@ describe('ATS Keywords - matchKeywords', () => {
     expect(matched.length).toBeGreaterThanOrEqual(0);
   });
 
-  it('does not match partial words', () => {
-    const keywords = ['python'];
-    const resume = 'pythonic style';
+  it('does not match a keyword inside an unrelated longer word (ENG-2011)', () => {
+    // This test previously asserted the DEFECT: its name said "does not match
+    // partial words" while its body required 'python' to match 'pythonic' via
+    // substring. That substring rule is what matched 'rust' inside 'trust' and
+    // 'scala' inside 'scalable' — and 'scalable' is in the NVIDIA JD's opening
+    // line, so it was live for a fixture we score against.
+    expect(matchKeywords(['rust'], 'relationships and trust through excellent').matched).toEqual([]);
+    expect(matchKeywords(['scala'], 'secure, scalable ci/cd infrastructure').matched).toEqual([]);
+    expect(matchKeywords(['java'], 'javascript and typescript').matched).toEqual([]);
+    expect(matchKeywords(['source'], 'demanded significant resources').matched).toEqual([]);
+  });
 
-    // 'python' should match in 'pythonic' via substring
-    const { matched } = matchKeywords(keywords, resume);
+  it('still matches a legitimate word-form variant, via the synonym table', () => {
+    // The recall lost by dropping substring matching is recovered as reviewable
+    // data, not by re-admitting every false positive.
+    expect(matchKeywords(['python'], 'pythonic style').matched).toContain('python');
+  });
 
-    expect(matched).toContain('python');
+  it('matches whole words exactly', () => {
+    expect(matchKeywords(['python'], 'python and go').matched).toContain('python');
   });
 
   it('prefers exact match over stem match', () => {
