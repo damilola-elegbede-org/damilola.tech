@@ -5,7 +5,7 @@
  * to initialise in a browser-like environment. The runner is server-only code.
  */
 import { describe, it, expect } from 'vitest';
-import { buildScorerResumeData } from '@/lib/score-core';
+import { buildScorerResumeData, buildResumeText } from '@/lib/score-core';
 import { resumeData } from '@/lib/resume-data';
 
 describe('buildScorerResumeData (ENG-1993)', () => {
@@ -45,5 +45,21 @@ describe('buildScorerResumeData (ENG-1993)', () => {
   it('does not assert the stale Verily-era teamSize', () => {
     const data = buildScorerResumeData();
     expect(data.teamSize).not.toBe('13 engineers');
+  });
+});
+
+describe('buildResumeText (ENG-1996)', () => {
+  it('renders through buildScorerResumeData, not a narrower ad hoc adapter', () => {
+    const text = buildResumeText();
+    // Fields buildResumeText used to bypass by hand-listing a subset of
+    // ScorerResumeData instead of delegating to buildScorerResumeData().
+    if (resumeData.tagline) expect(text).toContain(resumeData.tagline);
+    resumeData.experienceTags?.forEach((tag) => expect(text).toContain(tag));
+  });
+
+  it('still includes name and summary, which buildScorerResumeData does not derive on its own', () => {
+    const text = buildResumeText();
+    expect(text).toContain(resumeData.name);
+    expect(text).toContain(resumeData.brandingStatement);
   });
 });

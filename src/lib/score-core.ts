@@ -118,6 +118,8 @@ export function deriveYearsExperience(
  */
 export function buildScorerResumeData(): ScorerResumeData {
   return {
+    name: resumeData.name,
+    summary: resumeData.brandingStatement,
     title: resumeData.title,
     tagline: resumeData.tagline,
     yearsExperience: deriveYearsExperience(resumeData.experiences),
@@ -144,14 +146,7 @@ export function buildScorerResumeData(): ScorerResumeData {
 
 /** The plain-text resume both scoring paths grade against. */
 export function buildResumeText(): string {
-  return resumeDataToText({
-    name: resumeData.name,
-    summary: resumeData.brandingStatement,
-    title: resumeData.title,
-    skillsByCategory: resumeData.skills,
-    experiences: resumeData.experiences,
-    education: resumeData.education,
-  });
+  return resumeDataToText(buildScorerResumeData());
 }
 
 /**
