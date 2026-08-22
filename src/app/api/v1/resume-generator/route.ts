@@ -9,6 +9,7 @@ import {
   RATE_LIMIT_CONFIGS,
 } from '@/lib/rate-limit';
 import { buildResumeText, scoreAts, type AtsScore } from '@/lib/score-core';
+import { loadCareerCorpus } from '@/lib/career-corpus';
 import { getResumeGeneratorPrompt } from '@/lib/resume-generator-prompt';
 import type { ProposedChange } from '@/lib/types/resume-generation';
 import { JobDescriptionInputError, resolveJobDescriptionInput } from '@/lib/job-description-input';
@@ -68,7 +69,31 @@ function sharesSpecificTerm(resumeLine: string, requirement: string): boolean {
   return [...words(requirement)].some((word) => !ignored.has(word) && resumeWords.has(word));
 }
 
-function normalizeChanges(changes: unknown, resumeText: string, jobDescription: string, gap: number): ProposedChange[] {
+/**
+ * Numbers are where fabrication hides.
+ *
+ * A rewrite can be perfectly anchored — `original` is a real résumé line, the JD
+ * requirement is verbatim — and still smuggle in a metric nobody can support:
+ * "Led the platform migration" becomes "Led the platform migration, cutting
+ * build times 60%". The anchor checks pass, the change is emitted, and it is
+ * handed to D as something safe to put on a résumé.
+ *
+ * So every quantity in `modified` must already exist in the line being rewritten
+ * or somewhere in the career corpus. A quantity that appears in neither was
+ * invented by the model, and the change is dropped rather than repaired — a
+ * partially-invented rewrite is not worth the risk of D pasting it.
+ */
+const QUANTITY = /\d[\d,.]*\s*%?/g;
+
+function inventsAQuantity(modified: string, original: string, corpusText: string): boolean {
+  const known = `${original}\n${corpusText}`.replace(/,/g, '');
+  return [...modified.replace(/,/g, '').matchAll(QUANTITY)]
+    .map((m) => m[0].trim())
+    .filter((q) => q.length > 0)
+    .some((q) => !known.includes(q));
+}
+
+function normalizeChanges(changes: unknown, resumeText: string, jobDescription: string, gap: number, corpusText = ''): ProposedChange[] {
   if (!Array.isArray(changes)) {
     return [];
   }
@@ -101,7 +126,8 @@ function normalizeChanges(changes: unknown, resumeText: string, jobDescription: 
       // A rewrite must actually propose different text.
       change.modified.length > 0 && change.modified !== change.original &&
       jobDescription.includes(change.relevanceSignals[0]) &&
-      sharesSpecificTerm(change.original, change.relevanceSignals[0]))
+      sharesSpecificTerm(change.original, change.relevanceSignals[0]) &&
+      !inventsAQuantity(change.modified, change.original, corpusText))
     .map((change, index, valid) => ({
       ...change,
       // This is an exact ATS-gap allocation, never a rescale of model estimates.
@@ -168,7 +194,10 @@ export async function POST(req: Request) {
     );
 
     const systemPrompt = await getResumeGeneratorPrompt();
-    const atsScore = await scoreAts(resolvedInput.text);
+    // The corpus is what makes an invented number detectable: a metric that is
+    // in neither the line being rewritten nor D's own career data is fabricated.
+    const corpus = await loadCareerCorpus(buildResumeText());
+    const atsScore = await scoreAts(resolvedInput.text, corpus);
     const resumeText = buildResumeText();
 
     const message = await (async () => {
@@ -218,14 +247,27 @@ export async function POST(req: Request) {
       ? parsed.analysis as Record<string, unknown>
       : {};
 
-    const proposedChanges = normalizeChanges(parsed.proposedChanges, resumeText, resolvedInput.text, atsScore.gap);
+    const proposedChanges = normalizeChanges(
+      parsed.proposedChanges, resumeText, resolvedInput.text, atsScore.gap, corpus.document
+    );
     const points = proposedChanges.reduce((sum, change) => sum + change.impactPoints, 0);
-    if (points !== atsScore.gap) {
+    // AC13 exists to stop model-invented point values being laundered into
+    // arithmetic that looks sound, so it checks the allocation we derived.
+    //
+    // Zero surviving changes is NOT that failure. It is the anchoring and
+    // invented-quantity filters doing their job: the gap is real, and no
+    // rewrite we are willing to stand behind closes it. Throwing there would
+    // turn "we refused to fabricate" into a 500, which is the one outcome that
+    // would pressure a future change to loosen the filters.
+    if (proposedChanges.length > 0 && points !== atsScore.gap) {
       throw new Error(`ATS addressable gap mismatch: changes total ${points}, ATS gap ${atsScore.gap}`);
     }
+    const unaddressableGap = proposedChanges.length === 0 ? atsScore.gap : 0;
 
     const responseData = {
       generationId: crypto.randomUUID(),
+      // Points ATS (Max) says are reachable, that no citable rewrite can claim.
+      unaddressableGap,
       companyName: typeof analysis.companyName === 'string'
         ? analysis.companyName
         : (typeof parsed.companyName === 'string' ? parsed.companyName : 'Unknown'),

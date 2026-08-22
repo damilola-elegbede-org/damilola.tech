@@ -7,7 +7,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { resumeData } from '@/lib/resume-data';
-import { resumeDataToText } from '@/lib/resume-text';
+import { resumeDataToText, type ScorerResumeData } from '@/lib/resume-text';
 import {
   RUBRIC_DIMENSIONS, assembleRubric, buildDimensionCall, scoreDimension,
   type DimensionResult, type RawDimensionReply,
