@@ -20,6 +20,7 @@
  */
 
 import { readdir, open } from 'fs/promises';
+import { constants } from 'fs';
 import { join } from 'path';
 import { CONTENT_DIRS, isValidFilename } from '../src/lib/content-utils';
 
@@ -73,7 +74,18 @@ async function collectLocalFiles(): Promise<Map<string, string>> {
     for (const entry of entries) {
       if (!isValidFilename(entry)) continue;
       const full = join(dirPath, entry);
-      const handle = await open(full, 'r');
+      // O_NOFOLLOW rather than lstat-then-read: one resolution, so there is no
+      // window to swap the path between the check and the read, and a symlink
+      // fails outright instead of being followed. Opening with 'r' and calling
+      // handle.stat() would also be race-free, but it resolves links — a
+      // symlink planted in a content dir would be read and published.
+      let handle;
+      try {
+        handle = await open(full, constants.O_RDONLY | constants.O_NOFOLLOW);
+      } catch {
+        // ELOOP: a symlink. EISDIR / others: not a regular file we can read.
+        continue;
+      }
       try {
         const stat = await handle.stat();
         if (!stat.isFile()) continue;

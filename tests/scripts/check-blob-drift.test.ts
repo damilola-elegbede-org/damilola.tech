@@ -76,6 +76,23 @@ describe.skipIf(!CAREER_DATA_PRESENT)('checkBlobDrift', () => {
     expect(drift.map((d) => d.filename)).toContain('shared-context.md');
   });
 
+  it('does not read a symlink planted in a content dir', async () => {
+    // The collector opens with O_NOFOLLOW. An earlier revision opened with 'r'
+    // and stat'd the handle — race-free, but it followed links, so a symlink
+    // dropped into career-data would have been read and pushed to blob.
+    const { symlinkSync, unlinkSync } = await import('fs');
+    const { join } = await import('path');
+    const planted = join(process.cwd(), 'career-data/data/planted-symlink.md');
+    symlinkSync('/etc/hosts', planted);
+    try {
+      serve(() => ({ ok: false }));
+      const drift = await checkBlobDrift();
+      expect(drift.map((d) => d.filename)).not.toContain('planted-symlink.md');
+    } finally {
+      unlinkSync(planted);
+    }
+  });
+
   it('reports drift when a file was never published', async () => {
     serve(() => ({ ok: false }));
     const drift = await checkBlobDrift();
