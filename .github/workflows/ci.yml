@@ -51,7 +51,7 @@ jobs:
             git config --global url."https://x-access-token:${CAREER_DATA_PAT}@github.com/".insteadOf "https://github.com/"
             git submodule update --init --recursive --depth=1
           else
-            echo "::warning::CAREER_DATA_PAT not set — career-data submodule tests will fail"
+            echo "::warning::CAREER_DATA_PAT not set — career-data guards will SKIP, not run. See ENG-1990."
           fi
       - uses: actions/setup-node@v4
         with:
