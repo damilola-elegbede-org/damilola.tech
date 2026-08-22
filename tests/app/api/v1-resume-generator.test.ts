@@ -8,9 +8,15 @@ vi.mock('@/lib/api-key-auth', () => ({ requireApiKey: vi.fn().mockResolvedValue(
 vi.mock('@/lib/api-audit', () => ({ logApiAccess: vi.fn() }));
 vi.mock('@/lib/rate-limit', () => ({ getClientIp: () => '127.0.0.1', checkGenericRateLimit: vi.fn().mockResolvedValue({ limited: false }), RATE_LIMIT_CONFIGS: { resumeGenerator: {} } }));
 vi.mock('@/lib/resume-generator-prompt', () => ({ getResumeGeneratorPrompt: vi.fn().mockResolvedValue('prompt') }));
-vi.mock('@/lib/score-core', () => ({
+vi.mock('@/lib/score-core', async () => ({
   buildResumeText: () => 'Verily\nBuilt CI/CD platform with Kubernetes and Terraform\nQualcomm\nLed modem releases',
   scoreAts: (...args: unknown[]) => mockScoreAts(...args),
+  // The REAL class, not a stand-in. The route narrows with `instanceof`, so a
+  // look-alike would let a broken narrow pass this test — and a mock that omits
+  // it entirely makes `instanceof undefined` throw inside the catch.
+  AtsHeadroomUnverifiedError: (
+    await vi.importActual<typeof import('@/lib/score-core')>('@/lib/score-core')
+  ).AtsHeadroomUnverifiedError,
 }));
 vi.mock('@anthropic-ai/sdk', () => ({ default: class { messages = { create: mockCreate }; } }));
 
@@ -138,5 +144,41 @@ describe('v1 resume generator ATS contract', () => {
     const body = await response.json();
     expect(response.status).toBe(200);
     expect(body.data.proposedChanges).toEqual([]);
+  });
+
+  it('names the ATS assertion instead of blaming Anthropic', async () => {
+    // Production, deployment 69unz7l6u: this arrived as `AI service error.`,
+    // which points at a service the route never reached — scoreAts throws
+    // before the Anthropic call. The message below is the verbatim production
+    // one, current 50 / maximum 50 / no attribution failures.
+    const { AtsHeadroomUnverifiedError } = await import('@/lib/score-core');
+    mockScoreAts.mockRejectedValue(new AtsHeadroomUnverifiedError(50, 50, []));
+
+    const { POST } = await import('@/app/api/v1/resume-generator/route');
+    const response = await POST(request(IDEAL_JD));
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.error.code).toBe('HEADROOM_INVARIANT');
+    expect(body.error.message).toContain('zero headroom at 50/100 with a ceiling of 50');
+    expect(body.error.current).toBe(50);
+    expect(body.error.maximum).toBe(50);
+    expect(body.error.attributionFailures).toEqual([]);
+    // The fault is upstream of generation: Anthropic must never have been asked.
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('still reports a genuinely unrelated failure as an AI service error', async () => {
+    // The narrow must be a narrow, not a catch-all relabel. A transport failure
+    // is NOT a headroom invariant and must not be dressed as one.
+    mockScoreAts.mockRejectedValue(new Error('socket hang up'));
+
+    const { POST } = await import('@/app/api/v1/resume-generator/route');
+    const response = await POST(request(IDEAL_JD));
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.error.code).not.toBe('HEADROOM_INVARIANT');
+    expect(body.error.message).toContain('AI service error');
   });
 });

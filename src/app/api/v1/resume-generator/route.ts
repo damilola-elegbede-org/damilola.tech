@@ -1,14 +1,19 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { requireApiKey } from '@/lib/api-key-auth';
 import { logApiAccess } from '@/lib/api-audit';
-import { apiSuccess, Errors } from '@/lib/api-response';
+import { apiError, apiSuccess, Errors } from '@/lib/api-response';
 import { xmlEscape } from '@/lib/xml-escape';
 import {
   checkGenericRateLimit,
   getClientIp,
   RATE_LIMIT_CONFIGS,
 } from '@/lib/rate-limit';
-import { buildResumeText, scoreAts, type AtsScore } from '@/lib/score-core';
+import {
+  AtsHeadroomUnverifiedError,
+  buildResumeText,
+  scoreAts,
+  type AtsScore,
+} from '@/lib/score-core';
 import { loadCareerCorpus, CareerCorpusUnavailableError } from '@/lib/career-corpus';
 import { getResumeGeneratorPrompt } from '@/lib/resume-generator-prompt';
 import type { ProposedChange } from '@/lib/types/resume-generation';
@@ -321,6 +326,24 @@ export async function POST(req: Request) {
       // exists to prevent. "AI service error" would hide which of those it was.
       console.error('[api/v1/resume-generator] Career corpus unavailable:', error.missing);
       return Errors.internalError(error.message);
+    }
+    if (error instanceof AtsHeadroomUnverifiedError) {
+      // The generator cannot degrade the way score-job does. score-job carries an
+      // independent Fit Score, so it drops the ATS block and still answers; here
+      // ATS *is* the input to every rewrite, so there is no partial answer to
+      // give. What was wrong was the label: this arrived as `AI service error.`,
+      // which points at Anthropic — and Anthropic is never called, because
+      // scoreAts throws first. Naming the fault is the whole fix.
+      //
+      // The assertion itself stays. It is AC4 refusing to emit a false
+      // "already maximal", and it keeps firing until ENG-2011's deterministic
+      // scorer can find real headroom.
+      console.error('[api/v1/resume-generator] ATS headroom unverified:', error.attributionFailures);
+      return apiError('HEADROOM_INVARIANT', error.message, 500, {
+        current: error.current,
+        maximum: error.maximum,
+        attributionFailures: error.attributionFailures,
+      });
     }
     if (error instanceof JobDescriptionInputError) {
       return Errors.badRequest(error.message);
