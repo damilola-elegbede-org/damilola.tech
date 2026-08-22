@@ -13,6 +13,8 @@ jobs:
   score-job-regression:
     name: score_job Regression
     runs-on: ubuntu-latest
+    # p95 observed 2026-08-21 across 8 recent completed runs: 0.5m (ENG-1952)
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

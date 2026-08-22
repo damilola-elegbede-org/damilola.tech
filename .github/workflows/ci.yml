@@ -10,9 +10,27 @@ permissions:
   contents: read
 
 jobs:
+  workflow-timeouts:
+    name: Workflow Timeouts
+    runs-on: ubuntu-latest
+    # ENG-1952: fails when a workflow job is added without timeout-minutes,
+    # so the 2026-08-19 six-hour-runner-hang class can't silently regress.
+    # p95 observed 2026-08-21 across 8 recent completed runs: 0.5m
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run check:workflow-timeouts
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    # p95 observed 2026-08-21 across 8 recent completed runs: 0.9m (ENG-1952)
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,6 +43,8 @@ jobs:
   typecheck:
     name: Type Check
     runs-on: ubuntu-latest
+    # p95 observed 2026-08-21 across 8 recent completed runs: 0.7m (ENG-1952)
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -38,6 +58,8 @@ jobs:
   test:
     name: Unit Tests
     runs-on: ubuntu-latest
+    # p95 observed 2026-08-21 across 8 recent completed runs: 1.7m (ENG-1952)
+    timeout-minutes: 8
     env:
       RUN_SCORE_REGRESSION: '1'
       DAMILOLA_SCORE_API_KEY: ${{ secrets.DAMILOLA_SCORE_API_KEY }}
@@ -59,6 +81,8 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
+    # p95 observed 2026-08-21 across 8 recent completed runs: 2.0m (ENG-1952)
+    timeout-minutes: 8
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
@@ -74,6 +98,8 @@ jobs:
   validate-resume:
     name: Validate Resume Schema
     runs-on: ubuntu-latest
+    # p95 observed 2026-08-21 across 8 recent completed runs: 0.5m (ENG-1952)
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Fetch career-data submodule (soft-fail)
