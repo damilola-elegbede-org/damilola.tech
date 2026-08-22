@@ -5,6 +5,7 @@ import type {
   TitleTier,
   CompanyRemotePosture,
 } from '@/lib/fit-score';
+import type { DimensionKey, Band } from '@/lib/resume-rubric';
 
 interface AssessFitResponse {
   assessment: string;
@@ -101,6 +102,17 @@ interface ScoreJobResponse {
   recommendation: 'full_generation_recommended' | 'marginal_improvement' | 'strong_fit' | 'knocked_out';
   knockout?: JobKnockoutInfo;
   resumeGap: { achievable: number | null; closeable: number | null; structural: number | null };
+  // Optional: knockout responses omit these (route returns them only on the normal path).
+  experienceEvidence?: Array<{
+    dimension: DimensionKey;
+    score: number;
+    band: Band;
+    sourceFile: string | null;
+    corpusQuote: string | null;
+    jdQuote: string | null;
+    evidenceRejected: boolean;
+  }>;
+  corpus?: { files: string[]; totalWords: number };
 }
 
 export interface GenerateCoverLetterInput {
