@@ -56,6 +56,7 @@ const mockParseJsonResponse = vi.fn();
 const mockBuildScoringInput = vi.fn();
 const mockBuildScorePayload = vi.fn();
 const mockBuildGapAnalysisPrompt = vi.fn();
+const mockScoreAts = vi.fn();
 vi.mock('@/lib/score-core', () => ({
   extractTextContent: (...args: unknown[]) => mockExtractTextContent(...args),
   parseJsonResponse: (...args: unknown[]) => mockParseJsonResponse(...args),
@@ -66,6 +67,7 @@ vi.mock('@/lib/score-core', () => ({
   scoringClient: {
     messages: { create: (...args: unknown[]) => mockCreate(...args) },
   },
+  scoreAts: (...args: unknown[]) => mockScoreAts(...args),
 }));
 
 // Mock the Fit Score scorer (to isolate route logic — fit-score.test.ts is the
@@ -212,6 +214,12 @@ describe('POST /api/v1/score-job', () => {
     }));
     mockScoreExperienceDimensions.mockResolvedValue(defaultExperienceDimensions);
     mockLoadCareerCorpus.mockResolvedValue(fakeCorpus);
+    mockScoreAts.mockResolvedValue({
+      current: { total: 75, breakdown: [] },
+      max: { total: 90, breakdown: [], reachesTarget90: true },
+      gap: 15,
+      gapLine: 'Tailoring pays: true career evidence can reach the ATS (Max) target of 90.',
+    });
     mockBuildScoringInput.mockReturnValue({ readinessScore: { total: 75 } });
     mockBuildScorePayload.mockReturnValue({
       total: 75,

@@ -115,6 +115,8 @@ export interface DimensionResult {
   evidenceRejected: boolean;
   /** The band order actually presented, so a run can be reproduced exactly. */
   optionOrder: Band[];
+  /** Highest band supported by a separately cited career-corpus observation. */
+  ceilingScore?: number;
 }
 
 export interface RubricResult {
@@ -158,8 +160,8 @@ export function citationAppearsIn(quote: string | null | undefined, source: stri
 }
 
 /**
- * The ceiling a rewrite could reach: addressable dimensions go to full marks,
- * structural ones stay where the evidence actually puts them.
+ * The ceiling a truthful rewrite could reach.  Addressable does not mean
+ * imaginable: it is bounded by a separately cited career-corpus observation.
  *
  * This is the number D asked for — "what is the maximum I can get to" — and it
  * is deliberately arithmetic. Asking a model for it produced 58 and 78 for the
@@ -169,7 +171,8 @@ export function ceilingFor(dimensions: DimensionResult[]): number {
   return dimensions.reduce((sum, d) => {
     const spec = RUBRIC_DIMENSIONS.find((x) => x.key === d.dimension);
     if (!spec) return sum + d.score;
-    return sum + (spec.ceiling === 'addressable' ? MAX_DIMENSION_SCORE : d.score);
+    const supported = Math.max(d.score, Math.min(MAX_DIMENSION_SCORE, d.ceilingScore ?? d.score));
+    return sum + (spec.ceiling === 'addressable' ? supported : d.score);
   }, 0);
 }
 
