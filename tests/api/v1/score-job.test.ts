@@ -60,6 +60,7 @@ vi.mock('@/lib/score-core', () => ({
   extractTextContent: (...args: unknown[]) => mockExtractTextContent(...args),
   parseJsonResponse: (...args: unknown[]) => mockParseJsonResponse(...args),
   buildScoringInput: (...args: unknown[]) => mockBuildScoringInput(...args),
+  buildResumeText: () => 'RESUME TEXT',
   buildScorePayload: (...args: unknown[]) => mockBuildScorePayload(...args),
   buildGapAnalysisPrompt: (...args: unknown[]) => mockBuildGapAnalysisPrompt(...args),
   scoringClient: {
@@ -67,20 +68,96 @@ vi.mock('@/lib/score-core', () => ({
   },
 }));
 
-// Mock role-fit-scorer (to isolate route logic — role-fit-scorer.test.ts is
-// the source of truth for gate/signal correctness against the spec).
-const mockEvaluateRoleFit = vi.fn();
-vi.mock('@/lib/role-fit-scorer', () => ({
-  evaluateRoleFit: (...args: unknown[]) => mockEvaluateRoleFit(...args),
+// Mock the Fit Score scorer (to isolate route logic — fit-score.test.ts is the
+// source of truth for gate/component correctness against D's rubric).
+const mockEvaluateFitGates = vi.fn();
+const mockAssembleFitScore = vi.fn();
+const mockGatedFitResult = vi.fn();
+vi.mock('@/lib/fit-score', () => ({
+  evaluateFitGates: (...args: unknown[]) => mockEvaluateFitGates(...args),
+  assembleFitScore: (...args: unknown[]) => mockAssembleFitScore(...args),
+  gatedFitResult: (...args: unknown[]) => mockGatedFitResult(...args),
+  FIT_SCORE_SURFACE: 80,
 }));
 
-const defaultRoleFitResult = {
-  score: 75,
+const mockScoreExperienceDimensions = vi.fn();
+vi.mock('@/lib/fit-experience', () => ({
+  scoreExperienceDimensions: (...args: unknown[]) => mockScoreExperienceDimensions(...args),
+}));
+
+class FakeCorpusUnavailable extends Error {
+  constructor(public readonly missing: string[]) {
+    super(`Career corpus unavailable — could not load: ${missing.join(', ')}.`);
+  }
+}
+const mockLoadCareerCorpus = vi.fn();
+vi.mock('@/lib/career-corpus', () => ({
+  loadCareerCorpus: (...a: unknown[]) => mockLoadCareerCorpus(...a),
+  CareerCorpusUnavailableError: FakeCorpusUnavailable,
+}));
+
+const fakeCorpus = {
+  sources: [
+    { file: 'resume.txt', text: 'r', words: 1 },
+    { file: 'anecdotes.md', text: 'a', words: 1 },
+    { file: 'star-stories.json', text: 'b', words: 1 },
+  ],
+  totalWords: 2,
+  document: 'corpus document',
+};
+
+const passingGates = {
+  failed: [] as string[],
+  evidence: {} as Record<string, string>,
+  normalized: 'senior engineering manager',
+  head: 'senior engineering manager',
+  tail: '',
+  geo: 'us',
+  maxStatedSalary: null,
+  posture: 'unknown',
+};
+
+const defaultFitResult = {
+  total: 83,
   gateFailed: [] as string[],
   gateEvidence: {} as Record<string, string>,
-  breakdown: { level: 21, scope: 10, strategy: 14, comp: 9, company: 9, location: 6, domain: 2 },
-  locationUnknown: false,
+  breakdown: { experience: 30, title: 25, comp: 20, remote: 8 },
+  flags: ['comp_undisclosed'],
+  titleTier: 'exact',
+  remotePosture: 'hub-flex',
+  experienceRaw: 9,
 };
+
+const defaultExperienceDimensions = [
+  {
+    dimension: 'requirement_coverage',
+    score: 3,
+    band: 'strong',
+    resumeQuote: 'Led platform engineering',
+    jdQuote: 'lead platform engineering',
+    evidenceRejected: false,
+    optionOrder: [],
+    sourceFile: 'anecdotes.md',
+  },
+  {
+    dimension: 'domain_evidence',
+    score: 3,
+    band: 'strong',
+    resumeQuote: 'CI/CD pipeline design',
+    jdQuote: 'CI/CD',
+    evidenceRejected: false,
+    optionOrder: [],
+  },
+  {
+    dimension: 'leadership_evidence',
+    score: 3,
+    band: 'strong',
+    resumeQuote: 'Hired and developed engineers',
+    jdQuote: 'hiring',
+    evidenceRejected: false,
+    optionOrder: [],
+  },
+];
 
 const mockValidApiKey = {
   apiKey: { id: 'key-1', name: 'Test Key', enabled: true },
@@ -121,7 +198,20 @@ describe('POST /api/v1/score-job', () => {
       inputType: 'content',
       extractedUrl: 'https://example.com/jobs/senior-engineering-manager',
     });
-    mockEvaluateRoleFit.mockReturnValue(defaultRoleFitResult);
+    mockEvaluateFitGates.mockReturnValue(passingGates);
+    mockAssembleFitScore.mockReturnValue(defaultFitResult);
+    mockGatedFitResult.mockImplementation((gates: { failed: string[]; evidence: Record<string, string> }) => ({
+      total: 0,
+      gateFailed: gates.failed,
+      gateEvidence: gates.evidence,
+      breakdown: { experience: 0, title: 0, comp: 0, remote: 0 },
+      flags: [],
+      titleTier: 'none',
+      remotePosture: 'unknown',
+      experienceRaw: null,
+    }));
+    mockScoreExperienceDimensions.mockResolvedValue(defaultExperienceDimensions);
+    mockLoadCareerCorpus.mockResolvedValue(fakeCorpus);
     mockBuildScoringInput.mockReturnValue({ readinessScore: { total: 75 } });
     mockBuildScorePayload.mockReturnValue({
       total: 75,
@@ -261,12 +351,10 @@ describe('POST /api/v1/score-job', () => {
 
   describe('success', () => {
     it('returns a zero-score knockout without calling AI and audits its reasons', async () => {
-      mockEvaluateRoleFit.mockReturnValue({
-        score: 0,
-        gateFailed: ['G1_no_mgmt_signal'],
-        gateEvidence: { G1_no_mgmt_signal: 'no management-title match' },
-        breakdown: { level: 0, scope: 0, strategy: 0, comp: 0, company: 0, location: 0, domain: 0 },
-        locationUnknown: false,
+      mockEvaluateFitGates.mockReturnValue({
+        ...passingGates,
+        failed: ['G1_no_mgmt_signal'],
+        evidence: { G1_no_mgmt_signal: 'no management-title match' },
       });
 
       const { POST } = await import('@/app/api/v1/score-job/route');
@@ -274,7 +362,7 @@ describe('POST /api/v1/score-job', () => {
       const data = await response.json() as {
         success: boolean;
         data: {
-          roleFit: { total: number };
+          fitScore: { total: number; threshold: number; surfaced: boolean };
           currentScore: { total: number; breakdown: { roleRelevance: number } };
           recommendation: string;
           knockout: { knockedOut: boolean; hardReasons: string[] };
@@ -285,7 +373,9 @@ describe('POST /api/v1/score-job', () => {
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
       expect(data.data.recommendation).toBe('knocked_out');
-      expect(data.data.roleFit.total).toBe(0);
+      expect(data.data.fitScore.total).toBe(0);
+      expect(data.data.fitScore.surfaced).toBe(false);
+      expect(mockScoreExperienceDimensions).not.toHaveBeenCalled();
       expect(data.data.currentScore.total).toBe(75);
       expect(data.data.currentScore.breakdown.roleRelevance).toBe(30);
       expect(data.data.resumeGap).toEqual({ achievable: null, closeable: null, structural: null });
@@ -303,6 +393,16 @@ describe('POST /api/v1/score-job', () => {
         }),
         '127.0.0.1'
       );
+    });
+
+    it('fails loudly when the career corpus cannot be loaded, rather than scoring the resume — A3', async () => {
+      mockLoadCareerCorpus.mockRejectedValue(new FakeCorpusUnavailable(['verily-feedback.md']));
+
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest(validBody));
+
+      expect(response.status).toBe(500);
+      expect(mockScoreExperienceDimensions).not.toHaveBeenCalled();
     });
 
     it('a scored (not knocked-out) role returns knockedOut: false with no reasons', async () => {
@@ -328,7 +428,26 @@ describe('POST /api/v1/score-job', () => {
       expect(data.data.title).toBe('Senior Engineering Manager');
       expect(data.data.url).toBe('https://example.com/jobs/senior-engineering-manager');
       expect(data.data.currentScore).toBeDefined();
-      expect(data.data.roleFit).toEqual(expect.objectContaining({ total: 75, breakdown: defaultRoleFitResult.breakdown }));
+      expect(data.data.fitScore).toEqual(expect.objectContaining({
+        total: 83,
+        threshold: 80,
+        surfaced: true,
+        breakdown: defaultFitResult.breakdown,
+        flags: ['comp_undisclosed'],
+        titleTier: 'exact',
+        experienceRaw: 9,
+      }));
+      expect(data.data.experienceEvidence).toEqual([
+        expect.objectContaining({ dimension: 'requirement_coverage', score: 3, sourceFile: 'anecdotes.md' }),
+        expect.objectContaining({ dimension: 'domain_evidence', score: 3 }),
+        expect.objectContaining({ dimension: 'leadership_evidence', score: 3 }),
+      ]);
+      expect(data.data.corpus).toEqual({
+        files: ['resume.txt', 'anecdotes.md', 'star-stories.json'],
+        totalWords: 2,
+      });
+      // D's ruling: Fit reads all career data, the résumé included.
+      expect(mockLoadCareerCorpus).toHaveBeenCalledWith('RESUME TEXT');
       expect(data.data.currentScore).toEqual(expect.objectContaining({
         total: 75,
         breakdown: expect.objectContaining({ roleRelevance: 30 }),
@@ -448,12 +567,12 @@ describe('POST /api/v1/score-job', () => {
   // unreachable from any caller, so G5/the 8-point location signal always
   // fell back to scraping the title tail + JD preamble.
   describe('location (ENG-1975)', () => {
-    it('threads a provided location string into evaluateRoleFit as structuredLocation', async () => {
+    it('threads a provided location string into evaluateFitGates as structuredLocation', async () => {
       const { POST } = await import('@/app/api/v1/score-job/route');
       await POST(makeRequest({ ...validBody, location: 'Boulder, CO, United States' }));
 
-      expect(mockEvaluateRoleFit).toHaveBeenCalledTimes(1);
-      const [input] = mockEvaluateRoleFit.mock.calls[0] as [{ location?: string }];
+      expect(mockEvaluateFitGates).toHaveBeenCalledTimes(1);
+      const [input] = mockEvaluateFitGates.mock.calls[0] as [{ location?: string }];
       expect(input.location).toBe('Boulder, CO, United States');
     });
 
@@ -461,7 +580,7 @@ describe('POST /api/v1/score-job', () => {
       const { POST } = await import('@/app/api/v1/score-job/route');
       await POST(makeRequest({ ...validBody, location: '  Boulder, CO  ' }));
 
-      const [input] = mockEvaluateRoleFit.mock.calls[0] as [{ location?: string }];
+      const [input] = mockEvaluateFitGates.mock.calls[0] as [{ location?: string }];
       expect(input.location).toBe('Boulder, CO');
     });
 
@@ -470,7 +589,7 @@ describe('POST /api/v1/score-job', () => {
       const response = await POST(makeRequest(validBody));
 
       expect(response.status).toBe(200);
-      const [input] = mockEvaluateRoleFit.mock.calls[0] as [{ location?: string }];
+      const [input] = mockEvaluateFitGates.mock.calls[0] as [{ location?: string }];
       expect(input.location).toBeUndefined();
     });
 

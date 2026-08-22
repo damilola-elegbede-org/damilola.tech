@@ -1,4 +1,11 @@
-import type { GateFailedReason, SignalBreakdown } from '@/lib/role-fit-scorer';
+import type {
+  GateFailedReason,
+  FitBreakdown,
+  FitFlag,
+  TitleTier,
+  CompanyRemotePosture,
+} from '@/lib/fit-score';
+import type { DimensionKey, Band } from '@/lib/resume-rubric';
 
 interface AssessFitResponse {
   assessment: string;
@@ -72,12 +79,20 @@ interface ScoreJobResponse {
   company: string;
   title: string;
   url: string;
-  roleFit: {
+  // ENG-1995: the Fit Score ("should D apply") replaced the seven-signal
+  // roleFit table wholesale. `threshold`/`surfaced` travel with the score so a
+  // consumer cannot drift from the scorer's own bar.
+  fitScore: {
     total: number;
+    threshold: number;
+    surfaced: boolean;
     gateFailed: GateFailedReason[];
     gateEvidence: Record<string, string>;
-    breakdown: SignalBreakdown;
-    locationUnknown: boolean;
+    breakdown: FitBreakdown;
+    flags: FitFlag[];
+    titleTier: TitleTier;
+    remotePosture: CompanyRemotePosture;
+    experienceRaw: number | null;
   };
   currentScore: ReadinessCurrentScore;
   maxPossibleScore: number;
@@ -87,6 +102,17 @@ interface ScoreJobResponse {
   recommendation: 'full_generation_recommended' | 'marginal_improvement' | 'strong_fit' | 'knocked_out';
   knockout?: JobKnockoutInfo;
   resumeGap: { achievable: number | null; closeable: number | null; structural: number | null };
+  // Optional: knockout responses omit these (route returns them only on the normal path).
+  experienceEvidence?: Array<{
+    dimension: DimensionKey;
+    score: number;
+    band: Band;
+    sourceFile: string | null;
+    corpusQuote: string | null;
+    jdQuote: string | null;
+    evidenceRejected: boolean;
+  }>;
+  corpus?: { files: string[]; totalWords: number };
 }
 
 export interface GenerateCoverLetterInput {

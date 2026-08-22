@@ -107,12 +107,17 @@ export function parseJsonResponse(text: string): Record<string, unknown> {
 }
 
 /**
- * Builds the scorer input (resume text + readiness score) from a job description string.
- * Reads from the canonical resumeData singleton, matching the behaviour of
- * the original score-resume route.
+ * The canonical resumeData singleton, narrowed to the shape the scorers take.
+ *
+ * Extracted from buildScoringInput so the Fit Score's experience component
+ * (ENG-1995) can read the same resume text the readiness scorer sees, without
+ * duplicating the narrowing. ENG-1993 is the ticket that fixes what this
+ * narrowing DROPS — experienceTags, tiered skillsAssessment, tagline, and the
+ * location/startDate/endDate on each experience — plus the two hardcoded values
+ * below, which are Verily-era and cannot follow D.
  */
-export function buildScoringInput(jobDescription: string) {
-  const scorerResumeData: ScorerResumeData = {
+export function buildScorerResumeData(): ScorerResumeData {
+  return {
     title: resumeData.title,
     yearsExperience: 15,
     teamSize: '13 engineers',
@@ -129,12 +134,25 @@ export function buildScoringInput(jobDescription: string) {
     })) ?? [],
     openToRoles: resumeData.openToRoles,
   };
+}
 
-  const resumeText = resumeDataToText({
-    ...scorerResumeData,
+/** The plain-text resume both scoring paths grade against. */
+export function buildResumeText(): string {
+  return resumeDataToText({
+    ...buildScorerResumeData(),
     name: resumeData.name,
     summary: resumeData.brandingStatement,
   });
+}
+
+/**
+ * Builds the scorer input (resume text + readiness score) from a job description string.
+ * Reads from the canonical resumeData singleton, matching the behaviour of
+ * the original score-resume route.
+ */
+export function buildScoringInput(jobDescription: string) {
+  const scorerResumeData = buildScorerResumeData();
+  const resumeText = buildResumeText();
 
   const readinessScore = calculateReadinessScore({
     jobDescription,
