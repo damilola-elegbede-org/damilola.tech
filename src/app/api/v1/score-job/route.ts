@@ -24,6 +24,7 @@ import {
 } from '@/lib/fit-score';
 import { scoreExperienceDimensions } from '@/lib/fit-experience';
 import { loadCareerCorpus, CareerCorpusUnavailableError } from '@/lib/career-corpus';
+import { AtsHeadroomUnverifiedError } from '@/lib/score-core';
 
 export const runtime = 'nodejs';
 
@@ -220,6 +221,10 @@ export async function POST(req: Request) {
           hardReasons: fit.gateFailed,
           gateEvidence: fit.gateEvidence,
         },
+        // Gated: ATS was never computed, so there is nothing to report here.
+        // AC6: shipped {null,null,null} on every response since ENG-1996. Now
+      // derived by scoreAts from the rubric's addressable/structural split.
+        // Gated: ATS was never computed, so there is nothing to report here.
         resumeGap: { achievable: null, closeable: null, structural: null },
         ...(resolvedInput.isEmptyShell ? { emptyShellFallback: true } : {}),
       });
@@ -280,10 +285,20 @@ export async function POST(req: Request) {
       ...(interviewPrepMode ? { interviewPrepUnavailable: true } : {}),
       // Not knocked out here (the gateFailed branch returns earlier).
       knockout: { knockedOut: false, hardReasons: [], gateEvidence: {} },
-      resumeGap: { achievable: null, closeable: null, structural: null },
+      // AC6: shipped {null,null,null} on every response since ENG-1996. Now
+      // derived by scoreAts from the rubric's addressable/structural split.
+      resumeGap: atsScore.resumeGap,
       ...(resolvedInput.isEmptyShell ? { emptyShellFallback: true } : {}),
     });
   } catch (error) {
+    if (error instanceof AtsHeadroomUnverifiedError) {
+      // Distinct from a model outage on purpose. This is a deterministic
+      // verification failure — the ceiling lookup attributed nothing and the
+      // score cannot honestly claim "already maximal". A caller that cannot
+      // tell those apart will read a broken lookup as a finished résumé.
+      console.error('[api/v1/score-job] ATS headroom unverified:', error.attributionFailures);
+      return Errors.internalError(error.message);
+    }
     if (error instanceof CareerCorpusUnavailableError) {
       // Loud on purpose (A3). A Fit Score computed without the corpus is not a
       // worse score, it is a different question answered.

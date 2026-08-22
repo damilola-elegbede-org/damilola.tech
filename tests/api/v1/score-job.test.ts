@@ -56,7 +56,13 @@ const mockParseJsonResponse = vi.fn();
 const mockBuildScoringInput = vi.fn();
 const mockBuildScorePayload = vi.fn();
 const mockBuildGapAnalysisPrompt = vi.fn();
+class FakeHeadroomUnverified extends Error {
+  constructor(public readonly attributionFailures: string[]) {
+    super(`ATS reports zero headroom — unattributable: ${attributionFailures.join(', ')}.`);
+  }
+}
 vi.mock('@/lib/score-core', () => ({
+  AtsHeadroomUnverifiedError: FakeHeadroomUnverified,
   extractTextContent: (...args: unknown[]) => mockExtractTextContent(...args),
   parseJsonResponse: (...args: unknown[]) => mockParseJsonResponse(...args),
   buildResumeText: () => 'RESUME TEXT',
@@ -170,6 +176,9 @@ const validBody = {
   company: 'Acme Corp',
 };
 
+// Clara's 2026-08-21 Ascent snapshot: nearest-rank P95 was 9,386 characters.
+const P95_JD = `infrastructure requirements ${'platform reliability '.repeat(600)}`.slice(0, 9386);
+
 const mockAnthropicResponse = {
   content: [{ type: 'text', text: '{"gapAnalysis":"Strong fit.","maxPossibleScore":88,"recommendation":"marginal_improvement"}' }],
 };
@@ -194,11 +203,11 @@ describe('POST /api/v1/score-job', () => {
       inputType: 'url',
       extractedUrl: 'https://example.com/jobs/senior-engineering-manager',
     });
-    mockResolvePreFetchedJobDescription.mockReturnValue({
-      text: 'Senior Engineering Manager at Acme Corp. TypeScript, Node.js required. Responsibilities include API design.',
+    mockResolvePreFetchedJobDescription.mockImplementation((text: string) => ({
+      text,
       inputType: 'content',
       extractedUrl: 'https://example.com/jobs/senior-engineering-manager',
-    });
+    }));
     mockEvaluateFitGates.mockReturnValue(passingGates);
     mockAssembleFitScore.mockReturnValue(defaultFitResult);
     mockGatedFitResult.mockImplementation((gates: { failed: string[]; evidence: Record<string, string> }) => ({
@@ -214,6 +223,9 @@ describe('POST /api/v1/score-job', () => {
     mockScoreExperienceDimensions.mockResolvedValue(defaultExperienceDimensions);
     mockLoadCareerCorpus.mockResolvedValue(fakeCorpus);
     mockScoreAts.mockResolvedValue({
+      headroomUnverified: false,
+      attributionFailures: [],
+      resumeGap: { achievable: 26, closeable: 10, structural: 5 },
       current: { total: 75, breakdown: [] },
       max: { total: 90, breakdown: [], reachesTarget90: true },
       gap: 15,
@@ -251,6 +263,18 @@ describe('POST /api/v1/score-job', () => {
       const response = await POST(makeRequest(validBody));
       expect(response.status).toBe(401);
     });
+  });
+
+  it('returns 200 for a P95-length Google-shaped JD', async () => {
+    const { POST } = await import('@/app/api/v1/score-job/route');
+    const response = await POST(makeRequest({
+      ...validBody,
+      title: 'Software Engineering Manager II, Infrastructure, Google Cloud',
+      company: 'Google',
+      job_content: P95_JD,
+    }));
+    expect(response.status).toBe(200);
+    expect(mockScoreAts).toHaveBeenCalledWith(P95_JD, fakeCorpus);
   });
 
   describe('validation', () => {
@@ -404,6 +428,21 @@ describe('POST /api/v1/score-job', () => {
       );
     });
 
+    it('surfaces an unverified ATS ceiling distinctly from a model outage', async () => {
+      // The endpoint used to fall through to "AI service error", so a caller
+      // could not separate a deterministic verification failure from an
+      // upstream outage. ENG-2010 AC3.
+      mockScoreAts.mockRejectedValue(new FakeHeadroomUnverified(['leadership_evidence']));
+
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest(validBody));
+      const body = await response.json() as { error?: { message?: string } };
+
+      expect(response.status).toBe(500);
+      expect(JSON.stringify(body)).toMatch(/unattributable|zero headroom/i);
+      expect(JSON.stringify(body)).not.toMatch(/AI service error/);
+    });
+
     it('fails loudly when the career corpus cannot be loaded, rather than scoring the resume — A3', async () => {
       mockLoadCareerCorpus.mockRejectedValue(new FakeCorpusUnavailable(['verily-feedback.md']));
 
@@ -474,7 +513,8 @@ describe('POST /api/v1/score-job', () => {
       expect(data.data.atsScore.max.total).toBe(90);
       expect(data.data.atsScore.max.reachesTarget90).toBe(true);
       expect(data.data.atsScore.current.total).toBeLessThanOrEqual(data.data.atsScore.max.total);
-      expect(data.data.resumeGap).toEqual({ achievable: null, closeable: null, structural: null });
+      // AC6 (ENG-2010): resumeGap has a real producer on the scored path now.
+      expect(data.data.resumeGap).toEqual({ achievable: 26, closeable: 10, structural: 5 });
     });
 
     it('calls resolveJobDescriptionInput with the url', async () => {

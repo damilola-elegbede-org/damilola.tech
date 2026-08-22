@@ -20,6 +20,8 @@ describe('scoreAts() ceiling attribution excludes the résumé source', () => {
         totalWords: 17,
         document: `<<<source: resume.txt>>>\n${RESUME_ONLY_TEXT}\n<<<end>>>\n<<<source: technical-expertise.md>>>\n${CORPUS_ONLY_TEXT}\n<<<end>>>`,
       }),
+      buildCorpusDocument: (sources: Array<{ file: string; text: string }>) =>
+        sources.map((s) => `<<<source: ${s.file}>>>\n${s.text}\n<<<end: ${s.file}>>>`).join('\n\n'),
       attributeCitation: (quote: string | null, sources: Array<{ file: string; text: string }>) => {
         if (!quote) return null;
         const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
@@ -58,15 +60,21 @@ describe('scoreAts() ceiling attribution excludes the résumé source', () => {
     const { scoreAts } = await import('@/lib/score-core');
     const withCorpusEvidence = await scoreAts('Job description requiring relevant experience.');
 
+    // Real corpus evidence may raise the ceiling above current.
+    expect(withCorpusEvidence.max.total).toBeGreaterThanOrEqual(withCorpusEvidence.current.total);
+
     vi.resetModules();
     mockAnthropic(RESUME_ONLY_TEXT);
     mockCareerCorpus();
-    const { scoreAts: scoreAtsResumeOnly } = await import('@/lib/score-core');
-    const withResumeOnlyEvidence = await scoreAtsResumeOnly('Job description requiring relevant experience.');
+    const { scoreAts: scoreAtsResumeOnly, AtsHeadroomUnverifiedError } =
+      await import('@/lib/score-core');
 
-    // Real corpus evidence may raise the ceiling above current; a citation
-    // that only lands in resume.txt must never raise it beyond current.
-    expect(withCorpusEvidence.max.total).toBeGreaterThanOrEqual(withCorpusEvidence.current.total);
-    expect(withResumeOnlyEvidence.max.total).toBe(withResumeOnlyEvidence.current.total);
+    // A citation landing only in resume.txt still must not raise the ceiling —
+    // but ENG-2010 changed what that outcome IS. It used to return
+    // max === current and read as "already maximal"; below 90 that is now a
+    // defect signal and throws, because it is indistinguishable from a ceiling
+    // lookup that simply failed.
+    await expect(scoreAtsResumeOnly('Job description requiring relevant experience.'))
+      .rejects.toBeInstanceOf(AtsHeadroomUnverifiedError);
   });
 });
