@@ -214,6 +214,9 @@ describe('POST /api/v1/score-job', () => {
     mockScoreExperienceDimensions.mockResolvedValue(defaultExperienceDimensions);
     mockLoadCareerCorpus.mockResolvedValue(fakeCorpus);
     mockScoreAts.mockResolvedValue({
+      headroomUnverified: false,
+      attributionFailures: [],
+      resumeGap: { achievable: 26, closeable: 10, structural: 5 },
       current: { total: 75, breakdown: [] },
       max: { total: 90, breakdown: [], reachesTarget90: true },
       gap: 15,
@@ -474,7 +477,8 @@ describe('POST /api/v1/score-job', () => {
       expect(data.data.atsScore.max.total).toBe(90);
       expect(data.data.atsScore.max.reachesTarget90).toBe(true);
       expect(data.data.atsScore.current.total).toBeLessThanOrEqual(data.data.atsScore.max.total);
-      expect(data.data.resumeGap).toEqual({ achievable: null, closeable: null, structural: null });
+      // AC6 (ENG-2010): resumeGap has a real producer on the scored path now.
+      expect(data.data.resumeGap).toEqual({ achievable: 26, closeable: 10, structural: 5 });
     });
 
     it('calls resolveJobDescriptionInput with the url', async () => {

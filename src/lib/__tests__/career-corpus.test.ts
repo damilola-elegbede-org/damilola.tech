@@ -117,3 +117,83 @@ describe('loadCareerCorpus', () => {
     expect(corpus.sources).toHaveLength(CAREER_CORPUS_FILES.length + 1);
   });
 });
+
+describe('attribution survives a faithful quote (ENG-2010)', () => {
+  // The corpus is markdown and JSON. A model reads through the syntax and
+  // quotes clean prose, so requiring a raw-byte substring rejected quotes that
+  // were entirely faithful — and the rejection was indistinguishable from "the
+  // corpus holds nothing more", which is what rendered as "Already maximal".
+  const MARKDOWN = [
+    '## Agentic AI platform',
+    '',
+    'Built a **multi-agent platform** — 107,715 lines, 12 agents, 17 skills.',
+    '',
+    '| Workflow | LOC |',
+    '| --- | --- |',
+    '| Pipedream Automation Suite | ~8,620 Python |',
+  ].join('\n');
+  const JSONISH = '{"situation":"Led the release train across four teams.\\nCut build times."}';
+  const SOURCES = [
+    { file: 'projects-context.md', text: MARKDOWN, words: 20 },
+    { file: 'star-stories.json', text: JSONISH, words: 10 },
+  ];
+
+  it('attributes a quote whose markdown emphasis the model dropped', () => {
+    expect(
+      attributeCitation('Built a multi-agent platform — 107,715 lines, 12 agents, 17 skills.', SOURCES)
+    ).toBe('projects-context.md');
+  });
+
+  it('attributes a quote lifted out of a markdown table row', () => {
+    expect(attributeCitation('Pipedream Automation Suite ~8,620 Python', SOURCES))
+      .toBe('projects-context.md');
+  });
+
+  it('attributes a quote across a JSON-escaped newline', () => {
+    expect(attributeCitation('Led the release train across four teams. Cut build times.', SOURCES))
+      .toBe('star-stories.json');
+  });
+
+  it('still refuses a quote the corpus does not support', () => {
+    // The widening must not become a licence to infer.
+    expect(attributeCitation('Ran a 400-person organisation at Google Cloud', SOURCES)).toBeNull();
+  });
+
+  it('still refuses a quote that only half-overlaps a real source', () => {
+    expect(
+      attributeCitation('Built a multi-agent platform for autonomous trading and risk hedging', SOURCES)
+    ).toBeNull();
+  });
+});
+
+describe('attribution paths', () => {
+  // Attribution has a strict path (normalised substring) and a fallback (token
+  // overlap). The strict path is a FAST PATH only — every quote it accepts, the
+  // fallback also accepts at ratio 1.0 — so it cannot be isolated by a test and
+  // is not claimed as a separate guard. The fallback IS load-bearing, and the
+  // reordered case below is what proves it.
+  const SRC = [{
+    file: 'projects-context.md',
+    text: '## Platform\n\nBuilt a **multi-agent platform** — 107,715 lines across 12 agents.',
+    words: 12,
+  }];
+
+  it('attributes an in-order quote whose markdown the model dropped', () => {
+    const { text } = SRC[0];
+    expect(text).toContain('**multi-agent platform**');
+    expect(attributeCitation('Built a multi-agent platform — 107,715 lines across 12 agents.', SRC))
+      .toBe('projects-context.md');
+  });
+
+  it('fallback: a reordered quote is no substring, and still attributes', () => {
+    // Same vocabulary, different order — no normalisation makes this a
+    // substring, so only the overlap fallback can attribute it.
+    expect(attributeCitation('Across 12 agents, built a multi-agent platform of 107,715 lines.', SRC))
+      .toBe('projects-context.md');
+  });
+
+  it('fallback refuses a reordered quote that adds unsupported vocabulary', () => {
+    expect(attributeCitation('Across 12 agents, built a multi-agent trading platform for hedge funds.', SRC))
+      .toBeNull();
+  });
+});

@@ -145,18 +145,61 @@ export function buildCorpusDocument(sources: CorpusSource[]): string {
     .join('\n\n');
 }
 
-/** Whitespace-insensitive containment — the same normalisation the rubric uses. */
+/**
+ * Normalise for comparison.
+ *
+ * The corpus is markdown and JSON: `**bold**`, `#` headers, `|` table pipes,
+ * `-` bullets, and JSON escaping. A model reads through all of that and quotes
+ * clean prose, so a quote that is *faithful* is still not a byte-substring of
+ * the source. Lowercasing and collapsing whitespace was not enough, and the
+ * mismatch was indistinguishable from "the corpus holds nothing more" (ENG-2010).
+ */
 function normalize(s: string): string {
-  return s.toLowerCase().replace(/\s+/g, ' ').trim();
+  return s
+    .replace(/\\[nrt]/g, ' ')        // JSON-escaped whitespace in star-stories.json
+    .replace(/\\"/g, '"')
+    .replace(/[*_`~]/g, '')          // markdown emphasis and code ticks
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '') // ATX headers
+    .replace(/^\s*[-+*]\s+/gm, '')    // bullets
+    .replace(/\|/g, ' ')             // table pipes
+    .replace(/[\u2018\u2019]/g, "'")  // smart quotes
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/[\u2013\u2014]/g, '-')  // en/em dashes
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
- * Which corpus file contains this verbatim quote, or null.
+ * Content words, for the overlap fallback.
  *
- * A2: an award that cannot be attributed to a real file is not evidence, and is
- * clamped the same way an uncited rubric score is. A richer corpus must not
- * become a licence to infer.
+ * Trailing punctuation is stripped per token: the source ends a sentence
+ * "…12 agents." and a quote may render it "agents," or "agents". Leaving the
+ * punctuation attached made those three different tokens and dropped a faithful
+ * quote's overlap below threshold.
  */
+function tokens(s: string): string[] {
+  return normalize(s)
+    .replace(/[^a-z0-9%+./ -]/g, ' ')
+    .split(/\s+/)
+    .map((t) => t.replace(/^[.\-/]+|[.\-/]+$/g, ''))
+    .filter((t) => t.length > 2);
+}
+
+/**
+ * How much of the quote's vocabulary appears in the source, in order-independent
+ * terms. Substring containment is the strict path; this is the fallback for a
+ * quote the model reflowed, re-punctuated, or stitched across a markdown break.
+ */
+export const ATTRIBUTION_OVERLAP_THRESHOLD = 0.85;
+
+function overlapRatio(quote: string, source: string): number {
+  const q = tokens(quote);
+  if (q.length === 0) return 0;
+  const src = new Set(tokens(source));
+  return q.filter((t) => src.has(t)).length / q.length;
+}
+
 export function attributeCitation(
   quote: string | null | undefined,
   sources: CorpusSource[]
@@ -164,5 +207,22 @@ export function attributeCitation(
   if (!quote) return null;
   const q = normalize(quote);
   if (q.length < 12) return null; // too short to be evidence of anything
-  return sources.find((s) => normalize(s.text).includes(q))?.file ?? null;
+
+  // Strict first. This is a FAST PATH, not a second guard: any quote it accepts
+  // the overlap fallback would also accept at ratio 1.0. It is kept because an
+  // exact containment is unambiguous and cheap, but it is not independently
+  // load-bearing — do not treat its presence as a safety property.
+  const exact = sources.find((s) => normalize(s.text).includes(q));
+  if (exact) return exact.file;
+
+  // Then the overlap fallback. Still evidence-bound — a quote whose vocabulary
+  // is mostly absent from every source is not attributable, and returning null
+  // is what clamps the score. This widens what counts as a faithful quote; it
+  // does not lower the bar for having one.
+  let best: { file: string; ratio: number } | null = null;
+  for (const s of sources) {
+    const ratio = overlapRatio(quote, s.text);
+    if (!best || ratio > best.ratio) best = { file: s.file, ratio };
+  }
+  return best && best.ratio >= ATTRIBUTION_OVERLAP_THRESHOLD ? best.file : null;
 }

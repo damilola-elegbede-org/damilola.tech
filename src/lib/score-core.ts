@@ -9,7 +9,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { resumeData } from '@/lib/resume-data';
 import { resumeDataToText, type ScorerResumeData } from '@/lib/resume-text';
 import {
-  RUBRIC_DIMENSIONS, assembleRubric, buildDimensionCall, scoreDimension,
+  RUBRIC_DIMENSIONS, assembleRubric, buildDimensionCall, scoreDimension, MAX_DIMENSION_SCORE,
   type DimensionResult, type RawDimensionReply,
 } from '@/lib/resume-rubric';
 import { anchor } from '@/lib/resume-anchoring';
@@ -167,15 +167,70 @@ export interface AtsScore {
   max: { total: number; breakdown: DimensionResult[]; reachesTarget90: boolean };
   gap: number;
   gapLine: string;
+  /** True when gap is 0 below 90 — a defect signal, never "already maximal". */
+  headroomUnverified: boolean;
+  /** Dimensions where the model quoted the corpus but we could not attribute it. */
+  attributionFailures: string[];
+  resumeGap: { achievable: number; closeable: number; structural: number };
 }
 
 /** Scores exactly the five locked dimensions; current reads only the submitted resume. */
+/**
+ * Opus calls per role, run at a bounded width.
+ *
+ * ENG-2010 AC10: `Promise.all` over 5 dimension calls plus 3 corpus calls put
+ * EIGHT concurrent Opus requests in flight. The Google JD (6,399 chars) failed
+ * 3 of 3 attempts with a generic `AI service error` in ~10s while the shorter
+ * NVIDIA JD (3,961) succeeded — the failure tracked JD size against fan-out,
+ * not anything about the posting. That is the role D clears every stated
+ * minimum for, so this was the defect actually blocking an application.
+ *
+ * 3 is below any per-key concurrency limit we have seen bite and still keeps
+ * the eight calls inside a couple of round-trip waves.
+ */
+const ATS_CALL_CONCURRENCY = 3;
+
+/** Bounded-width map. Preserves input order; failures propagate. */
+async function mapWithLimit<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
+/**
+ * The ceiling a dimension may report.
+ *
+ * ENG-2010 AC5: the response shipped the raw pre-clamp value while the maths
+ * used the clamped one, so the API emitted ceilings BELOW the achieved score —
+ * `leadership_evidence` score 3 / ceiling 0. A ceiling under the observed score
+ * is impossible on its face and made the whole payload untrustworthy.
+ *
+ * Exported so the clamp is testable on its own; inline it was unreachable by
+ * any mutation a test could catch.
+ */
+export function boundedCeiling(score: number, corpusSupported: number | undefined): number {
+  return Math.max(score, Math.min(MAX_DIMENSION_SCORE, corpusSupported ?? score));
+}
+
 export async function scoreAts(jobDescription: string, corpus?: CareerCorpus): Promise<AtsScore> {
   const resumeText = buildResumeText();
   const careerCorpus = corpus ?? await loadCareerCorpus(resumeText);
   const seed = `${jobDescription.length}:${resumeText.length}`;
   const calls = RUBRIC_DIMENSIONS.map((d) => buildDimensionCall(d, resumeText, jobDescription, seed));
-  const dimensions = await Promise.all(calls.map((call) => callDimension(call, resumeText, jobDescription)));
+  const dimensions = await mapWithLimit(calls, ATS_CALL_CONCURRENCY, (call) =>
+    callDimension(call, resumeText, jobDescription)
+  );
   const addressable = RUBRIC_DIMENSIONS.filter((d) => d.ceiling === 'addressable');
   // The ceiling answers "what could the résumé truthfully say if rewritten
   // using career-corpus evidence" — a citation landing only in the résumé
@@ -184,23 +239,91 @@ export async function scoreAts(jobDescription: string, corpus?: CareerCorpus): P
   // context (it's still part of `careerCorpus.document`); only attribution
   // excludes it.
   const nonResumeSources = careerCorpus.sources.filter((s) => s.file !== RESUME_SOURCE_LABEL);
-  const corpusScores = await Promise.all(addressable.map(async (dimension) => {
+  const corpusScores = await mapWithLimit(addressable, ATS_CALL_CONCURRENCY, async (dimension) => {
     const call = buildDimensionCall(dimension, careerCorpus.document, jobDescription, `${seed}:corpus`);
     const scored = await callDimension(call, careerCorpus.document, jobDescription);
-    return [dimension.key, attributeCitation(scored.resumeQuote, nonResumeSources) ? scored.score : 0] as const;
-  }));
+    const sourceFile = attributeCitation(scored.resumeQuote, nonResumeSources);
+    // AC3: a failed attribution and a genuine no-headroom verdict used to emit
+    // byte-identical output, so a broken matcher read as a confident "already
+    // maximal". They are now distinguishable: `attributionFailed` means the
+    // model quoted something we could not verify, NOT that the corpus is empty.
+    return [
+      dimension.key,
+      {
+        score: sourceFile ? scored.score : 0,
+        sourceFile,
+        attributionFailed: Boolean(scored.resumeQuote) && sourceFile === null,
+        quoted: Boolean(scored.resumeQuote),
+      },
+    ] as const;
+  });
   const support = new Map(corpusScores);
-  const bounded = dimensions.map((d) => ({ ...d, ceilingScore: support.get(d.dimension) ?? d.score }));
+  const bounded = dimensions.map((d) => {
+    const s = support.get(d.dimension);
+    return {
+      ...d,
+      // AC5: emit the value the maths actually uses. Shipping the raw pre-clamp
+      // number produced ceilings BELOW the achieved score (score 3 / ceiling 0),
+      // which is impossible on its face and made the payload untrustworthy.
+      ceilingScore: boundedCeiling(d.score, s?.score),
+      ceilingSourceFile: s?.sourceFile ?? null,
+      attributionFailed: s?.attributionFailed ?? false,
+    };
+  });
   const rubric = assembleRubric(bounded);
   // Keep the anchoring module in the real scoring path. It intentionally emits no fourth score.
   anchor(rubric, []);
   const current = rubric.total * 5;
   const maximum = rubric.ceiling * 5;
   const gap = maximum - current;
+
+  // AC4 — D's invariant, encoded: "We should always be able to improve the ATS
+  // score unless it is already in the 90s." A zero gap below 90 is therefore a
+  // DEFECT SIGNAL, not a verdict. The endpoint previously returned ATS 55,
+  // Max 55, gap 0, zero proposed changes — and reported success.
+  //
+  // It is a flag rather than a throw: the scores themselves are still the best
+  // information available, and refusing to answer would be worse than answering
+  // with the caveat attached. But it must never render as "already maximal".
+  const attributionFailures = bounded.filter((d) => d.attributionFailed).map((d) => d.dimension);
+  const suspect = gap === 0 && maximum < 90;
+
+  const gapLine = suspect
+    ? attributionFailures.length > 0
+      ? `Cannot verify headroom: corpus evidence was quoted but not attributable (${attributionFailures.join(', ')}). This is not "already maximal".`
+      : 'Cannot verify headroom: no corpus evidence outranked the résumé, and ATS is below 90. Treat as unverified, not maximal.'
+    : gap === 0
+      ? 'Already maximal: the résumé states all truthfully supportable evidence.'
+      : maximum >= 90
+        ? 'Tailoring pays: true career evidence can reach the ATS (Max) target of 90.'
+        : 'Structural mismatch: true career evidence cannot reach the ATS (Max) target of 90.';
+
+  if (suspect) {
+    console.warn(
+      `[scoreAts] zero headroom below 90 (current=${current}, max=${maximum}) —` +
+        ` attribution failures: ${attributionFailures.join(', ') || 'none'}`
+    );
+  }
+
   return {
     current: { total: current, breakdown: bounded },
     max: { total: maximum, breakdown: bounded, reachesTarget90: maximum >= 90 },
     gap,
-    gapLine: gap === 0 ? 'Already maximal: the résumé states all truthfully supportable evidence.' : maximum >= 90 ? 'Tailoring pays: true career evidence can reach the ATS (Max) target of 90.' : 'Structural mismatch: true career evidence cannot reach the ATS (Max) target of 90.',
+    gapLine,
+    // AC3/AC4 visibility: a consumer can tell an unverified ceiling from a real one.
+    headroomUnverified: suspect,
+    attributionFailures,
+    // AC6: `resumeGap` shipped {null, null, null} on every response since ENG-1996.
+    // Derived here from the rubric's own addressable/structural split so it has a
+    // real producer rather than a placeholder.
+    resumeGap: {
+      achievable: gap,
+      closeable: bounded
+        .filter((d) => RUBRIC_DIMENSIONS.find((r) => r.key === d.dimension)?.ceiling === 'addressable')
+        .reduce((n, d) => n + (d.ceilingScore - d.score) * 5, 0),
+      structural: bounded
+        .filter((d) => RUBRIC_DIMENSIONS.find((r) => r.key === d.dimension)?.ceiling === 'structural')
+        .reduce((n, d) => n + (MAX_DIMENSION_SCORE - d.score) * 5, 0),
+    },
   };
 }
