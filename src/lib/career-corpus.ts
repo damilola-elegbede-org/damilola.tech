@@ -187,17 +187,37 @@ function tokens(s: string): string[] {
 }
 
 /**
- * How much of the quote's vocabulary appears in the source, in order-independent
- * terms. Substring containment is the strict path; this is the fallback for a
- * quote the model reflowed, re-punctuated, or stitched across a markdown break.
+ * How much of the quote's vocabulary appears in the source, scored against the
+ * best-matching window rather than the whole document. Substring containment
+ * is the strict path; this is the fallback for a quote the model reflowed,
+ * re-punctuated, or stitched across a markdown break. Windowing matters at
+ * corpus scale: a whole-document token Set has no position or adjacency
+ * information, so a quote stitched from unrelated paragraphs reaches ratio 1.0
+ * as long as the corpus happens to contain every one of its words somewhere.
  */
 export const ATTRIBUTION_OVERLAP_THRESHOLD = 0.85;
+
+/** Below this many content tokens, the fallback is too easily satisfied by
+ * common vocabulary to serve as evidence — require the strict substring path
+ * instead. */
+export const ATTRIBUTION_OVERLAP_MIN_TOKENS = 6;
 
 function overlapRatio(quote: string, source: string): number {
   const q = tokens(quote);
   if (q.length === 0) return 0;
-  const src = new Set(tokens(source));
-  return q.filter((t) => src.has(t)).length / q.length;
+  const src = tokens(source);
+  if (src.length === 0) return 0;
+  const width = Math.min(src.length, q.length * 3);
+  const step = Math.max(1, Math.floor(width / 2));
+  let best = 0;
+  for (let start = 0; ; start += step) {
+    const end = Math.min(start + width, src.length);
+    const window = new Set(src.slice(start, end));
+    const hit = q.filter((t) => window.has(t)).length / q.length;
+    if (hit > best) best = hit;
+    if (best === 1 || end === src.length) break;
+  }
+  return best;
 }
 
 export function attributeCitation(
@@ -224,5 +244,6 @@ export function attributeCitation(
     const ratio = overlapRatio(quote, s.text);
     if (!best || ratio > best.ratio) best = { file: s.file, ratio };
   }
-  return best && best.ratio >= ATTRIBUTION_OVERLAP_THRESHOLD ? best.file : null;
+  if (!best || best.ratio < ATTRIBUTION_OVERLAP_THRESHOLD) return null;
+  return tokens(quote).length >= ATTRIBUTION_OVERLAP_MIN_TOKENS ? best.file : null;
 }
