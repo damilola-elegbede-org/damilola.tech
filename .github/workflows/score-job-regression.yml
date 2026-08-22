@@ -30,3 +30,7 @@ jobs:
           RUN_SCORE_REGRESSION: '1'
           DAMILOLA_SCORE_API_KEY: ${{ secrets.DAMILOLA_SCORE_API_KEY }}
         run: npx vitest run tests/integration/score-regression.test.ts
+      # Keep ENG-2010's mocked long-JD and corpus-attribution probes explicit:
+      # this workflow intentionally has no ripgrep dependency.
+      - name: Run ENG-2010 fixture regressions
+        run: npx vitest run src/lib/__tests__/eng-2010-fixtures.test.ts

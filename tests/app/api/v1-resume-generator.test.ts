@@ -29,6 +29,8 @@ vi.mock('@/lib/career-corpus', () => ({
 
 const ats = (gap: number) => ({ current: { total: 70, breakdown: [] }, max: { total: 70 + gap, breakdown: [], reachesTarget90: false }, gap, gapLine: 'Structural mismatch' });
 const request = (input: string) => new Request('http://test/api/v1/resume-generator', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ input }) });
+// Clara's 2026-08-21 Ascent snapshot: nearest-rank P95 was 9,386 characters.
+const P95_JD = `Software Engineering Manager II, Infrastructure, Google Cloud. ${'infrastructure requirements '.repeat(500)}`.slice(0, 9386);
 
 describe('v1 resume generator ATS contract', () => {
   beforeEach(() => { vi.clearAllMocks(); mockScoreAts.mockResolvedValue(ats(6)); });
@@ -41,6 +43,14 @@ describe('v1 resume generator ATS contract', () => {
     expect(response.status).toBe(200);
     expect(body.data.atsScore.max.total).toBe(76);
     expect(body.data.proposedChanges.reduce((sum: number, change: { impactPoints: number }) => sum + change.impactPoints, 0)).toBe(6);
+  });
+
+  it('returns 200 for a P95-length Google-shaped JD', async () => {
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: JSON.stringify({ proposedChanges: [] }) }] });
+    const { POST } = await import('@/app/api/v1/resume-generator/route');
+    const response = await POST(request(P95_JD));
+    expect(response.status).toBe(200);
+    expect(mockScoreAts).toHaveBeenCalledWith(P95_JD, expect.any(Object));
   });
 
   it('drops a rewrite that invents a metric, even when its anchor is real', async () => {

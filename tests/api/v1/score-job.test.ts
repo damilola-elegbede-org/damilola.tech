@@ -170,6 +170,9 @@ const validBody = {
   company: 'Acme Corp',
 };
 
+// Clara's 2026-08-21 Ascent snapshot: nearest-rank P95 was 9,386 characters.
+const P95_JD = `infrastructure requirements ${'platform reliability '.repeat(600)}`.slice(0, 9386);
+
 const mockAnthropicResponse = {
   content: [{ type: 'text', text: '{"gapAnalysis":"Strong fit.","maxPossibleScore":88,"recommendation":"marginal_improvement"}' }],
 };
@@ -194,11 +197,11 @@ describe('POST /api/v1/score-job', () => {
       inputType: 'url',
       extractedUrl: 'https://example.com/jobs/senior-engineering-manager',
     });
-    mockResolvePreFetchedJobDescription.mockReturnValue({
-      text: 'Senior Engineering Manager at Acme Corp. TypeScript, Node.js required. Responsibilities include API design.',
+    mockResolvePreFetchedJobDescription.mockImplementation((text: string) => ({
+      text,
       inputType: 'content',
       extractedUrl: 'https://example.com/jobs/senior-engineering-manager',
-    });
+    }));
     mockEvaluateFitGates.mockReturnValue(passingGates);
     mockAssembleFitScore.mockReturnValue(defaultFitResult);
     mockGatedFitResult.mockImplementation((gates: { failed: string[]; evidence: Record<string, string> }) => ({
@@ -254,6 +257,18 @@ describe('POST /api/v1/score-job', () => {
       const response = await POST(makeRequest(validBody));
       expect(response.status).toBe(401);
     });
+  });
+
+  it('returns 200 for a P95-length Google-shaped JD', async () => {
+    const { POST } = await import('@/app/api/v1/score-job/route');
+    const response = await POST(makeRequest({
+      ...validBody,
+      title: 'Software Engineering Manager II, Infrastructure, Google Cloud',
+      company: 'Google',
+      job_content: P95_JD,
+    }));
+    expect(response.status).toBe(200);
+    expect(mockScoreAts).toHaveBeenCalledWith(P95_JD, fakeCorpus);
   });
 
   describe('validation', () => {
