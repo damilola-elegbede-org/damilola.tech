@@ -22,7 +22,12 @@ import { scoreExperienceMatch, FIT_EXPERIENCE_RAW_MAX } from '../src/lib/fit-sco
 import { buildResumeText } from '../src/lib/score-core';
 import { IDEAL_JD, PASTRY_JD } from '../src/lib/__tests__/fixtures/probe-jds';
 
-/** The resume as a one-file corpus — the pre-ENG-1995 input, for comparison only. */
+/**
+ * The resume as a one-file corpus — the pre-ENG-1995 input, for comparison only.
+ * The corpus-backed side now CONTAINS this same text (D: Fit reads all career
+ * data, resume included), so the delta measures exactly what the six
+ * career-data files add on top of it.
+ */
 function resumeAsCorpus(): CareerCorpus {
   const text = buildResumeText();
   const sources = [{ file: 'resume.txt', text, words: text.trim().split(/\s+/).length }];
@@ -30,7 +35,7 @@ function resumeAsCorpus(): CareerCorpus {
 }
 
 async function main() {
-  const corpus = await loadCareerCorpus();
+  const corpus = await loadCareerCorpus(buildResumeText());
   const resume = resumeAsCorpus();
 
   console.log(`corpus: ${corpus.sources.length} files, ${corpus.totalWords} words`);

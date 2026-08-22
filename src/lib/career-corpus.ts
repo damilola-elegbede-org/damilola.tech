@@ -5,9 +5,10 @@
  * The three scores need different sources, and the distinction is the whole
  * point rather than an implementation detail:
  *
- *   Fit        Have I done this kind of work?      corpus, always
- *   ATS        What does my résumé say today?      résumé, deliberately
- *   ATS (Max)  What could it say that is true?     corpus bounds the ceiling
+ *   Fit        Can I do this job?                  JD × ALL career data,
+ *                                                  résumé INCLUDED
+ *   ATS        What does my résumé say today?      résumé only, deliberately
+ *   ATS (Max)  What lifts ATS, truthfully?         corpus bounds the ceiling
  *
  * Scoring Fit off the résumé measures how well a one-page document happens to
  * be written for this posting — a presentation artifact. A role dropped because
@@ -28,6 +29,14 @@
  */
 
 import { fetchBlob } from '@/lib/blob';
+
+/**
+ * The label a résumé citation carries. The résumé is generated from
+ * `resumeData`, not read from a file, but it is part of the corpus Fit scores
+ * against — D's ruling: "all of my career data (including the resume)". Naming
+ * it here keeps `attributeCitation` able to say where a quote came from.
+ */
+export const RESUME_SOURCE_LABEL = 'resume.txt';
 
 /** The six files D named. Blob keys are basenames; `dir` is the local dev path. */
 export const CAREER_CORPUS_FILES: ReadonlyArray<{ dir: string; file: string }> = [
@@ -88,9 +97,14 @@ async function localReader(): Promise<(dir: string, file: string) => Promise<str
  * the cover-letter route uses — the corpus ships to Blob under
  * `career-data/context` and `career-data/data`, both in CONTENT_DIRS.
  *
+ * `resumeText` is a required parameter rather than an internal call to
+ * `buildResumeText()`: it keeps this module free of the scoring client that
+ * `score-core` instantiates at import time, and a required argument cannot be
+ * forgotten the way an optional one can.
+ *
  * Throws `CareerCorpusUnavailableError` when any file resolves empty from both.
  */
-export async function loadCareerCorpus(): Promise<CareerCorpus> {
+export async function loadCareerCorpus(resumeText: string): Promise<CareerCorpus> {
   const readLocal = await localReader().catch(() => null);
 
   const loaded = await Promise.all(
@@ -104,13 +118,15 @@ export async function loadCareerCorpus(): Promise<CareerCorpus> {
   );
 
   const missing = loaded.filter((s) => !s.text.trim()).map((s) => s.file);
+  if (!resumeText.trim()) missing.push(RESUME_SOURCE_LABEL);
   if (missing.length > 0) throw new CareerCorpusUnavailableError(missing);
 
-  const sources: CorpusSource[] = loaded.map((s) => ({
-    file: s.file,
-    text: s.text,
-    words: countWords(s.text),
-  }));
+  // Résumé first: it is the most specific statement of the career, and a model
+  // reading top-down should meet it before the long-form context.
+  const sources: CorpusSource[] = [
+    { file: RESUME_SOURCE_LABEL, text: resumeText, words: countWords(resumeText) },
+    ...loaded.map((s) => ({ file: s.file, text: s.text, words: countWords(s.text) })),
+  ];
 
   return {
     sources,

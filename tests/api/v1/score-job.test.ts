@@ -92,12 +92,13 @@ class FakeCorpusUnavailable extends Error {
 }
 const mockLoadCareerCorpus = vi.fn();
 vi.mock('@/lib/career-corpus', () => ({
-  loadCareerCorpus: () => mockLoadCareerCorpus(),
+  loadCareerCorpus: (...a: unknown[]) => mockLoadCareerCorpus(...a),
   CareerCorpusUnavailableError: FakeCorpusUnavailable,
 }));
 
 const fakeCorpus = {
   sources: [
+    { file: 'resume.txt', text: 'r', words: 1 },
     { file: 'anecdotes.md', text: 'a', words: 1 },
     { file: 'star-stories.json', text: 'b', words: 1 },
   ],
@@ -442,9 +443,11 @@ describe('POST /api/v1/score-job', () => {
         expect.objectContaining({ dimension: 'leadership_evidence', score: 3 }),
       ]);
       expect(data.data.corpus).toEqual({
-        files: ['anecdotes.md', 'star-stories.json'],
+        files: ['resume.txt', 'anecdotes.md', 'star-stories.json'],
         totalWords: 2,
       });
+      // D's ruling: Fit reads all career data, the résumé included.
+      expect(mockLoadCareerCorpus).toHaveBeenCalledWith('RESUME TEXT');
       expect(data.data.currentScore).toEqual(expect.objectContaining({
         total: 75,
         breakdown: expect.objectContaining({ roleRelevance: 30 }),

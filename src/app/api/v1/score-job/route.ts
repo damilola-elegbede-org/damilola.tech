@@ -20,6 +20,7 @@ import {
   buildGapAnalysisPrompt,
   buildScorePayload,
   buildScoringInput,
+  buildResumeText,
 } from '@/lib/score-core';
 import {
   evaluateFitGates,
@@ -244,7 +245,8 @@ export async function POST(req: Request) {
     // corpus, not the resume. A3: a corpus that will not load is a hard failure —
     // falling back to the resume would emit a plausible, lower score and nothing
     // in the response would say why.
-    const corpus = await loadCareerCorpus();
+    // D's ruling: Fit reads all career data, the résumé included.
+    const corpus = await loadCareerCorpus(buildResumeText());
 
     // The experience component's three dimension calls and the gap-analysis call
     // are independent — run them concurrently so the Fit Score costs latency, not

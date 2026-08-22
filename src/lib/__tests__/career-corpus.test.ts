@@ -22,7 +22,10 @@ import {
   attributeCitation,
   CareerCorpusUnavailableError,
   CAREER_CORPUS_FILES,
+  RESUME_SOURCE_LABEL,
 } from '@/lib/career-corpus';
+
+const RESUME = 'Damilola Elegbede. Sr. Engineering Manager, Developer Experience at Visa.';
 
 const SOURCES = [
   { file: 'anecdotes.md', text: 'Rebuilt the release train across four teams.', words: 7 },
@@ -71,12 +74,22 @@ describe('loadCareerCorpus', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it('loads every file D named', async () => {
+  it("loads every file D named, plus the résumé — Fit reads ALL career data", async () => {
     mockFetchBlob.mockImplementation((f: string) => Promise.resolve(`content of ${f} with enough words`));
     mockReadFile.mockImplementation(() => Promise.reject(new Error('ENOENT')));
-    const corpus = await loadCareerCorpus();
-    expect(corpus.sources.map((s) => s.file)).toEqual(CAREER_CORPUS_FILES.map((f) => f.file));
+    const corpus = await loadCareerCorpus(RESUME);
+    expect(corpus.sources.map((s) => s.file)).toEqual([
+      RESUME_SOURCE_LABEL,
+      ...CAREER_CORPUS_FILES.map((f) => f.file),
+    ]);
+    expect(corpus.document).toContain(RESUME);
     expect(corpus.totalWords).toBeGreaterThan(0);
+  });
+
+  it('treats an empty résumé as a missing source, not a smaller corpus', async () => {
+    mockFetchBlob.mockImplementation((f: string) => Promise.resolve(`content of ${f} with enough words`));
+    mockReadFile.mockImplementation(() => Promise.reject(new Error('ENOENT')));
+    await expect(loadCareerCorpus('   ')).rejects.toThrow(/resume\.txt/);
   });
 
   it('throws rather than falling back to the resume when a file is missing — A3', async () => {
@@ -88,19 +101,19 @@ describe('loadCareerCorpus', () => {
     );
     mockReadFile.mockImplementation(() => Promise.reject(new Error('ENOENT')));
 
-    await expect(loadCareerCorpus()).rejects.toBeInstanceOf(CareerCorpusUnavailableError);
+    await expect(loadCareerCorpus(RESUME)).rejects.toBeInstanceOf(CareerCorpusUnavailableError);
   });
 
   it('names what was missing, so the failure is diagnosable', async () => {
     mockFetchBlob.mockImplementation(() => Promise.resolve(''));
     mockReadFile.mockImplementation(() => Promise.reject(new Error('ENOENT')));
-    await expect(loadCareerCorpus()).rejects.toThrow(/anecdotes\.md/);
+    await expect(loadCareerCorpus(RESUME)).rejects.toThrow(/anecdotes\.md/);
   });
 
   it('falls back to local career-data when blob is empty, for development', async () => {
     mockFetchBlob.mockImplementation(() => Promise.resolve(''));
     mockReadFile.mockImplementation(() => Promise.resolve('local corpus content with several words in it'));
-    const corpus = await loadCareerCorpus();
-    expect(corpus.sources).toHaveLength(CAREER_CORPUS_FILES.length);
+    const corpus = await loadCareerCorpus(RESUME);
+    expect(corpus.sources).toHaveLength(CAREER_CORPUS_FILES.length + 1);
   });
 });
