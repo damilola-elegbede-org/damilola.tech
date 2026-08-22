@@ -3,6 +3,13 @@ import { describe, it, expect } from 'vitest';
 import { NavMenu } from '@/components/ui/nav-menu';
 
 describe('NavMenu', () => {
+  const expectedSectionLinks = [
+    ['Experience', '#experience'],
+    ['Projects', '#projects'],
+    ['Skills', '#skills-assessment'],
+    ['Education', '#education'],
+  ];
+
   it('renders hamburger button', () => {
     render(<NavMenu />);
     expect(screen.getByRole('button', { name: /open menu/i })).toBeInTheDocument();
@@ -20,10 +27,9 @@ describe('NavMenu', () => {
 
     // Get the mobile dropdown nav (the second one)
     const mobileNav = navs[1];
-    expect(within(mobileNav).getByRole('link', { name: /experience/i })).toBeInTheDocument();
-    expect(within(mobileNav).getByRole('link', { name: /skills/i })).toBeInTheDocument();
-    expect(within(mobileNav).getByRole('link', { name: /education/i })).toBeInTheDocument();
-    expect(within(mobileNav).getByRole('link', { name: /projects/i })).toBeInTheDocument();
+    expect(within(mobileNav).getAllByRole('link').slice(0, 4).map((link) => link.textContent)).toEqual(
+      expectedSectionLinks.map(([label]) => label)
+    );
   });
 
   it('closes menu on button click when open', () => {
@@ -49,20 +55,18 @@ describe('NavMenu', () => {
     const navs = screen.getAllByRole('navigation');
     const mobileNav = navs[1];
 
-    expect(within(mobileNav).getByRole('link', { name: /experience/i })).toHaveAttribute('href', '#experience');
-    expect(within(mobileNav).getByRole('link', { name: /skills/i })).toHaveAttribute('href', '#skills-assessment');
-    expect(within(mobileNav).getByRole('link', { name: /education/i })).toHaveAttribute('href', '#education');
-    expect(within(mobileNav).getByRole('link', { name: /projects/i })).toHaveAttribute('href', '#projects');
+    expect(within(mobileNav).getAllByRole('link').slice(0, 4).map((link) => link.getAttribute('href'))).toEqual(
+      expectedSectionLinks.map(([, href]) => href)
+    );
   });
 
   it('renders desktop navigation links', () => {
     render(<NavMenu />);
     const desktopNav = screen.getAllByRole('navigation')[0];
 
-    expect(within(desktopNav).getByRole('link', { name: /experience/i })).toBeInTheDocument();
-    expect(within(desktopNav).getByRole('link', { name: /skills/i })).toBeInTheDocument();
-    expect(within(desktopNav).getByRole('link', { name: /education/i })).toBeInTheDocument();
-    expect(within(desktopNav).getByRole('link', { name: /projects/i })).toBeInTheDocument();
+    expect(within(desktopNav).getAllByRole('link').slice(0, 4).map((link) => link.textContent)).toEqual(
+      expectedSectionLinks.map(([label]) => label)
+    );
   });
 
   it('renders a download resume link in desktop nav', () => {

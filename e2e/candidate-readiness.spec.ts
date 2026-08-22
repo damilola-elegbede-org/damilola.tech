@@ -60,7 +60,7 @@ test.describe('candidate-readiness smoke (ENG-480)', () => {
 
   test('home page displays all candidate-facing sections', async ({ page }) => {
     await page.goto('/');
-    for (const id of ['#experience', '#skills-assessment', '#fit-assessment', '#education', '#contact']) {
+    for (const id of ['#experience', '#projects', '#skills-assessment', '#education', '#contact']) {
       await expect(page.locator(id)).toBeVisible();
     }
   });
@@ -82,22 +82,6 @@ test.describe('candidate-readiness smoke (ENG-480)', () => {
     const suggestions = panel.getByTestId('suggestion-chip');
     await expect(suggestions.first()).toBeVisible();
     expect(await suggestions.count()).toBeGreaterThan(0);
-  });
-
-  // ── Fit Assessment ──────────────────────────────────────────────────────
-
-  test('fit assessment section has strong and weak fit example buttons', async ({ page }) => {
-    await page.goto('/');
-    const section = page.locator('#fit-assessment');
-    await expect(section).toBeVisible();
-    await expect(section.getByRole('button', { name: /strong fit example/i })).toBeVisible({ timeout: 15000 });
-    await expect(section.getByRole('button', { name: /weak fit example/i })).toBeVisible({ timeout: 15000 });
-  });
-
-  test('fit assessment analyze button starts disabled', async ({ page }) => {
-    await page.goto('/');
-    const section = page.locator('#fit-assessment');
-    await expect(section.getByRole('button', { name: /analyze fit/i })).toBeDisabled({ timeout: 15000 });
   });
 
   // ── /consulting ─────────────────────────────────────────────────────────
