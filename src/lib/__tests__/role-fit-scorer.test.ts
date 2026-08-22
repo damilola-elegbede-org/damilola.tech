@@ -346,6 +346,67 @@ describe('evaluateRoleFit — G1 comma-qualified Director/VP titles (ENG-1974)',
   });
 });
 
+describe('evaluateRoleFit — structuredLocation reaches the location signal (ENG-1975)', () => {
+  // Fit for the ServiceTitan JD from the ENG-1975 defect report: mission and
+  // availability language up top, no "Boulder"/"Colorado" text anywhere in
+  // the JD body, so isBoulderColorado() (and, before this fix, scoreLocation())
+  // could only see it via the structured location field. Title uses "Engineering
+  // Director" (not the comma-qualified "Director, Software Engineering" form
+  // from the real posting) so this fixture is independent of ENG-1974's G1
+  // comma-title fix landing first — this ticket is about the location signal,
+  // not G1.
+  const serviceTitanJD = {
+    title: 'Engineering Director, Infrastructure',
+    jobDescription: `
+      Own our infrastructure engineering platform organization. We're
+      available around the clock for customers who depend on us, and our
+      mission is to build the operating system for the trades.
+    `,
+  };
+
+  it('scores location 8/8 when a structured location resolves Boulder (AC3)', () => {
+    const result = evaluateRoleFit(
+      { ...serviceTitanJD, location: 'Boulder, CO, United States' },
+      'ServiceTitan'
+    );
+    expect(result.gateFailed).toEqual([]);
+    expect(result.breakdown.location).toBe(8);
+    expect(result.locationUnknown).toBe(false);
+  });
+
+  it('scores location 4/8 (unstated, not a reject) and does not throw when location is omitted (AC3 regression)', () => {
+    const result = evaluateRoleFit(serviceTitanJD, 'ServiceTitan');
+    expect(result.gateFailed).not.toContain('G4_geography');
+    expect(result.breakdown.location).toBe(4);
+    expect(result.locationUnknown).toBe(true);
+  });
+
+  it('does not let a supplied location render an unknown as known when it does not resolve (AC4)', () => {
+    const result = evaluateRoleFit(
+      { ...serviceTitanJD, location: 'somewhere unspecified' },
+      'ServiceTitan'
+    );
+    expect(result.breakdown.location).toBe(4);
+    expect(result.locationUnknown).toBe(true);
+  });
+
+  it('does not let an omitted location masquerade as known when the JD body itself names a hub (AC4 inverse)', () => {
+    // Sanity check on the flag's own semantics, not a location-signal case:
+    // when the geography IS resolvable from the JD body alone (no structured
+    // location needed), locationUnknown must correctly read false.
+    const result = evaluateRoleFit(
+      {
+        title: 'Engineering Director, Infrastructure',
+        jobDescription: 'Own our infrastructure platform. Location: Boulder, Colorado.',
+      },
+      'ServiceTitan'
+    );
+    expect(result.breakdown.location).toBe(8);
+    expect(result.locationUnknown).toBe(false);
+
+  });
+});
+
 describe('evaluateRoleFit — G1 admits a qualifier word between the comma and domain (ENG-1985)', () => {
   // "Tested against the deployed regex" list from the ENG-1985 defect report.
   // The domain word previously had to sit immediately after the comma —

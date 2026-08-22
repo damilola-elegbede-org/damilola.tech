@@ -98,7 +98,7 @@ export async function POST(req: Request) {
       return Errors.validationError('Request body must be a JSON object.');
     }
 
-    const { url, title, company, job_content: jobContent, mode } = body as Record<string, unknown>;
+    const { url, title, company, job_content: jobContent, mode, location } = body as Record<string, unknown>;
 
     if (mode !== undefined && mode !== null && mode !== 'interview-prep') {
       return Errors.badRequest('Invalid mode. Accepted values: "interview-prep".');
@@ -109,6 +109,7 @@ export async function POST(req: Request) {
     const normalizedTitle = typeof title === 'string' ? title.trim() : title;
     const normalizedCompany = typeof company === 'string' ? company.trim() : company;
     const hasJobContent = typeof jobContent === 'string' && jobContent.trim().length > 0;
+    const normalizedLocation = typeof location === 'string' ? location.trim() : location;
 
     if (!normalizedUrl || typeof normalizedUrl !== 'string') {
       return Errors.validationError('"url" is required and must be a string.');
@@ -133,6 +134,9 @@ export async function POST(req: Request) {
     if (hasJobContent && new TextEncoder().encode(jobContent as string).byteLength > MAX_JOB_CONTENT_SIZE) {
       return Errors.badRequest(`"job_content" exceeds ${MAX_JOB_CONTENT_SIZE} byte limit.`);
     }
+    if (location !== undefined && typeof location !== 'string') {
+      return Errors.validationError('"location" must be a string when provided.');
+    }
 
     const resolvedInput = hasJobContent
       ? resolvePreFetchedJobDescription(jobContent as string, normalizedUrl)
@@ -154,7 +158,10 @@ export async function POST(req: Request) {
     // win, on top of being the correct semantics — a role D can't take
     // regardless of fit quality shouldn't consume an Opus call to prove it
     // scores well).
-    const roleFit = evaluateRoleFit({ title: normalizedTitle, jobDescription: scoringText }, normalizedCompany);
+    const roleFit = evaluateRoleFit(
+      { title: normalizedTitle, jobDescription: scoringText, location: normalizedLocation as string | undefined },
+      normalizedCompany
+    );
     // Role fit decides whether D would take the role; readiness measures how
     // well the current resume matches it. They deliberately remain separate.
     const { readinessScore } = buildScoringInput(scoringText);

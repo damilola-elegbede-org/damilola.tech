@@ -443,6 +443,52 @@ describe('POST /api/v1/score-job', () => {
     });
   });
 
+  // ENG-1975: evaluateRoleFit takes RoleFitInput.location, but the route
+  // never accepted or threaded a "location" field — structuredLocation was
+  // unreachable from any caller, so G5/the 8-point location signal always
+  // fell back to scraping the title tail + JD preamble.
+  describe('location (ENG-1975)', () => {
+    it('threads a provided location string into evaluateRoleFit as structuredLocation', async () => {
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      await POST(makeRequest({ ...validBody, location: 'Boulder, CO, United States' }));
+
+      expect(mockEvaluateRoleFit).toHaveBeenCalledTimes(1);
+      const [input] = mockEvaluateRoleFit.mock.calls[0] as [{ location?: string }];
+      expect(input.location).toBe('Boulder, CO, United States');
+    });
+
+    it('trims a provided location before threading it through', async () => {
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      await POST(makeRequest({ ...validBody, location: '  Boulder, CO  ' }));
+
+      const [input] = mockEvaluateRoleFit.mock.calls[0] as [{ location?: string }];
+      expect(input.location).toBe('Boulder, CO');
+    });
+
+    it('omits location when the caller does not send one — unchanged behavior for scrapers with no location field (AC2)', async () => {
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest(validBody));
+
+      expect(response.status).toBe(200);
+      const [input] = mockEvaluateRoleFit.mock.calls[0] as [{ location?: string }];
+      expect(input.location).toBeUndefined();
+    });
+
+    it('returns 400 when location is not a string', async () => {
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest({ ...validBody, location: 12345 }));
+      const data = (await response.json()) as { error: { code: string } };
+      expect(response.status).toBe(400);
+      expect(data.error.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('does not throw when location is an empty string — falls back like omitted (AC2)', async () => {
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest({ ...validBody, location: '' }));
+      expect(response.status).toBe(200);
+    });
+  });
+
   describe('error handling', () => {
     it('returns 400 when JobDescriptionInputError is thrown', async () => {
       const { JobDescriptionInputError } = await import('@/lib/job-description-input');
