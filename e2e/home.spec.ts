@@ -29,13 +29,13 @@ test.describe('Home Page', () => {
     await expect(page.locator('#experience')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Experience', exact: true })).toBeVisible();
 
+    // Projects
+    await expect(page.locator('#projects')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible();
+
     // Skills Assessment
     await expect(page.locator('#skills-assessment')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Skills Assessment' })).toBeVisible();
-
-    // Fit Assessment
-    await expect(page.locator('#fit-assessment')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Fit Assessment' })).toBeVisible();
 
     // Education
     await expect(page.locator('#education')).toBeVisible();
@@ -75,20 +75,25 @@ test.describe('Home Page', () => {
     await expect(footer.getByText('Boulder, CO', { exact: true })).toBeVisible();
   });
 
-  test('should display navigation with correct links', async ({ page, isMobile }) => {
+  test('should display navigation with the homepage section order', async ({ page, isMobile }) => {
     // Skip on mobile - navigation is hidden behind hamburger menu
     test.skip(isMobile, 'Navigation links are hidden on mobile');
 
     // Navigation links visible on desktop
-    await expect(page.getByRole('link', { name: /experience/i }).first()).toBeVisible();
-    await expect(page.getByRole('link', { name: /skills/i }).first()).toBeVisible();
-    await expect(page.getByRole('link', { name: /fit assessment/i }).first()).toBeVisible();
-    await expect(page.getByRole('link', { name: /education/i }).first()).toBeVisible();
+    const navLinks = page.locator('nav a:not([href="/api/v1/resume.pdf"])');
+    await expect(navLinks).toHaveText(['Experience', 'Projects', 'Skills', 'Education']);
+    await expect(navLinks.nth(0)).toHaveAttribute('href', '#experience');
+    await expect(navLinks.nth(1)).toHaveAttribute('href', '#projects');
+    await expect(navLinks.nth(2)).toHaveAttribute('href', '#skills-assessment');
+    await expect(navLinks.nth(3)).toHaveAttribute('href', '#education');
+  });
 
-    // At least 4 nav links expected (Contact not in nav)
-    const navLinks = page.locator('nav a');
-    const count = await navLinks.count();
-    expect(count).toBeGreaterThanOrEqual(4);
+  test('should render homepage sections in the requested order', async ({ page }) => {
+    const sectionIds = await page.locator('main > section, main > footer').evaluateAll((elements) =>
+      elements.map((element) => element.id)
+    );
+
+    expect(sectionIds).toEqual(['hero', 'experience', 'projects', 'skills-assessment', 'education', 'contact']);
   });
 
   test('should include JSON-LD structured data with Person and WebSite schema', async ({ page }) => {

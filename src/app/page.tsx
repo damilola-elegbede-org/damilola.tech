@@ -5,7 +5,6 @@ import {
   Hero,
   Experience,
   SkillsAssessment,
-  FitAssessment,
   Education,
   Projects,
   Contact,
@@ -29,10 +28,9 @@ export default function Home() {
       <main id="main-content">
         <Hero onOpenChat={toggleChat} />
         <Experience />
+        <Projects />
         <SkillsAssessment />
         <Education />
-        <Projects />
-        <FitAssessment />
         <Contact />
       </main>
 
