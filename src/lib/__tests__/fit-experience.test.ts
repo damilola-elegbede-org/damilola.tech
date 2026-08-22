@@ -73,6 +73,14 @@ describe('scoreExperienceDimensions', () => {
     });
     expect(results).toHaveLength(FIT_EXPERIENCE_DIMENSIONS.length);
     expect(results.every((r) => r.score === 0)).toBe(true);
+    // Marked, so a caller can tell an error apart from a genuine absence.
+    expect(results.every((r) => r.callFailed)).toBe(true);
+  });
+
+  it('does not mark a genuine absence as a failed call', async () => {
+    const { client } = clientReturning('{"band":"absent","resumeQuote":null,"jdQuote":null}');
+    const results = await scoreExperienceDimensions(CORPUS, JD, { client });
+    expect(results.every((r) => r.callFailed)).toBe(false);
   });
 
   it('seeds from the job description, so an unchanged posting re-scores identically', async () => {

@@ -457,9 +457,17 @@ export function scoreTitle(normalizedTitle: string): { pts: number; tier: TitleT
 
 const SALARY_RANGE = /\$\s?(\d{1,3}(?:,\d{3})*)(k)?\s*(?:-|–|—|to)\s*\$?\s?(\d{1,3}(?:,\d{3})*)(k)?/gi;
 const SALARY_SINGLE = /\$\s?(\d{2,3}(?:,\d{3})?)(k)?/gi;
-const SALARY_RANGE_ISO_AT_START = /\b(\d{1,3}(?:,\d{3})*)(k)?\s*(?:USD|CAD|EUR|GBP)\b\s*(?:-|–|—|to)\s*(\d{1,3}(?:,\d{3})*)(k)?(?:\s*(?:USD|CAD|EUR|GBP)\b)?/gi;
-const SALARY_RANGE_ISO_AT_END = /\b(\d{1,3}(?:,\d{3})*)(k)?(?:\s*(?:USD|CAD|EUR|GBP)\b)?\s*(?:-|–|—|to)\s*(\d{1,3}(?:,\d{3})*)(k)?\s*(?:USD|CAD|EUR|GBP)\b/gi;
-const SALARY_SINGLE_ISO = /\b(\d{2,3}(?:,\d{3})?)(k)?\s*(?:USD|CAD|EUR|GBP)\b/gi;
+// USD only. The bands below are dollar figures, so accepting CAD/EUR/GBP here
+// scored a "CAD 350,000" posting at the top USD tier — 350,000 CAD is roughly
+// $255K. G4 gates most non-US postings before comp is ever scored, but a
+// Canadian or UK remote-US-eligible listing reaches this, and reading a foreign
+// band as dollars is a silent overstatement in D's most decision-heavy field.
+// A non-USD band now reads as undisclosed and is flagged, which is the honest
+// answer: we do not know the USD value without a rate we have no business
+// inventing.
+const SALARY_RANGE_ISO_AT_START = /\b(\d{1,3}(?:,\d{3})*)(k)?\s*USD\b\s*(?:-|–|—|to)\s*(\d{1,3}(?:,\d{3})*)(k)?(?:\s*USD\b)?/gi;
+const SALARY_RANGE_ISO_AT_END = /\b(\d{1,3}(?:,\d{3})*)(k)?(?:\s*USD\b)?\s*(?:-|–|—|to)\s*(\d{1,3}(?:,\d{3})*)(k)?\s*USD\b/gi;
+const SALARY_SINGLE_ISO = /\b(\d{2,3}(?:,\d{3})?)(k)?\s*USD\b/gi;
 
 function parseAmount(digits: string, hasK: boolean): number | null {
   const numeric = Number(digits.replace(/,/g, ''));
@@ -682,7 +690,13 @@ export function evaluateFitGates(input: FitScoreInput, company: string): FitGate
     evidence.G4_geography = `tail="${tail}" resolves non-US with no US token present`;
   }
 
-  const maxStatedSalary = extractMaxStatedSalary(input.compRange ?? jobDescription);
+  // A structured compRange that parses to nothing must not suppress the job
+  // description — a scraper supplying `compRange: "Competitive"` would
+  // otherwise hide a band stated plainly in the body, and the role would score
+  // as undisclosed with full comp credit.
+  const maxStatedSalary =
+    (input.compRange ? extractMaxStatedSalary(input.compRange) : null) ??
+    extractMaxStatedSalary(jobDescription);
   if (maxStatedSalary !== null && maxStatedSalary < COMP_GATE_FLOOR) {
     failed.push('G6_comp_floor');
     evidence.G6_comp_floor = `stated maximum base salary $${maxStatedSalary.toLocaleString()} is below $${COMP_GATE_FLOOR.toLocaleString()}`;

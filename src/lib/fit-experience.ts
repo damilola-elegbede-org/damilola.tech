@@ -96,6 +96,17 @@ export interface ExperienceMatchOptions {
 export interface CorpusDimensionResult extends DimensionResult {
   /** Basename of the corpus file the quote was found in; null when unattributable. */
   sourceFile: string | null;
+  /**
+   * True when the model call itself failed and the dimension was scored absent.
+   *
+   * Scoring absent is the right RUNTIME behaviour — a transport error is not
+   * evidence of a poor match, and zero is the conservative direction. But it is
+   * indistinguishable from a genuine absence unless it is marked, and the A4
+   * probe exists precisely to answer "did the corpus move the number" — a run
+   * where three calls failed would report a delta of 0 and read as "the corpus
+   * does not help", which is the opposite of what happened.
+   */
+  callFailed: boolean;
 }
 
 /**
@@ -129,6 +140,7 @@ export async function scoreExperienceDimensions(
     specs.map(async (spec) => {
       const call = buildDimensionCall(spec, corpusText, jobDescription, seed);
       let reply: RawDimensionReply = {};
+      let callFailed = false;
       try {
         const message = await client.messages.create({
           model: FIT_EXPERIENCE_MODEL,
@@ -153,6 +165,7 @@ export async function scoreExperienceDimensions(
           error
         );
         reply = {};
+        callFailed = true;
       }
       const graded = scoreDimension(call, reply, corpusText, jobDescription);
       const sourceFile = attributeCitation(graded.resumeQuote, corpus.sources);
@@ -160,9 +173,16 @@ export async function scoreExperienceDimensions(
       // clamped a quote it could not find at all; this clamps one we cannot
       // pin to a named file.
       if (graded.score > 0 && sourceFile === null) {
-        return { ...graded, score: 0, band: 'absent' as const, evidenceRejected: true, sourceFile: null };
+        return {
+          ...graded,
+          score: 0,
+          band: 'absent' as const,
+          evidenceRejected: true,
+          sourceFile: null,
+          callFailed,
+        };
       }
-      return { ...graded, sourceFile };
+      return { ...graded, sourceFile, callFailed };
     })
   );
 }

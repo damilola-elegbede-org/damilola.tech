@@ -164,6 +164,34 @@ describe('component 3 — compensation (20)', () => {
     expect(extractMaxStatedSalary('base salary range is 272,000 USD - 425,500 USD')).toBe(425_500);
   });
 
+  it('does not read a non-USD band as dollars', () => {
+    // 350,000 CAD is roughly $255K. Scoring it at the top USD tier overstates
+    // comp in D's most decision-heavy field.
+    expect(extractMaxStatedSalary('salary range 300,000 CAD - 350,000 CAD')).toBeNull();
+    expect(extractMaxStatedSalary('£180,000 - £220,000 GBP')).toBeNull();
+  });
+
+  it('falls back to the job description when compRange parses to nothing', () => {
+    const jobDescription = 'Remote (US). Lead a team of engineers. $400,000 - $450,000.';
+    const withJunkRange = evaluateFitGates(
+      { title: manager, jobDescription, compRange: 'Competitive' },
+      'Acme Corp'
+    );
+    expect(withJunkRange.maxStatedSalary).toBe(450_000);
+  });
+
+  it('still prefers a structured compRange when it parses', () => {
+    const gates = evaluateFitGates(
+      {
+        title: manager,
+        jobDescription: 'Remote (US). Lead a team of engineers. $400,000 - $450,000.',
+        compRange: '$260,000 - $280,000',
+      },
+      'Acme Corp'
+    );
+    expect(gates.maxStatedSalary).toBe(280_000);
+  });
+
   it('flags comp_undisclosed on the assembled result, not just the component', () => {
     const result = evaluateFitScore(
       { title: manager, jobDescription: 'Remote (US). Lead a team of engineers.' },

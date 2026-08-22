@@ -47,6 +47,19 @@ async function main() {
       scoreExperienceDimensions(corpus, jd),
     ]);
 
+    // A failed model call scores absent, which is right at runtime and fatal
+    // here: three failures would report a delta of 0 and read as "the corpus
+    // does not help". Refuse to report a number built on one.
+    const failed = [...resumeOnly, ...corpusBacked].filter((d) => d.callFailed);
+    if (failed.length > 0) {
+      console.error(
+        `${label}: ${failed.length} model call(s) failed — ` +
+          `refusing to report a delta built on absent-by-error dimensions.`
+      );
+      process.exitCode = 1;
+      continue;
+    }
+
     const r = scoreExperienceMatch(resumeOnly);
     const c = scoreExperienceMatch(corpusBacked);
 
