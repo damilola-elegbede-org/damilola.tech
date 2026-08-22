@@ -186,9 +186,6 @@ export async function POST(req: Request) {
       location: normalizedLocation as string | undefined,
     };
     const fitGates = evaluateFitGates(fitInput, normalizedCompany);
-    // The corpus is required for both scores: Fit reads it as career evidence,
-    // and ATS (Max) needs it so the ceiling can never assume fabrication.
-    const corpus = await loadCareerCorpus(buildResumeText());
 
     if (fitGates.failed.length > 0) {
       const fit = gatedFitResult(fitGates);
@@ -238,6 +235,9 @@ export async function POST(req: Request) {
     // a serial round-trip per dimension on top of the existing one.
     // Fit's three dimension calls and ATS's rubric pass are independent — run
     // them concurrently rather than paying for them in series.
+    // The corpus is required for both scores: Fit reads it as career evidence,
+    // and ATS (Max) needs it so the ceiling can never assume fabrication.
+    const corpus = await loadCareerCorpus(buildResumeText());
     const [experienceDimensions, atsScore] = await Promise.all([
       scoreExperienceDimensions(corpus, scoringText),
       scoreAts(scoringText, corpus),
