@@ -13,7 +13,7 @@ const mockCreate = vi.fn(async () => {
   inFlight--;
   return { content: [{ type: 'text', text: JSON.stringify({
     band: 'exemplary',
-    resumeQuote: 'Built a multi-agent platform with 107,715 lines across 12 agents and 5 CI/CD workflows.',
+    resumeQuote: 'Built a data platform with 8,400 lines across 6 services and 3 deploy workflows.',
     jdQuote: 'infrastructure requirements',
   }) }] };
 });
@@ -27,7 +27,7 @@ import { scoreExperienceDimensions } from '@/lib/fit-experience';
 import { evaluateFitScore } from '@/lib/fit-score';
 import { PASTRY_JD } from '@/lib/__tests__/fixtures/probe-jds';
 
-const AGENTIC_EVIDENCE = 'Built a multi-agent platform with 107,715 lines across 12 agents and 5 CI/CD workflows.';
+const AGENTIC_EVIDENCE = 'Built a data platform with 8,400 lines across 6 services and 3 deploy workflows.';
 const CORPUS: CareerCorpus = {
   sources: [
     { file: 'resume.txt', text: 'Engineering manager.', words: 2 },
