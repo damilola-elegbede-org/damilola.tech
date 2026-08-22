@@ -100,6 +100,36 @@ vi.mock('node:dns/promises', () => ({
   lookup: mockLookup,
 }));
 
+// ENG-1996: these routes now load the career corpus for ATS (Max). Mock it —
+// the real loader needs Blob credentials and these tests exist to cover SSRF
+// protection and HTML sanitisation, not corpus loading.
+// ENG-1996: the generator now computes ATS / ATS (Max) via the locked rubric.
+// Mock it — this suite covers SSRF protection and HTML sanitisation, and a real
+// model call would make every case here network-dependent.
+vi.mock('@/lib/score-core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/score-core')>();
+  return {
+    ...actual,
+    scoreAts: vi.fn().mockResolvedValue({
+      current: { total: 62, breakdown: [] },
+      max: { total: 88, breakdown: [], reachesTarget90: false },
+      gap: 26,
+      gapLine: 'Tailoring pays.',
+    }),
+  };
+});
+
+vi.mock('@/lib/career-corpus', () => ({
+  loadCareerCorpus: vi.fn().mockResolvedValue({
+    sources: [{ file: 'resume.txt', text: 'resume evidence text', words: 3 }],
+    totalWords: 3,
+    document: '<<<source: resume.txt>>>\nresume evidence text\n<<<end: resume.txt>>>',
+  }),
+  attributeCitation: () => 'resume.txt',
+  CareerCorpusUnavailableError: class extends Error {},
+}));
+
+
 // Store original fetch
 const originalFetch = global.fetch;
 
@@ -177,7 +207,10 @@ describe('resume-generator API route', () => {
       );
     });
 
-    it('includes deterministic ATS score in metadata', async () => {
+    // ENG-1996 follow-up: the streaming metadata contract for ATS / ATS (Max)
+    // is not settled — this asserted readiness-scorer's `deterministicScore`,
+    // which is deleted. Skipped rather than removed so the gap stays greppable.
+    it.skip('includes deterministic ATS score in metadata', async () => {
       const { POST } = await import('@/app/api/resume-generator/route');
 
       const request = new Request('http://localhost/api/resume-generator', {
@@ -200,9 +233,11 @@ describe('resume-generator API route', () => {
       const metadata = JSON.parse(firstLine);
 
       expect(metadata.wasUrl).toBe(false);
-      expect(metadata.deterministicScore).toBeDefined();
-      expect(metadata.deterministicScore.total).toBe(75);
-      expect(metadata.deterministicScore.breakdown).toBeDefined();
+      // ENG-1996: `deterministicScore` was readiness-scorer's number and is
+      // retired. The streaming metadata contract for ATS / ATS (Max) is not
+      // asserted here — see the follow-up ticket; the server-validated v1
+      // endpoint is the contract that is covered.
+      expect(metadata.deterministicScore).toBeUndefined();
       expect(metadata.deterministicScore.matchedKeywords).toEqual(['python', 'react', 'leadership']);
     });
   });

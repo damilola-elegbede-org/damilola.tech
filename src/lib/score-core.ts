@@ -7,6 +7,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { resumeData } from '@/lib/resume-data';
+import { resumeDataToText } from '@/lib/resume-text';
 import {
   RUBRIC_DIMENSIONS, assembleRubric, buildDimensionCall, scoreDimension,
   type DimensionResult, type RawDimensionReply,
@@ -25,8 +26,7 @@ export const scoringClient = new Anthropic({
 });
 
 /**
- * Formats a ReadinessScore into the payload shape returned in API responses
- * and consumed by buildGapAnalysisPrompt.
+ * Shared ATS scoring primitives returned by the score and generator APIs.
  */
 
 /**
@@ -144,11 +144,14 @@ export function buildScorerResumeData(): ScorerResumeData {
 
 /** The plain-text resume both scoring paths grade against. */
 export function buildResumeText(): string {
-  return [resumeData.name, resumeData.brandingStatement, resumeData.title,
-    ...resumeData.skills.flatMap((s) => s.items),
-    ...resumeData.experiences.flatMap((e) => [e.title, e.company, ...e.highlights]),
-    ...(resumeData.education ?? []).flatMap((e) => [e.degree, e.institution]),
-  ].filter(Boolean).join('\n');
+  return resumeDataToText({
+    name: resumeData.name,
+    summary: resumeData.brandingStatement,
+    title: resumeData.title,
+    skillsByCategory: resumeData.skills,
+    experiences: resumeData.experiences,
+    education: resumeData.education,
+  });
 }
 
 /**

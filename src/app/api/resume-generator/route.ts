@@ -10,14 +10,7 @@ import {
   RATE_LIMIT_CONFIGS,
 } from '@/lib/rate-limit';
 import { logUsage } from '@/lib/usage-logger';
-import {
-  calculateReadinessScore,
-  resumeDataToText,
-  type ReadinessScore,
-  type ResumeData as ScorerResumeData,
-} from '@/lib/readiness-scorer';
-import { resumeData } from '@/lib/resume-data';
-import { sanitizeBreakdown } from '@/lib/score-utils';
+import { scoreAts, type AtsScore } from '@/lib/score-core';
 // ResumeAnalysisResult parsing happens client-side for streaming support
 
 // Dynamic import for DNS to allow testing without mocking
@@ -340,36 +333,14 @@ async function fetchWithSizeLimit(
  * Build context about pre-calculated readiness score for Claude.
  * This provides Claude with a deterministic baseline to work from.
  */
-function buildScoreContext(score: ReadinessScore): string {
-  const { breakdown, details } = score;
-
-  return `<pre_calculated_readiness_score>
-## IMPORTANT: Pre-Calculated Readiness Score
-
-The system has calculated a deterministic baseline readiness score for this job description.
-Use this score as your "currentScore" in the response. DO NOT recalculate it.
-
-### Current Score: ${score.total}/100
-
-### Breakdown:
-- Role Relevance: ${breakdown.roleRelevance}/30
-- Clarity & Skimmability: ${breakdown.claritySkimmability}/30
-- Business Impact: ${breakdown.businessImpact}/25
-- Presentation Quality: ${breakdown.presentationQuality}/15
-
-### Keyword Analysis:
-- Match Rate: ${details.matchRate}%
-- Keyword Density: ${details.keywordDensity}%
-- Matched Keywords (${details.matchedKeywords.length}): ${details.matchedKeywords.slice(0, 15).join(', ')}${details.matchedKeywords.length > 15 ? '...' : ''}
-- Missing Keywords (${details.missingKeywords.length}): ${details.missingKeywords.join(', ')}
-
-### Your Task:
-1. Use the currentScore values EXACTLY as provided above
-2. Focus on clarity, quantified impact, and natural relevance
-3. Propose changes that improve recruiter readability
-4. Calculate optimizedScore based on your proposed changes
-5. Each change should have an impactPoints estimate
-</pre_calculated_readiness_score>`;
+function buildScoreContext(score: AtsScore): string {
+  return `<ats_scores>
+ATS (résumé only): ${score.current.total}/100
+ATS (Max, truthful corpus ceiling): ${score.max.total}/100
+Addressable gap: ${score.gap}
+${score.gapLine}
+Every rewrite needs an exact current résumé line and exact JD requirement anchor. Structural gaps are reported, never rewritten. Do not return a readiness breakdown.
+</ats_scores>`;
 }
 
 export async function POST(req: Request) {
@@ -501,48 +472,23 @@ export async function POST(req: Request) {
     const systemPrompt = await getResumeGeneratorPrompt();
     console.log('[resume-generator] System prompt loaded, length:', systemPrompt.length);
 
-    // Calculate deterministic readiness score before calling Claude
-    console.log('[resume-generator] Calculating deterministic readiness score...');
-    const scorerResumeData: ScorerResumeData = {
-      title: resumeData.title,
-      yearsExperience: 15, // Based on resume data (2009-2024)
-      teamSize: '13 engineers',
-      skills: resumeData.skills.flatMap(s => s.items),
-      skillsByCategory: resumeData.skills,
-      experiences: resumeData.experiences.map(e => ({
-        title: e.title,
-        company: e.company,
-        highlights: e.highlights,
-      })),
-      education: resumeData.education?.map(e => ({
-        degree: e.degree,
-        institution: e.institution,
-      })) ?? [],
-    };
-    const resumeText = resumeDataToText({
-      ...scorerResumeData,
-      name: resumeData.name,
-      summary: resumeData.brandingStatement,
-    });
-    const readinessScore = calculateReadinessScore({
-      jobDescription: jobDescriptionText,
-      resumeText,
-      resumeData: scorerResumeData,
-    });
-    console.log('[resume-generator] Deterministic readiness score:', readinessScore.total);
+    console.log('[resume-generator] Calculating ATS and ATS (Max)...');
+    const atsScore = await scoreAts(jobDescriptionText);
+    console.log('[resume-generator] ATS:', atsScore.current.total, 'ATS (Max):', atsScore.max.total);
 
     // Log audit event for generation started
     await logAdminEvent('resume_generation_started', {
       inputType: wasUrl ? 'url' : 'text',
       extractedUrl: extractedUrl || undefined,
       jobDescriptionLength: jobDescriptionText.length,
-      deterministicScore: readinessScore.total,
+      atsCurrent: atsScore.current.total,
+      atsMax: atsScore.max.total,
     }, ip);
 
     console.log('[resume-generator] Calling Anthropic API (streaming)...');
 
     // Build the user message with pre-calculated score
-    const scoreContext = buildScoreContext(readinessScore);
+    const scoreContext = buildScoreContext(atsScore);
 
     // Streaming API call for progressive JSON output
     // Wrap job description in XML tags for prompt injection mitigation
@@ -562,7 +508,7 @@ export async function POST(req: Request) {
       messages: [
         {
           role: 'user',
-          content: `${scoreContext}\n\nAnalyze this job description and provide resume readiness optimization recommendations. Return ONLY valid JSON, no markdown or code blocks.\n\n<job_description>${xmlEscape(jobDescriptionText)}</job_description>`,
+          content: `${scoreContext}\n\nAnalyze this job description and provide anchored ATS rewrite recommendations. Return ONLY valid JSON, no markdown or code blocks.\n\n<job_description>${xmlEscape(jobDescriptionText)}</job_description>`,
         },
       ],
     });
@@ -573,14 +519,7 @@ export async function POST(req: Request) {
       wasUrl,
       extractedUrl,
       ...(wasUrl ? { resolvedJobDescription: jobDescriptionText } : {}),
-      deterministicScore: {
-        total: readinessScore.total,
-        breakdown: sanitizeBreakdown(readinessScore.breakdown),
-        matchedKeywords: readinessScore.details.matchedKeywords,
-        missingKeywords: readinessScore.details.missingKeywords,
-        matchRate: readinessScore.details.matchRate,
-        keywordDensity: readinessScore.details.keywordDensity,
-      },
+      atsScore,
     });
 
     return new Response(

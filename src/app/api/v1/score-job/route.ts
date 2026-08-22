@@ -186,13 +186,17 @@ export async function POST(req: Request) {
       location: normalizedLocation as string | undefined,
     };
     const fitGates = evaluateFitGates(fitInput, normalizedCompany);
-    // ATS always answers what the resume says, even when Fit correctly gates
-    // surfacing. The corpus is required because ATS (Max) must never assume
-    // fabrication is possible.
+    // The corpus is required for both scores: Fit reads it as career evidence,
+    // and ATS (Max) needs it so the ceiling can never assume fabrication.
     const corpus = await loadCareerCorpus(buildResumeText());
-    const atsScore = await scoreAts(scoringText, corpus);
+
     if (fitGates.failed.length > 0) {
       const fit = gatedFitResult(fitGates);
+      // A gated role costs ZERO model calls — neither Fit's three dimension
+      // calls nor ATS's five. ATS answers "what does my resume say against this
+      // JD", and for a role D cannot take, nobody ever reads the answer.
+      // Computing it anyway would spend 5 Opus calls per gated role, on a
+      // corpus of ~291 roles a day, to produce a number with no consumer.
       logApiAccess('api_score_job', authResult.apiKey, {
         company: normalizedCompany,
         title: normalizedTitle,
@@ -212,7 +216,6 @@ export async function POST(req: Request) {
         title: normalizedTitle,
         url: normalizedUrl,
         fitScore: buildFitScorePayload(fit),
-        atsScore,
         gapAnalysis: `Knocked out before scoring: ${fit.gateFailed.join(', ')}.`,
         recommendation: 'knocked_out',
         knockout: {
@@ -233,7 +236,12 @@ export async function POST(req: Request) {
     // The experience component's three dimension calls and the gap-analysis call
     // are independent — run them concurrently so the Fit Score costs latency, not
     // a serial round-trip per dimension on top of the existing one.
-    const experienceDimensions = await scoreExperienceDimensions(corpus, scoringText);
+    // Fit's three dimension calls and ATS's rubric pass are independent — run
+    // them concurrently rather than paying for them in series.
+    const [experienceDimensions, atsScore] = await Promise.all([
+      scoreExperienceDimensions(corpus, scoringText),
+      scoreAts(scoringText, corpus),
+    ]);
     const fit = assembleFitScore(fitInput, fitGates, experienceDimensions);
 
 

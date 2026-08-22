@@ -56,11 +56,9 @@ const mockParseJsonResponse = vi.fn();
 const mockBuildScoringInput = vi.fn();
 const mockBuildScorePayload = vi.fn();
 const mockBuildGapAnalysisPrompt = vi.fn();
-const mockScoreAts = vi.fn();
 vi.mock('@/lib/score-core', () => ({
   extractTextContent: (...args: unknown[]) => mockExtractTextContent(...args),
   parseJsonResponse: (...args: unknown[]) => mockParseJsonResponse(...args),
-  buildScoringInput: (...args: unknown[]) => mockBuildScoringInput(...args),
   buildResumeText: () => 'RESUME TEXT',
   buildScorePayload: (...args: unknown[]) => mockBuildScorePayload(...args),
   buildGapAnalysisPrompt: (...args: unknown[]) => mockBuildGapAnalysisPrompt(...args),
@@ -92,6 +90,7 @@ class FakeCorpusUnavailable extends Error {
     super(`Career corpus unavailable — could not load: ${missing.join(', ')}.`);
   }
 }
+const mockScoreAts = vi.fn();
 const mockLoadCareerCorpus = vi.fn();
 vi.mock('@/lib/career-corpus', () => ({
   loadCareerCorpus: (...a: unknown[]) => mockLoadCareerCorpus(...a),
@@ -371,7 +370,7 @@ describe('POST /api/v1/score-job', () => {
         success: boolean;
         data: {
           fitScore: { total: number; threshold: number; surfaced: boolean };
-          currentScore: { total: number; breakdown: { roleRelevance: number } };
+          atsScore?: unknown;
           recommendation: string;
           knockout: { knockedOut: boolean; hardReasons: string[] };
           resumeGap: { achievable: null; closeable: null; structural: null };
@@ -384,8 +383,10 @@ describe('POST /api/v1/score-job', () => {
       expect(data.data.fitScore.total).toBe(0);
       expect(data.data.fitScore.surfaced).toBe(false);
       expect(mockScoreExperienceDimensions).not.toHaveBeenCalled();
-      expect(data.data.currentScore.total).toBe(75);
-      expect(data.data.currentScore.breakdown.roleRelevance).toBe(30);
+      // A gated role costs ZERO model calls — neither Fit's three dimension
+      // calls nor ATS's rubric pass. ATS has no consumer for a role D cannot take.
+      expect(mockScoreAts).not.toHaveBeenCalled();
+      expect(data.data.atsScore).toBeUndefined();
       expect(data.data.resumeGap).toEqual({ achievable: null, closeable: null, structural: null });
       expect(data.data.knockout).toEqual(expect.objectContaining({
         knockedOut: true,
@@ -422,20 +423,31 @@ describe('POST /api/v1/score-job', () => {
 
       expect(response.status).toBe(200);
       expect(data.data.knockout).toEqual({ knockedOut: false, hardReasons: [], gateEvidence: {} });
-      expect(mockCreate).toHaveBeenCalledTimes(1);
+      // The readiness gap-analysis call is retired with readiness-scorer; the
+      // model work is now Fit's dimension calls plus ATS's rubric pass.
+      expect(mockScoreAts).toHaveBeenCalledTimes(1);
+      expect(mockScoreExperienceDimensions).toHaveBeenCalledTimes(1);
     });
 
     it('returns 200 with company, title, url, and scoring fields', async () => {
       const { POST } = await import('@/app/api/v1/score-job/route');
       const response = await POST(makeRequest(validBody));
-      const data = await response.json() as { success: boolean; data: Record<string, unknown> };
+      const data = await response.json() as {
+        success: boolean;
+        data: Record<string, unknown> & {
+          atsScore: {
+            current: { total: number };
+            max: { total: number; reachesTarget90: boolean };
+          };
+        };
+      };
 
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
       expect(data.data.company).toBe('Acme Corp');
       expect(data.data.title).toBe('Senior Engineering Manager');
       expect(data.data.url).toBe('https://example.com/jobs/senior-engineering-manager');
-      expect(data.data.currentScore).toBeDefined();
+      expect(data.data.atsScore).toBeDefined();
       expect(data.data.fitScore).toEqual(expect.objectContaining({
         total: 83,
         threshold: 80,
@@ -456,14 +468,13 @@ describe('POST /api/v1/score-job', () => {
       });
       // D's ruling: Fit reads all career data, the résumé included.
       expect(mockLoadCareerCorpus).toHaveBeenCalledWith('RESUME TEXT');
-      expect(data.data.currentScore).toEqual(expect.objectContaining({
-        total: 75,
-        breakdown: expect.objectContaining({ roleRelevance: 30 }),
-      }));
+      // ATS and ATS (Max) are diagnostic and carry no threshold; only Fit gates.
+      // ATS and ATS (Max) are diagnostic and carry no threshold; only Fit gates.
+      expect(data.data.atsScore.current.total).toBe(75);
+      expect(data.data.atsScore.max.total).toBe(90);
+      expect(data.data.atsScore.max.reachesTarget90).toBe(true);
+      expect(data.data.atsScore.current.total).toBeLessThanOrEqual(data.data.atsScore.max.total);
       expect(data.data.resumeGap).toEqual({ achievable: null, closeable: null, structural: null });
-      expect(data.data.maxPossibleScore).toBeDefined();
-      expect(data.data.gapAnalysis).toBe('Strong fit.');
-      expect(data.data.recommendation).toBe('marginal_improvement');
     });
 
     it('calls resolveJobDescriptionInput with the url', async () => {
@@ -489,40 +500,24 @@ describe('POST /api/v1/score-job', () => {
       );
     });
 
-    it('returns recommendation strong_fit when gap < 5', async () => {
-      mockBuildScorePayload.mockReturnValue({
-        total: 85, breakdown: {}, matchedKeywords: [], missingKeywords: [], matchRate: 0, keywordDensity: 0,
+    it('reports the ATS gap in one line instead of a readiness recommendation', async () => {
+      // The old `recommendation` was derived from maxPossibleScore - currentScore,
+      // both retired with readiness-scorer. atsScore.gapLine answers the same
+      // question honestly: is this one worth tailoring for?
+      mockScoreAts.mockResolvedValue({
+        current: { total: 61, breakdown: [] },
+        max: { total: 74, breakdown: [], reachesTarget90: false },
+        gap: 13,
+        gapLine: 'Cannot reach 90 — structural mismatch.',
       });
-      mockParseJsonResponse.mockReturnValue({
-        gapAnalysis: 'Excellent.',
-        maxPossibleScore: 87,
-        recommendation: 'strong_fit',
-      });
-
       const { POST } = await import('@/app/api/v1/score-job/route');
       const response = await POST(makeRequest(validBody));
-      const data = await response.json() as { data: { recommendation: string } };
-      expect(data.data.recommendation).toBe('strong_fit');
+      const data = await response.json() as { data: { atsScore: { gapLine: string; max: { reachesTarget90: boolean } } } };
+
+      expect(data.data.atsScore.gapLine).toContain('structural mismatch');
+      expect(data.data.atsScore.max.reachesTarget90).toBe(false);
     });
 
-    it('returns recommendation full_generation_recommended when gap > 15', async () => {
-      mockBuildScorePayload.mockReturnValue({
-        total: 50, breakdown: {}, matchedKeywords: [], missingKeywords: [], matchRate: 0, keywordDensity: 0,
-      });
-      mockParseJsonResponse.mockReturnValue({
-        gapAnalysis: 'Large gap.',
-        maxPossibleScore: 90,
-        recommendation: 'full_generation_recommended',
-      });
-
-      const { POST } = await import('@/app/api/v1/score-job/route');
-      const response = await POST(makeRequest(validBody));
-      const data = await response.json() as { data: { recommendation: string } };
-      expect(data.data.recommendation).toBe('full_generation_recommended');
-    });
-  });
-
-  describe('pre-fetched job_content', () => {
     it('uses pre-fetched content when job_content is provided and does not call URL fetch', async () => {
       const { POST } = await import('@/app/api/v1/score-job/route');
       const response = await POST(makeRequest({
@@ -694,7 +689,9 @@ describe('POST /api/v1/score-job', () => {
     });
 
     it('returns 500 on unexpected errors', async () => {
-      mockCreate.mockRejectedValue(new Error('Anthropic down'));
+      // The retired gap-analysis call was the old trigger; ATS's rubric pass is
+      // the model work on this path now.
+      mockScoreAts.mockRejectedValue(new Error('Anthropic down'));
 
       const { POST } = await import('@/app/api/v1/score-job/route');
       const response = await POST(makeRequest(validBody));
@@ -720,66 +717,21 @@ describe('POST /api/v1/score-job', () => {
       });
     });
 
-    it('returns interviewPrepQuestions with exactly 5 items when mode=interview-prep', async () => {
+    it('reports interview-prep as unavailable rather than silently ignoring the mode', async () => {
+      // REGRESSION, deliberately made visible: interviewPrepQuestions were
+      // generated by the readiness gap-analysis call, which ENG-1996 retires.
+      // The mode is still accepted, so a caller is told rather than handed a
+      // response that quietly lacks the thing it asked for. Restoring the
+      // feature on the rubric path is tracked separately.
       const { POST } = await import('@/app/api/v1/score-job/route');
       const response = await POST(makeRequest({ ...validBody, mode: 'interview-prep' }));
-      const data = await response.json() as { success: boolean; data: Record<string, unknown> };
+      const data = await response.json() as {
+        data: { interviewPrepUnavailable?: boolean; interviewPrepQuestions?: string[] };
+      };
 
       expect(response.status).toBe(200);
-      expect(data.success).toBe(true);
-      expect(Array.isArray(data.data.interviewPrepQuestions)).toBe(true);
-      expect((data.data.interviewPrepQuestions as string[]).length).toBe(5);
-    });
-
-    it('response does not include interviewPrepQuestions when mode is absent', async () => {
-      mockParseJsonResponse.mockReturnValue({
-        gapAnalysis: 'Strong fit.',
-        maxPossibleScore: 88,
-        recommendation: 'marginal_improvement',
-      });
-
-      const { POST } = await import('@/app/api/v1/score-job/route');
-      const response = await POST(makeRequest(validBody));
-      const data = await response.json() as { success: boolean; data: Record<string, unknown> };
-
-      expect(response.status).toBe(200);
+      expect(data.data.interviewPrepUnavailable).toBe(true);
       expect(data.data.interviewPrepQuestions).toBeUndefined();
-    });
-
-    it('response does not include interviewPrepQuestions when mode is null', async () => {
-      mockParseJsonResponse.mockReturnValue({
-        gapAnalysis: 'Strong fit.',
-        maxPossibleScore: 88,
-        recommendation: 'marginal_improvement',
-      });
-
-      const { POST } = await import('@/app/api/v1/score-job/route');
-      const response = await POST(makeRequest({ ...validBody, mode: null }));
-      const data = await response.json() as { success: boolean; data: Record<string, unknown> };
-
-      expect(response.status).toBe(200);
-      expect(data.data.interviewPrepQuestions).toBeUndefined();
-    });
-
-    it('returns 400 with Invalid mode error when mode is an unrecognized string', async () => {
-      const { POST } = await import('@/app/api/v1/score-job/route');
-      const response = await POST(makeRequest({ ...validBody, mode: 'invalid-mode' }));
-      const data = await response.json() as { error: { message: string } };
-
-      expect(response.status).toBe(400);
-      expect(data.error.message).toContain('Invalid mode');
-    });
-
-    it('questions use behavioral framing (Tell me about or How would you)', async () => {
-      const { POST } = await import('@/app/api/v1/score-job/route');
-      const response = await POST(makeRequest({ ...validBody, mode: 'interview-prep' }));
-      const data = await response.json() as { data: { interviewPrepQuestions: string[] } };
-
-      const questions = data.data.interviewPrepQuestions;
-      const allBehavioral = questions.every(
-        (q) => q.startsWith('Tell me about') || q.startsWith('How would you')
-      );
-      expect(allBehavioral).toBe(true);
     });
 
     it('omits interviewPrepQuestions when AI returns mixed-type array (strings and numbers)', async () => {

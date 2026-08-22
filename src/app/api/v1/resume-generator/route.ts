@@ -8,17 +8,9 @@ import {
   getClientIp,
   RATE_LIMIT_CONFIGS,
 } from '@/lib/rate-limit';
-import {
-  calculateReadinessScore,
-  resumeDataToText,
-  type ReadinessScore,
-  type ResumeData as ScorerResumeData,
-} from '@/lib/readiness-scorer';
-import { resumeData } from '@/lib/resume-data';
-import { sanitizeBreakdown, sanitizeScoreValue, computePossibleMaxScore } from '@/lib/score-utils';
+import { buildResumeText, scoreAts, type AtsScore } from '@/lib/score-core';
 import { getResumeGeneratorPrompt } from '@/lib/resume-generator-prompt';
-import { normalizeImpactPoints } from '@/lib/resume-scoring';
-import type { ImpactBreakdown, ProposedChange, ResumeAnalysisResult } from '@/lib/types/resume-generation';
+import type { ProposedChange } from '@/lib/types/resume-generation';
 import { JobDescriptionInputError, resolveJobDescriptionInput } from '@/lib/job-description-input';
 
 export const runtime = 'nodejs';
@@ -33,36 +25,17 @@ const client = new Anthropic({
 const MAX_BODY_SIZE = 50 * 1024;
 const AI_REQUEST_TIMEOUT_MS = 90_000;
 
-function buildScoreContext(score: ReadinessScore): string {
-  const { breakdown, details } = score;
+function buildScoreContext(score: AtsScore): string {
+  return `<ats_scores>
+ATS (résumé only): ${score.current.total}/100
+ATS (Max, truthful corpus ceiling): ${score.max.total}/100
+Addressable gap: ${score.gap}
+${score.gapLine}
 
-  return `<pre_calculated_readiness_score>
-## IMPORTANT: Pre-Calculated Readiness Score
-
-The system has calculated a deterministic baseline readiness score for this job description.
-Use this score as your "currentScore" in the response. DO NOT recalculate it.
-
-### Current Score: ${score.total}/100
-
-### Breakdown:
-- Role Relevance: ${breakdown.roleRelevance}/30
-- Clarity & Skimmability: ${breakdown.claritySkimmability}/30
-- Business Impact: ${breakdown.businessImpact}/25
-- Presentation Quality: ${breakdown.presentationQuality}/15
-
-### Keyword Analysis:
-- Match Rate: ${details.matchRate}%
-- Keyword Density: ${details.keywordDensity}%
-- Matched Keywords (${details.matchedKeywords.length}): ${details.matchedKeywords.slice(0, 15).join(', ')}${details.matchedKeywords.length > 15 ? '...' : ''}
-- Missing Keywords (${details.missingKeywords.length}): ${details.missingKeywords.join(', ')}
-
-### Your Task:
-1. Use the currentScore values EXACTLY as provided above
-2. Focus on clarity, quantified impact, and natural relevance
-3. Propose changes that improve recruiter readability
-4. Calculate optimizedScore based on your proposed changes
-5. Each change should have an impactPoints estimate
-</pre_calculated_readiness_score>`;
+Return only suggested rewrites for addressable gaps. Each proposedChanges item MUST contain
+original (an exact current résumé line), modified, reason, and jdRequirement (an exact JD requirement).
+Never propose a rewrite for a structural gap. Do not return scores or impact points.
+</ats_scores>`;
 }
 
 function extractTextContent(content: Array<{ type: string; text?: string }>): string {
@@ -88,58 +61,14 @@ function parseJsonResponse(text: string): Record<string, unknown> {
   }
 }
 
-function buildScoringInput(jobDescription: string) {
-  const scorerResumeData: ScorerResumeData = {
-    title: resumeData.title,
-    yearsExperience: 15,
-    teamSize: '13 engineers',
-    skills: resumeData.skills.flatMap((s) => s.items),
-    skillsByCategory: resumeData.skills,
-    experiences: resumeData.experiences.map((e) => ({
-      title: e.title,
-      company: e.company,
-      highlights: e.highlights,
-    })),
-    education: resumeData.education?.map((e) => ({
-      degree: e.degree,
-      institution: e.institution,
-    })) ?? [],
-    openToRoles: resumeData.openToRoles,
-  };
-
-  const resumeText = resumeDataToText({
-    ...scorerResumeData,
-    name: resumeData.name,
-    summary: resumeData.brandingStatement,
-  });
-
-  const readinessScore = calculateReadinessScore({
-    jobDescription,
-    resumeText,
-    resumeData: scorerResumeData,
-  });
-
-  return { readinessScore };
+function sharesSpecificTerm(resumeLine: string, requirement: string): boolean {
+  const words = (value: string) => new Set(value.toLowerCase().match(/[a-z][a-z0-9/+.-]{3,}/g) ?? []);
+  const ignored = new Set(['with', 'that', 'this', 'from', 'have', 'experience', 'requirements', 'engineering', 'leadership']);
+  const resumeWords = words(resumeLine);
+  return [...words(requirement)].some((word) => !ignored.has(word) && resumeWords.has(word));
 }
 
-function normalizeImpactBreakdown(value: unknown): ImpactBreakdown | undefined {
-  if (!value || typeof value !== 'object') return undefined;
-  const b = value as Record<string, unknown>;
-  if (
-    typeof b.roleRelevance !== 'number' ||
-    typeof b.claritySkimmability !== 'number' ||
-    typeof b.businessImpact !== 'number' ||
-    typeof b.presentationQuality !== 'number'
-  ) return undefined;
-  return {
-    roleRelevance: sanitizeScoreValue(b.roleRelevance, 0, 30),
-    claritySkimmability: sanitizeScoreValue(b.claritySkimmability, 0, 30),
-    businessImpact: sanitizeScoreValue(b.businessImpact, 0, 25),
-    presentationQuality: sanitizeScoreValue(b.presentationQuality, 0, 15),
-  };
-}
-
-function normalizeChanges(changes: unknown): ProposedChange[] {
+export function normalizeChanges(changes: unknown, resumeText: string, jobDescription: string, gap: number): ProposedChange[] {
   if (!Array.isArray(changes)) {
     return [];
   }
@@ -148,22 +77,26 @@ function normalizeChanges(changes: unknown): ProposedChange[] {
     .filter((change) => change && typeof change === 'object')
     .map((change) => {
       const value = change as Record<string, unknown>;
-      const breakdown = normalizeImpactBreakdown(value.impactBreakdown);
+      const original = typeof value.original === 'string' ? value.original.trim() : '';
+      const jdRequirement = typeof value.jdRequirement === 'string' ? value.jdRequirement.trim() : '';
       return {
         section: typeof value.section === 'string' ? value.section : 'unknown',
-        original: typeof value.original === 'string' ? value.original : '',
+        original,
         modified: typeof value.modified === 'string' ? value.modified : '',
         reason: typeof value.reason === 'string' ? value.reason : '',
-        relevanceSignals: Array.isArray(value.relevanceSignals)
-          ? value.relevanceSignals.filter((signal) => typeof signal === 'string')
-          : [],
-        impactPoints: sanitizeScoreValue(value.impactPoints, 0, 100),
-        ...(typeof value.impactPerSignal === 'number'
-          ? { impactPerSignal: sanitizeScoreValue(value.impactPerSignal, 0, 100) }
-          : {}),
-        ...(breakdown !== undefined ? { impactBreakdown: breakdown } : {}),
+        relevanceSignals: [jdRequirement],
+        impactPoints: 0,
       };
-    });
+    })
+    // Anchors are evidence, not model assertions: both strings must be verbatim.
+    .filter((change) => change.original.length > 0 && change.relevanceSignals[0].length > 0 &&
+      resumeText.includes(change.original) && jobDescription.includes(change.relevanceSignals[0]) &&
+      sharesSpecificTerm(change.original, change.relevanceSignals[0]))
+    .map((change, index, valid) => ({
+      ...change,
+      // This is an exact ATS-gap allocation, never a rescale of model estimates.
+      impactPoints: Math.floor(gap / valid.length) + (index < gap % valid.length ? 1 : 0),
+    }));
 }
 
 function extractGaps(gaps: unknown): string[] {
@@ -225,7 +158,8 @@ export async function POST(req: Request) {
     );
 
     const systemPrompt = await getResumeGeneratorPrompt();
-    const { readinessScore } = buildScoringInput(resolvedInput.text);
+    const atsScore = await scoreAts(resolvedInput.text);
+    const resumeText = buildResumeText();
 
     const message = await (async () => {
       try {
@@ -244,7 +178,7 @@ export async function POST(req: Request) {
             messages: [
               {
                 role: 'user',
-                content: `${buildScoreContext(readinessScore)}\n\nAnalyze this job description and provide resume readiness optimization recommendations. Return ONLY valid JSON, no markdown or code blocks.\n\n<job_description>${xmlEscape(resolvedInput.text)}</job_description>`,
+                content: `${buildScoreContext(atsScore)}\n\nAnalyze this job description and provide anchored ATS rewrite recommendations. Return ONLY valid JSON, no markdown or code blocks.\n\n<job_description>${xmlEscape(resolvedInput.text)}</job_description>`,
               },
             ],
           },
@@ -274,45 +208,11 @@ export async function POST(req: Request) {
       ? parsed.analysis as Record<string, unknown>
       : {};
 
-    const optimizedScoreInput = parsed.optimizedScore && typeof parsed.optimizedScore === 'object'
-      ? parsed.optimizedScore as Record<string, unknown>
-      : {};
-
-    const optimizedBreakdownInput = optimizedScoreInput.breakdown && typeof optimizedScoreInput.breakdown === 'object'
-      ? optimizedScoreInput.breakdown as Record<string, unknown>
-      : {};
-
-    const optimizedScore = {
-      total: sanitizeScoreValue(optimizedScoreInput.total, readinessScore.total, 100),
-      breakdown: sanitizeBreakdown({
-        roleRelevance: sanitizeScoreValue(optimizedBreakdownInput.roleRelevance, 0, 30),
-        claritySkimmability: sanitizeScoreValue(optimizedBreakdownInput.claritySkimmability, 0, 30),
-        businessImpact: sanitizeScoreValue(optimizedBreakdownInput.businessImpact, 0, 25),
-        presentationQuality: sanitizeScoreValue(optimizedBreakdownInput.presentationQuality, 0, 15),
-      }),
-    };
-
-    // Parse scoreCeiling for use in normalization and maxPossibleScore computation
-    const scoreCeilingInput = parsed.scoreCeiling && typeof parsed.scoreCeiling === 'object'
-      ? parsed.scoreCeiling as Record<string, unknown>
-      : undefined;
-    const scoreCeiling = scoreCeilingInput ? {
-      maximum: sanitizeScoreValue(scoreCeilingInput.maximum, 0, 100),
-      blockers: [],
-      toImprove: '',
-    } : undefined;
-
-    // Normalize changes and scale impact points to match admin page behavior
-    const rawChanges = normalizeChanges(parsed.proposedChanges);
-    const normalizedResult = normalizeImpactPoints({
-      proposedChanges: rawChanges,
-      scoreCeiling,
-      optimizedScore: { total: optimizedScore.total, breakdown: optimizedScore.breakdown, assessment: '' },
-      currentScore: { total: readinessScore.total, breakdown: sanitizeBreakdown(readinessScore.breakdown), assessment: '' },
-    } as ResumeAnalysisResult);
-    const proposedChanges = normalizedResult.proposedChanges;
-
-    const maxPossibleScore = computePossibleMaxScore(readinessScore.total, proposedChanges, scoreCeiling);
+    const proposedChanges = normalizeChanges(parsed.proposedChanges, resumeText, resolvedInput.text, atsScore.gap);
+    const points = proposedChanges.reduce((sum, change) => sum + change.impactPoints, 0);
+    if (points !== atsScore.gap) {
+      throw new Error(`ATS addressable gap mismatch: changes total ${points}, ATS gap ${atsScore.gap}`);
+    }
 
     const responseData = {
       generationId: crypto.randomUUID(),
@@ -322,16 +222,7 @@ export async function POST(req: Request) {
       roleTitle: typeof analysis.roleTitle === 'string'
         ? analysis.roleTitle
         : (typeof parsed.roleTitle === 'string' ? parsed.roleTitle : 'Unknown'),
-      currentScore: {
-        total: readinessScore.total,
-        breakdown: sanitizeBreakdown(readinessScore.breakdown),
-        matchedKeywords: readinessScore.details.matchedKeywords,
-        missingKeywords: readinessScore.details.missingKeywords,
-        matchRate: readinessScore.details.matchRate,
-        keywordDensity: readinessScore.details.keywordDensity,
-      },
-      optimizedScore,
-      maxPossibleScore,
+      atsScore,
       proposedChanges,
       gapsIdentified: extractGaps(parsed.gaps),
       inputType: resolvedInput.inputType,
@@ -342,8 +233,8 @@ export async function POST(req: Request) {
       await logApiAccess('api_resume_generation', authResult.apiKey, {
         inputType: resolvedInput.inputType,
         extractedUrl: resolvedInput.extractedUrl,
-        currentScore: responseData.currentScore.total,
-        optimizedScore: responseData.optimizedScore.total,
+        atsCurrent: responseData.atsScore.current.total,
+        atsMax: responseData.atsScore.max.total,
         proposedChanges: responseData.proposedChanges.length,
       }, ip);
     } catch (error) {
