@@ -65,6 +65,16 @@ jobs:
       DAMILOLA_SCORE_API_KEY: ${{ secrets.DAMILOLA_SCORE_API_KEY }}
     steps:
       - uses: actions/checkout@v4
+      - name: Fetch career-data submodule
+        env:
+          CAREER_DATA_PAT: ${{ secrets.CAREER_DATA_PAT }}
+        run: |
+          if [[ -n "${CAREER_DATA_PAT}" ]]; then
+            git config --global url."https://x-access-token:${CAREER_DATA_PAT}@github.com/".insteadOf "https://github.com/"
+            git submodule update --init --recursive --depth=1
+          else
+            echo "::warning::CAREER_DATA_PAT not set — career-data guards will SKIP, not run. See ENG-1990."
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
