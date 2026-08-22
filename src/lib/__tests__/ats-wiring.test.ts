@@ -9,6 +9,8 @@ vi.mock('@/lib/career-corpus', () => ({
     totalWords: 6,
     document: '<<<source: resume.txt>>>\nresume evidence text\n<<<end: resume.txt>>>\n<<<source: technical-expertise.md>>>\ncorpus evidence text\n<<<end: technical-expertise.md>>>',
   }),
+  buildCorpusDocument: (sources: Array<{ file: string; text: string }>) =>
+    sources.map((s) => `<<<source: ${s.file}>>>\n${s.text}\n<<<end: ${s.file}>>>`).join('\n\n'),
   attributeCitation: (quote: string | null, sources: Array<{ file: string }>) => (quote ? sources[0]?.file ?? null : null),
   RESUME_SOURCE_LABEL: 'resume.txt',
   CareerCorpusUnavailableError: class extends Error {},

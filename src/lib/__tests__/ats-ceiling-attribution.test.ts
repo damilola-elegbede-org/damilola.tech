@@ -20,6 +20,8 @@ describe('scoreAts() ceiling attribution excludes the résumé source', () => {
         totalWords: 17,
         document: `<<<source: resume.txt>>>\n${RESUME_ONLY_TEXT}\n<<<end>>>\n<<<source: technical-expertise.md>>>\n${CORPUS_ONLY_TEXT}\n<<<end>>>`,
       }),
+      buildCorpusDocument: (sources: Array<{ file: string; text: string }>) =>
+        sources.map((s) => `<<<source: ${s.file}>>>\n${s.text}\n<<<end: ${s.file}>>>`).join('\n\n'),
       attributeCitation: (quote: string | null, sources: Array<{ file: string; text: string }>) => {
         if (!quote) return null;
         const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
