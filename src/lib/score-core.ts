@@ -162,6 +162,25 @@ async function callDimension(call: ReturnType<typeof buildDimensionCall>, source
   return scoreDimension(call, parseJsonResponse(extractTextContent(message.content as Array<{ type: string; text?: string }>)) as RawDimensionReply, source, jobDescription);
 }
 
+/**
+ * Zero headroom below the 90 target is not a verdict — it is the signature of a
+ * ceiling lookup that failed to attribute anything (ENG-2010).
+ */
+export class AtsHeadroomUnverifiedError extends Error {
+  constructor(
+    public readonly current: number,
+    public readonly maximum: number,
+    public readonly attributionFailures: string[]
+  ) {
+    super(
+      `ATS reports zero headroom at ${current}/100 with a ceiling of ${maximum} — ` +
+        `below the 90 target, so "already maximal" cannot be true. ` +
+        `Unattributable corpus citations: ${attributionFailures.join(', ') || 'none'}.`
+    );
+    this.name = 'AtsHeadroomUnverifiedError';
+  }
+}
+
 export interface AtsScore {
   current: { total: number; breakdown: DimensionResult[] };
   max: { total: number; breakdown: DimensionResult[]; reachesTarget90: boolean };
@@ -298,11 +317,14 @@ export async function scoreAts(jobDescription: string, corpus?: CareerCorpus): P
         ? 'Tailoring pays: true career evidence can reach the ATS (Max) target of 90.'
         : 'Structural mismatch: true career evidence cannot reach the ATS (Max) target of 90.';
 
+  // D's ruling: THROW, do not flag. A flag can be ignored, and this state was
+  // being served as a confident "Already maximal" for weeks. The legitimate
+  // exception is max >= 90 — a résumé genuinely at the ceiling may have gap 0,
+  // and `suspect` excludes it. That exclusion is what keeps this an assertion
+  // rather than a coercion: without it the check could be "passed" by inflating
+  // max until nothing is ever maximal.
   if (suspect) {
-    console.warn(
-      `[scoreAts] zero headroom below 90 (current=${current}, max=${maximum}) —` +
-        ` attribution failures: ${attributionFailures.join(', ') || 'none'}`
-    );
+    throw new AtsHeadroomUnverifiedError(current, maximum, attributionFailures);
   }
 
   return {
