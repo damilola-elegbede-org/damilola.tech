@@ -68,7 +68,7 @@ function sharesSpecificTerm(resumeLine: string, requirement: string): boolean {
   return [...words(requirement)].some((word) => !ignored.has(word) && resumeWords.has(word));
 }
 
-export function normalizeChanges(changes: unknown, resumeText: string, jobDescription: string, gap: number): ProposedChange[] {
+function normalizeChanges(changes: unknown, resumeText: string, jobDescription: string, gap: number): ProposedChange[] {
   if (!Array.isArray(changes)) {
     return [];
   }
