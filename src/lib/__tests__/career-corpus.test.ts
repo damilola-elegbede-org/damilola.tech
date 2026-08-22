@@ -197,3 +197,19 @@ describe('attribution paths', () => {
       .toBeNull();
   });
 });
+
+describe('overlap counts multiplicity, not membership', () => {
+  const SRC = [{ file: 'projects-context.md', text: 'Built a multi-agent platform for internal teams.', words: 7 }];
+
+  it('refuses a quote that reuses one supported word to cover itself', () => {
+    // A Set membership test scored this 1.0: "platform" appears once in the
+    // source, and every token of the quote claimed that single occurrence.
+    expect(attributeCitation('platform platform platform platform platform platform', SRC))
+      .toBeNull();
+  });
+
+  it('still attributes a genuine quote with a legitimately repeated word', () => {
+    expect(attributeCitation('Built a multi-agent platform for internal teams.', SRC))
+      .toBe('projects-context.md');
+  });
+});

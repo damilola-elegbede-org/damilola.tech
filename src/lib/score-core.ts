@@ -242,13 +242,22 @@ export class AtsHeadroomUnverifiedError extends Error {
   }
 }
 
+/**
+ * What the ceiling pass actually emits. `DimensionResult` declares none of
+ * these, and the assignment compiled only because `bounded` is a variable, so
+ * excess-property checking never ran.
+ */
+export interface CeilingBoundedDimension extends DimensionResult {
+  ceilingScore: number;
+  ceilingSourceFile: string | null;
+  attributionFailed: boolean;
+}
+
 export interface AtsScore {
-  current: { total: number; breakdown: DimensionResult[] };
-  max: { total: number; breakdown: DimensionResult[]; reachesTarget90: boolean };
+  current: { total: number; breakdown: CeilingBoundedDimension[] };
+  max: { total: number; breakdown: CeilingBoundedDimension[]; reachesTarget90: boolean };
   gap: number;
   gapLine: string;
-  /** True when gap is 0 below 90 — a defect signal, never "already maximal". */
-  headroomUnverified: boolean;
   /** Dimensions where the model quoted the corpus but we could not attribute it. */
   attributionFailures: string[];
   resumeGap: { achievable: number; closeable: number; structural: number };
@@ -382,37 +391,36 @@ export async function scoreAts(jobDescription: string, corpus?: CareerCorpus): P
   const attributionFailures = bounded.filter((d) => d.attributionFailed).map((d) => d.dimension);
   const suspect = gap === 0 && maximum < 90;
 
-  const gapLine = suspect
-    ? attributionFailures.length > 0
-      ? `Cannot verify headroom: corpus evidence was quoted but not attributable (${attributionFailures.join(', ')}). This is not "already maximal".`
-      : 'Cannot verify headroom: no corpus evidence outranked the résumé, and ATS is below 90. Treat as unverified, not maximal.'
-    : gap === 0
+  // D's ruling: THROW, do not flag. A flag can be ignored, and this state was
+  // served as a confident "Already maximal" for weeks. The legitimate exception
+  // is max >= 90 — a résumé genuinely at the ceiling may have gap 0 — and
+  // excluding it is what keeps this an assertion rather than a coercion.
+  if (suspect) {
+    throw new AtsHeadroomUnverifiedError(current, maximum, attributionFailures);
+  }
+
+  // Below 90, a zero gap is unreachable past this point: `suspect` threw. So the
+  // only states left are a real gap, or a genuine ceiling at 90+.
+  const gapLine =
+    gap === 0
       ? 'Already maximal: the résumé states all truthfully supportable evidence.'
       : maximum >= 90
         ? 'Tailoring pays: true career evidence can reach the ATS (Max) target of 90.'
         : 'Structural mismatch: true career evidence cannot reach the ATS (Max) target of 90.';
-
-  // D's ruling: THROW, do not flag. A flag can be ignored, and this state was
-  // being served as a confident "Already maximal" for weeks. The legitimate
-  // exception is max >= 90 — a résumé genuinely at the ceiling may have gap 0,
-  // and `suspect` excludes it. That exclusion is what keeps this an assertion
-  // rather than a coercion: without it the check could be "passed" by inflating
-  // max until nothing is ever maximal.
-  if (suspect) {
-    throw new AtsHeadroomUnverifiedError(current, maximum, attributionFailures);
-  }
 
   return {
     current: { total: current, breakdown: bounded },
     max: { total: maximum, breakdown: bounded, reachesTarget90: maximum >= 90 },
     gap,
     gapLine,
-    // AC3/AC4 visibility: a consumer can tell an unverified ceiling from a real one.
-    headroomUnverified: suspect,
     attributionFailures,
     // AC6: `resumeGap` shipped {null, null, null} on every response since ENG-1996.
     // Derived here from the rubric's own addressable/structural split so it has a
     // real producer rather than a placeholder.
+    // `achievable` IS the addressable sum — ceilingFor() sums ceilingScore, so
+    // the two were the same number reported twice. Kept as the headline value
+    // with `closeable` naming the same thing per-dimension, and `structural`
+    // the part no rewrite reaches.
     resumeGap: {
       achievable: gap,
       closeable: bounded

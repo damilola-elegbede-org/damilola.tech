@@ -24,6 +24,7 @@ import {
 } from '@/lib/fit-score';
 import { scoreExperienceDimensions } from '@/lib/fit-experience';
 import { loadCareerCorpus, CareerCorpusUnavailableError } from '@/lib/career-corpus';
+import { AtsHeadroomUnverifiedError } from '@/lib/score-core';
 
 export const runtime = 'nodejs';
 
@@ -290,6 +291,14 @@ export async function POST(req: Request) {
       ...(resolvedInput.isEmptyShell ? { emptyShellFallback: true } : {}),
     });
   } catch (error) {
+    if (error instanceof AtsHeadroomUnverifiedError) {
+      // Distinct from a model outage on purpose. This is a deterministic
+      // verification failure — the ceiling lookup attributed nothing and the
+      // score cannot honestly claim "already maximal". A caller that cannot
+      // tell those apart will read a broken lookup as a finished résumé.
+      console.error('[api/v1/score-job] ATS headroom unverified:', error.attributionFailures);
+      return Errors.internalError(error.message);
+    }
     if (error instanceof CareerCorpusUnavailableError) {
       // Loud on purpose (A3). A Fit Score computed without the corpus is not a
       // worse score, it is a different question answered.

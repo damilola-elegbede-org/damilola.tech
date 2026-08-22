@@ -56,7 +56,13 @@ const mockParseJsonResponse = vi.fn();
 const mockBuildScoringInput = vi.fn();
 const mockBuildScorePayload = vi.fn();
 const mockBuildGapAnalysisPrompt = vi.fn();
+class FakeHeadroomUnverified extends Error {
+  constructor(public readonly attributionFailures: string[]) {
+    super(`ATS reports zero headroom — unattributable: ${attributionFailures.join(', ')}.`);
+  }
+}
 vi.mock('@/lib/score-core', () => ({
+  AtsHeadroomUnverifiedError: FakeHeadroomUnverified,
   extractTextContent: (...args: unknown[]) => mockExtractTextContent(...args),
   parseJsonResponse: (...args: unknown[]) => mockParseJsonResponse(...args),
   buildResumeText: () => 'RESUME TEXT',
@@ -420,6 +426,21 @@ describe('POST /api/v1/score-job', () => {
         }),
         '127.0.0.1'
       );
+    });
+
+    it('surfaces an unverified ATS ceiling distinctly from a model outage', async () => {
+      // The endpoint used to fall through to "AI service error", so a caller
+      // could not separate a deterministic verification failure from an
+      // upstream outage. ENG-2010 AC3.
+      mockScoreAts.mockRejectedValue(new FakeHeadroomUnverified(['leadership_evidence']));
+
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      const response = await POST(makeRequest(validBody));
+      const body = await response.json() as { error?: { message?: string } };
+
+      expect(response.status).toBe(500);
+      expect(JSON.stringify(body)).toMatch(/unattributable|zero headroom/i);
+      expect(JSON.stringify(body)).not.toMatch(/AI service error/);
     });
 
     it('fails loudly when the career corpus cannot be loaded, rather than scoring the resume — A3', async () => {

@@ -202,6 +202,16 @@ export const ATTRIBUTION_OVERLAP_THRESHOLD = 0.85;
  * instead. */
 export const ATTRIBUTION_OVERLAP_MIN_TOKENS = 6;
 
+/**
+ * Best windowed overlap, counting MULTIPLICITY.
+ *
+ * A `Set` membership test let a quote reuse one supported word to cover itself:
+ * a source containing "platform" once, against a six-token quote that says
+ * "platform" six times, scored 1.0 and attributed. That is unsupported evidence
+ * passing the guard, which is the one thing this function exists to stop.
+ *
+ * Each source token is now consumed at most once per quote token that claims it.
+ */
 function overlapRatio(quote: string, source: string): number {
   const q = tokens(quote);
   if (q.length === 0) return 0;
@@ -212,13 +222,23 @@ function overlapRatio(quote: string, source: string): number {
   let best = 0;
   for (let start = 0; ; start += step) {
     const end = Math.min(start + width, src.length);
-    const window = new Set(src.slice(start, end));
-    const hit = q.filter((t) => window.has(t)).length / q.length;
+    const available = new Map<string, number>();
+    for (const t of src.slice(start, end)) available.set(t, (available.get(t) ?? 0) + 1);
+    let hits = 0;
+    for (const t of q) {
+      const left = available.get(t) ?? 0;
+      if (left > 0) {
+        available.set(t, left - 1);
+        hits++;
+      }
+    }
+    const hit = hits / q.length;
     if (hit > best) best = hit;
     if (best === 1 || end === src.length) break;
   }
   return best;
 }
+
 
 export function attributeCitation(
   quote: string | null | undefined,
