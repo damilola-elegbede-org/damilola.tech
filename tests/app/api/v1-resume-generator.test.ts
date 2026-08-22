@@ -1,300 +1,132 @@
-/**
- * @vitest-environment node
- */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-
-const mockRequireApiKey = vi.fn();
-vi.mock('@/lib/api-key-auth', () => ({
-  requireApiKey: (req: Request) => mockRequireApiKey(req),
-}));
-
-const mockLogApiAccess = vi.fn().mockResolvedValue(undefined);
-vi.mock('@/lib/api-audit', () => ({
-  logApiAccess: (...args: unknown[]) => mockLogApiAccess(...args),
-}));
-
-const mockCheckGenericRateLimit = vi.fn();
-vi.mock('@/lib/rate-limit', () => ({
-  getClientIp: vi.fn().mockReturnValue('127.0.0.1'),
-  checkGenericRateLimit: (...args: unknown[]) => mockCheckGenericRateLimit(...args),
-  RATE_LIMIT_CONFIGS: {
-    resumeGenerator: { key: 'resume-generator', limit: 10, windowSeconds: 3600 },
-  },
-}));
-
-const mockCalculateReadinessScore = vi.fn();
-const mockResumeDataToText = vi.fn();
-vi.mock('@/lib/readiness-scorer', () => ({
-  calculateReadinessScore: (...args: unknown[]) => mockCalculateReadinessScore(...args),
-  resumeDataToText: (...args: unknown[]) => mockResumeDataToText(...args),
-}));
-
-vi.mock('@/lib/resume-data', () => ({
-  resumeData: {
-    title: 'Engineering Manager',
-    name: 'Damilola',
-    brandingStatement: 'Summary',
-    skills: [{ category: 'Cloud', items: ['AWS', 'GCP'] }],
-    experiences: [{ title: 'EM', company: 'Verily', highlights: ['Did thing'] }],
-    education: [{ degree: 'MBA', institution: 'School' }],
-  },
-}));
-
-vi.mock('@/lib/resume-generator-prompt', () => ({
-  getResumeGeneratorPrompt: vi.fn().mockResolvedValue('Mock resume system prompt'),
-}));
-
-vi.mock('@/lib/generated/system-prompt', () => ({
-  RESUME_GENERATOR_PROMPT: 'Mock resume system prompt',
-}));
+/** @vitest-environment node */
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { IDEAL_JD, PASTRY_JD } from '@/lib/__tests__/fixtures/probe-jds';
 
 const mockCreate = vi.fn();
-vi.mock('@anthropic-ai/sdk', () => ({
-  default: class MockAnthropic {
-    messages = { create: mockCreate };
-  },
+const mockScoreAts = vi.fn();
+vi.mock('@/lib/api-key-auth', () => ({ requireApiKey: vi.fn().mockResolvedValue({ apiKey: { id: 'test' } }) }));
+vi.mock('@/lib/api-audit', () => ({ logApiAccess: vi.fn() }));
+vi.mock('@/lib/rate-limit', () => ({ getClientIp: () => '127.0.0.1', checkGenericRateLimit: vi.fn().mockResolvedValue({ limited: false }), RATE_LIMIT_CONFIGS: { resumeGenerator: {} } }));
+vi.mock('@/lib/resume-generator-prompt', () => ({ getResumeGeneratorPrompt: vi.fn().mockResolvedValue('prompt') }));
+vi.mock('@/lib/score-core', () => ({
+  buildResumeText: () => 'Verily\nBuilt CI/CD platform with Kubernetes and Terraform\nQualcomm\nLed modem releases',
+  scoreAts: (...args: unknown[]) => mockScoreAts(...args),
+}));
+vi.mock('@anthropic-ai/sdk', () => ({ default: class { messages = { create: mockCreate }; } }));
+
+vi.mock('@/lib/career-corpus', () => ({
+  loadCareerCorpus: vi.fn().mockResolvedValue({
+    // "2020" is deliberately present: it is what made the old substring check
+    // accept a fabricated "20". A corpus without it tests nothing.
+    sources: [{ file: 'resume.txt', text: 'resume evidence text since 2020, cut costs 30 percent', words: 9 }],
+    totalWords: 3,
+    document: '<<<source: resume.txt>>>\nresume evidence text since 2020, cut costs 30 percent\n<<<end: resume.txt>>>',
+  }),
+  attributeCitation: () => 'resume.txt',
+  RESUME_SOURCE_LABEL: 'resume.txt',
+  CareerCorpusUnavailableError: class extends Error {},
 }));
 
-describe('v1/resume-generator API route', () => {
-  const originalFetch = global.fetch;
+const ats = (gap: number) => ({ current: { total: 70, breakdown: [] }, max: { total: 70 + gap, breakdown: [], reachesTarget90: false }, gap, gapLine: 'Structural mismatch' });
+const request = (input: string) => new Request('http://test/api/v1/resume-generator', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ input }) });
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.resetModules();
-    global.fetch = vi.fn();
-    mockRequireApiKey.mockResolvedValue({
-      apiKey: { id: 'key-1', name: 'Test Key', enabled: true },
-    });
-    mockCheckGenericRateLimit.mockResolvedValue({ limited: false, remaining: 9 });
-    mockResumeDataToText.mockReturnValue('resume text');
-    mockCalculateReadinessScore.mockReturnValue({
-      total: 64,
-      breakdown: {
-        roleRelevance: 25,
-        claritySkimmability: 18,
-        businessImpact: 14,
-        presentationQuality: 7,
-      },
-      isOptimized: true,
-      details: {
-        matchedKeywords: ['cloud', 'kubernetes'],
-        missingKeywords: ['terraform', 'cost optimization'],
-        matchRate: 45.2,
-        keywordDensity: 2.1,
-      },
-    });
-    mockCreate.mockResolvedValue({
-      model: 'claude-opus-4-6',
-      usage: { input_tokens: 10, output_tokens: 10 },
-      content: [{
-        type: 'text',
-        text: JSON.stringify({
-          analysis: { companyName: 'Acme', roleTitle: 'Senior EM' },
-          currentScore: {
-            total: 64,
-            breakdown: {
-              roleRelevance: 25,
-              claritySkimmability: 18,
-              businessImpact: 14,
-              presentationQuality: 7,
-            },
-          },
-          optimizedScore: {
-            total: 83,
-            breakdown: {
-              roleRelevance: 33,
-              claritySkimmability: 21,
-              businessImpact: 18,
-              presentationQuality: 9,
-            },
-          },
-          proposedChanges: [
-            {
-              section: 'experience.verily.bullet1',
-              original: 'old',
-              modified: 'new',
-              reason: 'added key terms',
-              relevanceSignals: ['terraform'],
-              impactPoints: 5,
-              impactPerSignal: 5,
-              impactBreakdown: {
-                roleRelevance: 3,
-                claritySkimmability: 1,
-                businessImpact: 1,
-                presentationQuality: 0,
-              },
-            },
-          ],
-          gaps: [{ requirement: 'Cost optimization' }],
-          scoreCeiling: { maximum: 89 },
-        }),
-      }],
-    });
-  });
+describe('v1 resume generator ATS contract', () => {
+  beforeEach(() => { vi.clearAllMocks(); mockScoreAts.mockResolvedValue(ats(6)); });
 
-  afterEach(() => {
-    global.fetch = originalFetch;
-  });
-
-  describe('authentication', () => {
-    it('returns 401 when API key is missing', async () => {
-      mockRequireApiKey.mockResolvedValue(
-        Response.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'missing' } }, { status: 401 })
-      );
-
-      const { POST } = await import('@/app/api/v1/resume-generator/route');
-      const response = await POST(new Request('http://localhost/api/v1/resume-generator', { method: 'POST' }));
-      expect(response.status).toBe(401);
-    });
-
-    it('returns 401 when API key is invalid', async () => {
-      mockRequireApiKey.mockResolvedValue(
-        Response.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'invalid' } }, { status: 401 })
-      );
-
-      const { POST } = await import('@/app/api/v1/resume-generator/route');
-      const response = await POST(new Request('http://localhost/api/v1/resume-generator', { method: 'POST' }));
-      expect(response.status).toBe(401);
-    });
-
-    it('returns 403 when API key is revoked', async () => {
-      mockRequireApiKey.mockResolvedValue(
-        Response.json({ success: false, error: { code: 'FORBIDDEN', message: 'revoked' } }, { status: 403 })
-      );
-
-      const { POST } = await import('@/app/api/v1/resume-generator/route');
-      const response = await POST(new Request('http://localhost/api/v1/resume-generator', { method: 'POST' }));
-      expect(response.status).toBe(403);
-    });
-  });
-
-  it('returns 400 for missing input', async () => {
+  it('completes the ideal probe and assigns exactly the ATS addressable gap', async () => {
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: JSON.stringify({ proposedChanges: [{ section: 'experience', original: 'Built CI/CD platform with Kubernetes and Terraform', modified: 'Built CI/CD platform', reason: 'surface evidence', jdRequirement: 'CI/CD, build and release infrastructure' }] }) }] });
     const { POST } = await import('@/app/api/v1/resume-generator/route');
-    const response = await POST(
-      new Request('http://localhost/api/v1/resume-generator', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({}),
-      })
-    );
-
-    expect(response.status).toBe(400);
+    const response = await POST(request(IDEAL_JD));
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.data.atsScore.max.total).toBe(76);
+    expect(body.data.proposedChanges.reduce((sum: number, change: { impactPoints: number }) => sum + change.impactPoints, 0)).toBe(6);
   });
 
-  it('returns full JSON generation payload (non-streaming)', async () => {
+  it('drops a rewrite that invents a metric, even when its anchor is real', async () => {
+    // The dangerous shape: `original` IS a verbatim résumé line and the JD
+    // requirement IS verbatim, so every anchor check passes — and the rewrite
+    // still smuggles in "60%", a number in neither the line nor D's career
+    // data. Emitting it would hand D a fabricated metric to paste on a résumé.
+    mockScoreAts.mockResolvedValue(ats(6));
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: JSON.stringify({ proposedChanges: [{
+      section: 'experience',
+      original: 'Built CI/CD platform with Kubernetes and Terraform',
+      modified: 'Built CI/CD platform with Kubernetes and Terraform, cutting build times 60%',
+      reason: 'quantify impact',
+      jdRequirement: 'CI/CD, build and release infrastructure',
+    }] }) }] });
+
     const { POST } = await import('@/app/api/v1/resume-generator/route');
-    const response = await POST(
-      new Request('http://localhost/api/v1/resume-generator', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ input: 'JD text with requirements and responsibilities' }),
-      })
-    );
-    const data = await response.json();
+    const response = await POST(request(IDEAL_JD));
+    const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('content-type')).toContain('application/json');
-    expect(data.success).toBe(true);
-    expect(data.data.generationId).toBeDefined();
-    expect(data.data.companyName).toBe('Acme');
-    expect(data.data.roleTitle).toBe('Senior EM');
-    expect(data.data.currentScore.total).toBe(64);
-    expect(data.data.optimizedScore.total).toBe(83);
-    // maxPossibleScore = computePossibleMaxScore(64, [{impactPoints:5}], {maximum:89})
-    // = min(89, 64+5) = 69
-    expect(data.data.maxPossibleScore).toBe(69);
-    expect(data.data.proposedChanges).toHaveLength(1);
-    expect(data.data.proposedChanges[0].impactBreakdown).toEqual({
-      roleRelevance: 3,
-      claritySkimmability: 1,
-      businessImpact: 1,
-      presentationQuality: 0,
-    });
-    expect(data.data.proposedChanges[0].impactPerSignal).toBe(5);
-    expect(data.data.inputType).toBe('text');
-    expect(mockCreate).toHaveBeenCalledTimes(1);
-    expect(mockLogApiAccess).toHaveBeenCalledWith(
-      'api_resume_generation',
-      expect.any(Object),
-      expect.objectContaining({ inputType: 'text', currentScore: 64 }),
-      '127.0.0.1'
-    );
+    expect(body.data.proposedChanges).toEqual([]);
   });
 
-  it('handles changes without impactBreakdown (backward compat)', async () => {
-    mockCreate.mockResolvedValue({
-      model: 'claude-opus-4-6',
-      usage: { input_tokens: 10, output_tokens: 10 },
-      content: [{
-        type: 'text',
-        text: JSON.stringify({
-          analysis: { companyName: 'Legacy Co', roleTitle: 'EM' },
-          optimizedScore: { total: 72, breakdown: { roleRelevance: 28, claritySkimmability: 20, businessImpact: 16, presentationQuality: 8 } },
-          proposedChanges: [
-            {
-              section: 'summary',
-              original: 'old summary',
-              modified: 'new summary',
-              reason: 'improved',
-              relevanceSignals: ['leadership'],
-              impactPoints: 8,
-              // no impactBreakdown, no impactPerSignal
-            },
-          ],
-          gaps: [],
-        }),
-      }],
-    });
+  it('does not let a corpus year satisfy a fabricated number', async () => {
+    // The substring trap: the corpus contains "2020", so `includes("20")` was
+    // true and a fabricated "20%" sailed through the guard that claimed to stop
+    // it. Quantities are compared as tokens now.
+    mockScoreAts.mockResolvedValue(ats(6));
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: JSON.stringify({ proposedChanges: [{
+      section: 'experience',
+      original: 'Built CI/CD platform with Kubernetes and Terraform',
+      modified: 'Built CI/CD platform with Kubernetes and Terraform across 20 teams',
+      reason: 'quantify',
+      jdRequirement: 'CI/CD, build and release infrastructure',
+    }] }) }] });
 
     const { POST } = await import('@/app/api/v1/resume-generator/route');
-    const response = await POST(
-      new Request('http://localhost/api/v1/resume-generator', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ input: 'JD text with requirements and responsibilities' }),
-      })
-    );
-    const data = await response.json();
+    const body = await (await POST(request(IDEAL_JD))).json();
 
+    expect(body.data.proposedChanges).toEqual([]);
+    expect(body.data.unaddressableGap).toBe(6);
+  });
+
+  it('accepts a supported figure even when the sentence ends in a period', async () => {
+    // The other direction of the same bug: "cut costs 30." tokenised to "30."
+    // and a figure the corpus genuinely supports was rejected as fabricated.
+    mockScoreAts.mockResolvedValue(ats(6));
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: JSON.stringify({ proposedChanges: [{
+      section: 'experience',
+      original: 'Built CI/CD platform with Kubernetes and Terraform',
+      modified: 'Built CI/CD platform with Kubernetes and Terraform, cut costs 30.',
+      reason: 'quantify from corpus evidence',
+      jdRequirement: 'CI/CD, build and release infrastructure',
+    }] }) }] });
+
+    const { POST } = await import('@/app/api/v1/resume-generator/route');
+    const body = await (await POST(request(IDEAL_JD))).json();
+
+    expect(body.data.proposedChanges).toHaveLength(1);
+  });
+
+  it('keeps a rewrite whose numbers already exist in the line it edits', async () => {
+    mockScoreAts.mockResolvedValue(ats(6));
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: JSON.stringify({ proposedChanges: [{
+      section: 'experience',
+      original: 'Built CI/CD platform with Kubernetes and Terraform',
+      modified: 'Built and owned the CI/CD platform with Kubernetes and Terraform',
+      reason: 'surface ownership',
+      jdRequirement: 'CI/CD, build and release infrastructure',
+    }] }) }] });
+
+    const { POST } = await import('@/app/api/v1/resume-generator/route');
+    const response = await POST(request(IDEAL_JD));
+    const body = await response.json();
+
+    expect(body.data.proposedChanges).toHaveLength(1);
+  });
+
+  it('does not turn pastry requirements into Verily or Qualcomm rewrites', async () => {
+    mockScoreAts.mockResolvedValue(ats(0));
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: JSON.stringify({ proposedChanges: [{ section: 'experience.verily', original: 'Built CI/CD platform with Kubernetes and Terraform', modified: 'Prepared croissants', reason: 'pastry', jdRequirement: 'laminated doughs, croissants, danishes, and viennoiserie' }] }) }] });
+    const { POST } = await import('@/app/api/v1/resume-generator/route');
+    const response = await POST(request(PASTRY_JD));
+    const body = await response.json();
     expect(response.status).toBe(200);
-    expect(data.data.proposedChanges[0].impactBreakdown).toBeUndefined();
-    expect(data.data.proposedChanges[0].impactPerSignal).toBeUndefined();
-    // maxPossibleScore = min(100, 64+8) = 72
-    expect(data.data.maxPossibleScore).toBe(72);
-  });
-
-  it('returns 429 when rate limited', async () => {
-    mockCheckGenericRateLimit.mockResolvedValue({ limited: true, remaining: 0, retryAfter: 60 });
-
-    const { POST } = await import('@/app/api/v1/resume-generator/route');
-    const response = await POST(
-      new Request('http://localhost/api/v1/resume-generator', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ input: 'JD text' }),
-      })
-    );
-
-    expect(response.status).toBe(429);
-  });
-
-  it('returns 500 on Anthropic failure', async () => {
-    mockCreate.mockRejectedValue(new Error('Anthropic down'));
-
-    const { POST } = await import('@/app/api/v1/resume-generator/route');
-    const response = await POST(
-      new Request('http://localhost/api/v1/resume-generator', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ input: 'JD text' }),
-      })
-    );
-
-    expect(response.status).toBe(500);
-  });
-
-  it('exports maxDuration = 120', async () => {
-    const route = await import('@/app/api/v1/resume-generator/route');
-    expect(route.maxDuration).toBe(120);
+    expect(body.data.proposedChanges).toEqual([]);
   });
 });

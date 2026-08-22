@@ -1,25 +1,18 @@
 import { requireApiKey } from '@/lib/api-key-auth';
 import { logApiAccess } from '@/lib/api-audit';
 import { apiSuccess, Errors } from '@/lib/api-response';
-import { xmlEscape } from '@/lib/xml-escape';
 import {
   checkGenericRateLimit,
   getClientIp,
   RATE_LIMIT_CONFIGS,
 } from '@/lib/rate-limit';
-import { sanitizeScoreValue } from '@/lib/score-utils';
 import {
   JobDescriptionInputError,
   resolveJobDescriptionInput,
   resolvePreFetchedJobDescription,
 } from '@/lib/job-description-input';
 import {
-  scoringClient,
-  extractTextContent,
-  parseJsonResponse,
-  buildGapAnalysisPrompt,
-  buildScorePayload,
-  buildScoringInput,
+  scoreAts,
   buildResumeText,
 } from '@/lib/score-core';
 import {
@@ -193,14 +186,14 @@ export async function POST(req: Request) {
       location: normalizedLocation as string | undefined,
     };
     const fitGates = evaluateFitGates(fitInput, normalizedCompany);
-    // Fit decides whether D would take the role; readiness (currentScore)
-    // measures how well the current resume matches it. They deliberately remain
-    // separate, and only Fit ranks — ENG-1994.
-    const { readinessScore } = buildScoringInput(scoringText);
-    const currentScore = buildScorePayload(readinessScore);
 
     if (fitGates.failed.length > 0) {
       const fit = gatedFitResult(fitGates);
+      // A gated role costs ZERO model calls — neither Fit's three dimension
+      // calls nor ATS's five. ATS answers "what does my resume say against this
+      // JD", and for a role D cannot take, nobody ever reads the answer.
+      // Computing it anyway would spend 5 Opus calls per gated role, on a
+      // corpus of ~291 roles a day, to produce a number with no consumer.
       logApiAccess('api_score_job', authResult.apiKey, {
         company: normalizedCompany,
         title: normalizedTitle,
@@ -208,9 +201,7 @@ export async function POST(req: Request) {
         inputType: resolvedInput.inputType,
         extractedUrl: resolvedInput.extractedUrl,
         emptyShell: resolvedInput.isEmptyShell === true,
-        currentScore: currentScore.total,
         fitScore: fit.total,
-        maxPossibleScore: 0,
         recommendation: 'knocked_out',
         knockoutReasons: fit.gateFailed,
       }, ip).catch((error) => {
@@ -222,8 +213,6 @@ export async function POST(req: Request) {
         title: normalizedTitle,
         url: normalizedUrl,
         fitScore: buildFitScorePayload(fit),
-        currentScore,
-        maxPossibleScore: 0,
         gapAnalysis: `Knocked out before scoring: ${fit.gateFailed.join(', ')}.`,
         recommendation: 'knocked_out',
         knockout: {
@@ -236,66 +225,25 @@ export async function POST(req: Request) {
       });
     }
 
-    const basePrompt = buildGapAnalysisPrompt(currentScore);
-    const userContent = interviewPrepMode
-      ? `${basePrompt}\n\nAdditionally, return exactly 5 "interviewPrepQuestions" in the JSON. Each must use behavioral framing — start with "Tell me about a time..." or "How would you approach...". Base questions on the top gap areas identified above.\n\nUpdated JSON schema: {"gapAnalysis":"...","maxPossibleScore":0-100,"recommendation":"...","interviewPrepQuestions":["Q1","Q2","Q3","Q4","Q5"]}\n\n<job_description>${xmlEscape(scoringText)}</job_description>`
-      : `${basePrompt}\n\n<job_description>${xmlEscape(scoringText)}</job_description>`;
-
     // ENG-1995 A1: Fit's experience component scores against the career-data
     // corpus, not the resume. A3: a corpus that will not load is a hard failure —
     // falling back to the resume would emit a plausible, lower score and nothing
     // in the response would say why.
     // D's ruling: Fit reads all career data, the résumé included.
-    const corpus = await loadCareerCorpus(buildResumeText());
-
     // The experience component's three dimension calls and the gap-analysis call
     // are independent — run them concurrently so the Fit Score costs latency, not
     // a serial round-trip per dimension on top of the existing one.
-    const experiencePromise = scoreExperienceDimensions(corpus, scoringText);
-
-    const message = await scoringClient.messages.create({
-      model: 'claude-opus-4-6',
-      max_tokens: interviewPrepMode ? 2000 : 1200,
-      temperature: 0,
-      system: [
-        {
-          type: 'text',
-          text: 'You are a resume readiness analyst. Be concise and accurate.',
-          cache_control: { type: 'ephemeral', ttl: '1h' },
-        },
-      ],
-      messages: [
-        {
-          role: 'user',
-          content: userContent,
-        },
-      ],
-    });
-
-    const responseText = extractTextContent(message.content as Array<{ type: string; text?: string }>);
-    const parsed = parseJsonResponse(responseText);
-
-    const experienceDimensions = await experiencePromise;
+    // Fit's three dimension calls and ATS's rubric pass are independent — run
+    // them concurrently rather than paying for them in series.
+    // The corpus is required for both scores: Fit reads it as career evidence,
+    // and ATS (Max) needs it so the ceiling can never assume fabrication.
+    const corpus = await loadCareerCorpus(buildResumeText());
+    const [experienceDimensions, atsScore] = await Promise.all([
+      scoreExperienceDimensions(corpus, scoringText),
+      scoreAts(scoringText, corpus),
+    ]);
     const fit = assembleFitScore(fitInput, fitGates, experienceDimensions);
 
-    const gapAnalysis = typeof parsed.gapAnalysis === 'string' ? parsed.gapAnalysis : '';
-    const _rawPrepQuestions = interviewPrepMode && Array.isArray(parsed.interviewPrepQuestions)
-      ? (parsed.interviewPrepQuestions as unknown[])
-          .filter((q): q is string => typeof q === 'string')
-          .map((q) => q.trim())
-          .filter((q) => q.length > 0)
-          .slice(0, 5)
-      : undefined;
-    const interviewPrepQuestions = _rawPrepQuestions?.length === 5 ? _rawPrepQuestions : undefined;
-    const parsedMaxScore = sanitizeScoreValue(parsed.maxPossibleScore, 0, 100);
-    const maxPossibleScore = Math.max(currentScore.total, parsedMaxScore);
-    const gap = maxPossibleScore - currentScore.total;
-
-    const recommendation = gap > 15
-      ? 'full_generation_recommended'
-      : gap >= 5
-        ? 'marginal_improvement'
-        : 'strong_fit';
 
     logApiAccess('api_score_job', authResult.apiKey, {
       company: normalizedCompany,
@@ -304,10 +252,7 @@ export async function POST(req: Request) {
       inputType: resolvedInput.inputType,
       extractedUrl: resolvedInput.extractedUrl,
       emptyShell: resolvedInput.isEmptyShell === true,
-      currentScore: currentScore.total,
       fitScore: fit.total,
-      maxPossibleScore,
-      recommendation,
     }, ip).catch((error) => {
       console.warn('[api/v1/score-job] Failed to log audit:', error);
     });
@@ -331,15 +276,12 @@ export async function POST(req: Request) {
         files: corpus.sources.map((s) => s.file),
         totalWords: corpus.totalWords,
       },
-      currentScore,
-      maxPossibleScore,
-      gapAnalysis,
-      recommendation,
+      atsScore,
+      ...(interviewPrepMode ? { interviewPrepUnavailable: true } : {}),
       // Not knocked out here (the gateFailed branch returns earlier).
       knockout: { knockedOut: false, hardReasons: [], gateEvidence: {} },
       resumeGap: { achievable: null, closeable: null, structural: null },
       ...(resolvedInput.isEmptyShell ? { emptyShellFallback: true } : {}),
-      ...(interviewPrepQuestions ? { interviewPrepQuestions } : {}),
     });
   } catch (error) {
     if (error instanceof CareerCorpusUnavailableError) {

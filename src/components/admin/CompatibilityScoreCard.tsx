@@ -1,12 +1,13 @@
 'use client';
 
 import type { ScoreBreakdown } from '@/lib/types/resume-generation';
-import { sanitizeBreakdown, sanitizeScoreValue } from '@/lib/score-utils';
+import { sanitizeScoreValue } from '@/lib/score-utils';
 
 interface CompatibilityScoreCardProps {
   title: string;
   score: number;
-  breakdown: ScoreBreakdown;
+  /** Retained only while historical admin records are read; never rendered. */
+  breakdown?: ScoreBreakdown;
   assessment: string;
   highlight?: boolean;
   targetScore?: number;
@@ -26,53 +27,15 @@ function getScoreLabel(score: number): string {
   return 'Weak';
 }
 
-function ScoreBar({
-  label,
-  value,
-  maxValue,
-  description,
-}: {
-  label: string;
-  value: number;
-  maxValue: number;
-  description: string;
-}) {
-  const safeValue = sanitizeScoreValue(value, 0, maxValue);
-  const percentage = (safeValue / maxValue) * 100;
-  const barColor =
-    percentage >= 75 ? 'bg-green-500' : percentage >= 50 ? 'bg-blue-500' : percentage >= 25 ? 'bg-yellow-500' : 'bg-red-500';
-
-  return (
-    <div className="space-y-1">
-      <div className="flex justify-between text-xs">
-        <span className="text-[var(--color-text-muted)]" title={description}>
-          {label}
-        </span>
-        <span className="text-[var(--color-text)]">
-          {Math.round(safeValue * 10) / 10}/{maxValue}
-        </span>
-      </div>
-      <div className="h-2 overflow-hidden rounded-full bg-[var(--color-bg-alt)]">
-        <div
-          className={`h-full rounded-full transition-all ${barColor}`}
-          style={{ width: `${percentage}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
 export function CompatibilityScoreCard({
   title,
   score,
-  breakdown,
   assessment,
   highlight,
   targetScore,
 }: CompatibilityScoreCardProps) {
   const safeScore = sanitizeScoreValue(score, 0, 100);
   const safeTargetScore = targetScore === undefined ? undefined : sanitizeScoreValue(targetScore, 0, 100);
-  const safeBreakdown = sanitizeBreakdown(breakdown);
   const showTarget = safeTargetScore !== undefined && safeTargetScore > safeScore;
   return (
     <div className={`rounded-lg border bg-[var(--color-card)] p-6 ${highlight ? 'border-[var(--color-accent)] ring-1 ring-[var(--color-accent)]/30' : 'border-[var(--color-border)]'}`}>
@@ -108,32 +71,6 @@ export function CompatibilityScoreCard({
 
       <p className="mt-2 text-sm text-[var(--color-text-muted)]">{assessment}</p>
 
-      <div className="mt-6 space-y-3">
-        <ScoreBar
-          label="Role Relevance"
-          value={safeBreakdown.roleRelevance}
-          maxValue={30}
-          description="Recruiter-visible signals: role terms, title clarity, skills coverage (30 pts max)"
-        />
-        <ScoreBar
-          label="Clarity & Skimmability"
-          value={safeBreakdown.claritySkimmability}
-          maxValue={30}
-          description="Structure, conciseness, and frontloading (30 pts max)"
-        />
-        <ScoreBar
-          label="Business Impact"
-          value={safeBreakdown.businessImpact}
-          maxValue={25}
-          description="Quantified outcomes and achievement framing (25 pts max)"
-        />
-        <ScoreBar
-          label="Presentation Quality"
-          value={safeBreakdown.presentationQuality}
-          maxValue={15}
-          description="Natural keyword use, title bridging, and professional format (15 pts max)"
-        />
-      </div>
     </div>
   );
 }

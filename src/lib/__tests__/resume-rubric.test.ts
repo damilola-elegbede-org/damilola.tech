@@ -106,7 +106,7 @@ describe('ceiling is arithmetic, not generated', () => {
   const dims = (scores: number[]): DimensionResult[] =>
     RUBRIC_DIMENSIONS.map((d, i) => ({
       dimension: d.key, score: scores[i], band: 'partial' as Band,
-      resumeQuote: 'x', jdQuote: null, evidenceRejected: false, optionOrder: [],
+      resumeQuote: 'x', jdQuote: null, evidenceRejected: false, optionOrder: [], ceilingScore: 4,
     }));
 
   it('lifts addressable dimensions to full marks and leaves structural ones alone', () => {
@@ -121,6 +121,14 @@ describe('ceiling is arithmetic, not generated', () => {
       const r = assembleRubric(d);
       expect(r.ceiling).toBeGreaterThanOrEqual(r.total);
     }
+  });
+
+  it('does not price fabrication into an addressable requirement', () => {
+    const d = dims([0, 2, 2, 1, 1]);
+    // The requirement is not evidenced anywhere in the corpus. It is
+    // addressable only when a truthful corpus citation supports a better band.
+    for (const dimension of d) dimension.ceilingScore = dimension.score;
+    expect(ceilingFor(d)).toBe(6);
   });
 
   it('is stable across repeated calls — the defect that motivated this ticket', () => {

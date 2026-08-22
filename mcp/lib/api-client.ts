@@ -94,12 +94,21 @@ interface ScoreJobResponse {
     remotePosture: CompanyRemotePosture;
     experienceRaw: number | null;
   };
-  currentScore: ReadinessCurrentScore;
-  maxPossibleScore: number;
-  gapAnalysis: string;
+  // ENG-1996: the readiness breakdown is retired. ATS answers "what does the
+  // resume say today" and ATS (Max) "what could it truthfully say"; neither
+  // carries a threshold. Only fitScore gates surfacing.
+  atsScore?: {
+    current: number;
+    max: number;
+    reachesTarget90: boolean;
+    gapLine: string;
+  };
+  // Emitted only on the knockout path now — a gated role costs no model calls,
+  // so there is no analysis to report for a scored one.
+  gapAnalysis?: string;
   // A knockout is a role-fit decision; currentScore remains the independently
   // computed readiness score for the same JD/resume pair.
-  recommendation: 'full_generation_recommended' | 'marginal_improvement' | 'strong_fit' | 'knocked_out';
+  recommendation?: 'knocked_out';
   knockout?: JobKnockoutInfo;
   resumeGap: { achievable: number | null; closeable: number | null; structural: number | null };
   // Optional: knockout responses omit these (route returns them only on the normal path).

@@ -7,15 +7,9 @@ import {
   getClientIp,
   RATE_LIMIT_CONFIGS,
 } from '@/lib/rate-limit';
-import { sanitizeScoreValue } from '@/lib/score-utils';
 import { JobDescriptionInputError, resolveJobDescriptionInput } from '@/lib/job-description-input';
 import {
-  scoringClient,
-  buildScorePayload,
-  buildScoringInput,
-  buildGapAnalysisPrompt,
-  extractTextContent,
-  parseJsonResponse,
+  scoreAts,
 } from '@/lib/score-core';
 
 export const runtime = 'nodejs';
@@ -57,57 +51,19 @@ export async function POST(req: Request) {
       'Mozilla/5.0 (compatible; ResumeScoreBot/1.0)'
     );
 
-    const { readinessScore } = buildScoringInput(resolvedInput.text);
-    const currentScore = buildScorePayload(readinessScore);
-
-    const message = await scoringClient.messages.create({
-      model: 'claude-opus-4-6',
-      max_tokens: 1200,
-      temperature: 0,
-      system: [
-        {
-          type: 'text',
-          text: 'You are a resume readiness analyst. Be concise and accurate.',
-          cache_control: { type: 'ephemeral', ttl: '1h' },
-        },
-      ],
-      messages: [
-        {
-          role: 'user',
-          content: `${buildGapAnalysisPrompt(currentScore)}\n\n<job_description>${xmlEscape(resolvedInput.text)}</job_description>`,
-        },
-      ],
-    });
-
-    const responseText = extractTextContent(message.content as Array<{ type: string; text?: string }>);
-    const parsed = parseJsonResponse(responseText);
-
-    const gapAnalysis = typeof parsed.gapAnalysis === 'string' ? parsed.gapAnalysis : '';
-    const parsedMaxScore = sanitizeScoreValue(parsed.maxPossibleScore, 0, 100);
-    const maxPossibleScore = Math.max(currentScore.total, parsedMaxScore);
-    const gap = maxPossibleScore - currentScore.total;
-
-    const recommendation = gap > 15
-      ? 'full_generation_recommended'
-      : gap >= 5
-        ? 'marginal_improvement'
-        : 'strong_fit';
+    const atsScore = await scoreAts(resolvedInput.text);
 
     logApiAccess('api_score_resume', authResult.apiKey, {
       inputType: resolvedInput.inputType,
       extractedUrl: resolvedInput.extractedUrl,
-      currentScore: currentScore.total,
-      maxPossibleScore,
-      recommendation,
+      currentScore: atsScore.current.total,
+      maxPossibleScore: atsScore.max.total,
     }, ip).catch((error) => {
       console.warn('[api/v1/score-resume] Failed to log audit:', error);
     });
 
     return apiSuccess({
-      currentScore,
-      maxPossibleScore,
-      gapAnalysis,
-      recommendation,
+      atsScore,
     });
   } catch (error) {
     if (error instanceof JobDescriptionInputError) {

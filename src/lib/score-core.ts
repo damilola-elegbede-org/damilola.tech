@@ -6,14 +6,14 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import {
-  calculateReadinessScore,
-  resumeDataToText,
-  type ReadinessScore,
-  type ResumeData as ScorerResumeData,
-} from '@/lib/readiness-scorer';
 import { resumeData } from '@/lib/resume-data';
-import { sanitizeBreakdown } from '@/lib/score-utils';
+import { resumeDataToText, type ScorerResumeData } from '@/lib/resume-text';
+import {
+  RUBRIC_DIMENSIONS, assembleRubric, buildDimensionCall, scoreDimension,
+  type DimensionResult, type RawDimensionReply,
+} from '@/lib/resume-rubric';
+import { anchor } from '@/lib/resume-anchoring';
+import { attributeCitation, loadCareerCorpus, RESUME_SOURCE_LABEL, type CareerCorpus } from '@/lib/career-corpus';
 
 /**
  * Shared Anthropic client configured with the extended cache TTL beta header.
@@ -26,43 +26,8 @@ export const scoringClient = new Anthropic({
 });
 
 /**
- * Formats a ReadinessScore into the payload shape returned in API responses
- * and consumed by buildGapAnalysisPrompt.
+ * Shared ATS scoring primitives returned by the score and generator APIs.
  */
-export function buildScorePayload(score: ReadinessScore) {
-  return {
-    total: score.total,
-    breakdown: sanitizeBreakdown(score.breakdown),
-    matchedKeywords: score.details.matchedKeywords,
-    missingKeywords: score.details.missingKeywords,
-    matchRate: score.details.matchRate,
-    keywordDensity: score.details.keywordDensity,
-  };
-}
-
-/**
- * Builds the gap-analysis prompt sent to Claude.
- */
-export function buildGapAnalysisPrompt(currentScore: ReturnType<typeof buildScorePayload>): string {
-  return [
-    'Analyze this resume readiness score against the job description and return JSON only.',
-    '',
-    `Current score: ${currentScore.total}/100`,
-    `Breakdown: ${JSON.stringify(currentScore.breakdown)}`,
-    `Matched keywords: ${currentScore.matchedKeywords.join(', ') || 'none'}`,
-    `Missing keywords: ${currentScore.missingKeywords.join(', ') || 'none'}`,
-    `Match rate: ${currentScore.matchRate}%`,
-    `Keyword density: ${currentScore.keywordDensity}%`,
-    '',
-    'Return exactly this JSON schema:',
-    '{"gapAnalysis":"2-3 short paragraphs","maxPossibleScore":0-100,"recommendation":"full_generation_recommended|marginal_improvement|strong_fit"}',
-    '',
-    'Recommendation logic:',
-    '- full_generation_recommended when gap > 15 points',
-    '- marginal_improvement when gap is 5-15 points',
-    '- strong_fit when gap < 5 points',
-  ].join('\n');
-}
 
 /**
  * Extracts and concatenates all text blocks from an Anthropic message content array.
@@ -153,6 +118,8 @@ export function deriveYearsExperience(
  */
 export function buildScorerResumeData(): ScorerResumeData {
   return {
+    name: resumeData.name,
+    summary: resumeData.brandingStatement,
     title: resumeData.title,
     tagline: resumeData.tagline,
     yearsExperience: deriveYearsExperience(resumeData.experiences),
@@ -179,11 +146,7 @@ export function buildScorerResumeData(): ScorerResumeData {
 
 /** The plain-text resume both scoring paths grade against. */
 export function buildResumeText(): string {
-  return resumeDataToText({
-    ...buildScorerResumeData(),
-    name: resumeData.name,
-    summary: resumeData.brandingStatement,
-  });
+  return resumeDataToText(buildScorerResumeData());
 }
 
 /**
@@ -191,15 +154,53 @@ export function buildResumeText(): string {
  * Reads from the canonical resumeData singleton, matching the behaviour of
  * the original score-resume route.
  */
-export function buildScoringInput(jobDescription: string) {
-  const scorerResumeData = buildScorerResumeData();
-  const resumeText = buildResumeText();
-
-  const readinessScore = calculateReadinessScore({
-    jobDescription,
-    resumeText,
-    resumeData: scorerResumeData,
+async function callDimension(call: ReturnType<typeof buildDimensionCall>, source: string, jobDescription: string) {
+  const message = await scoringClient.messages.create({
+    model: 'claude-opus-4-6', max_tokens: 300, temperature: 0,
+    messages: [{ role: 'user', content: call.prompt }],
   });
+  return scoreDimension(call, parseJsonResponse(extractTextContent(message.content as Array<{ type: string; text?: string }>)) as RawDimensionReply, source, jobDescription);
+}
 
-  return { readinessScore };
+export interface AtsScore {
+  current: { total: number; breakdown: DimensionResult[] };
+  max: { total: number; breakdown: DimensionResult[]; reachesTarget90: boolean };
+  gap: number;
+  gapLine: string;
+}
+
+/** Scores exactly the five locked dimensions; current reads only the submitted resume. */
+export async function scoreAts(jobDescription: string, corpus?: CareerCorpus): Promise<AtsScore> {
+  const resumeText = buildResumeText();
+  const careerCorpus = corpus ?? await loadCareerCorpus(resumeText);
+  const seed = `${jobDescription.length}:${resumeText.length}`;
+  const calls = RUBRIC_DIMENSIONS.map((d) => buildDimensionCall(d, resumeText, jobDescription, seed));
+  const dimensions = await Promise.all(calls.map((call) => callDimension(call, resumeText, jobDescription)));
+  const addressable = RUBRIC_DIMENSIONS.filter((d) => d.ceiling === 'addressable');
+  // The ceiling answers "what could the résumé truthfully say if rewritten
+  // using career-corpus evidence" — a citation landing only in the résumé
+  // itself proves nothing beyond what `current` already scored, so it must
+  // not be accepted as ceiling support. The résumé stays in the model's
+  // context (it's still part of `careerCorpus.document`); only attribution
+  // excludes it.
+  const nonResumeSources = careerCorpus.sources.filter((s) => s.file !== RESUME_SOURCE_LABEL);
+  const corpusScores = await Promise.all(addressable.map(async (dimension) => {
+    const call = buildDimensionCall(dimension, careerCorpus.document, jobDescription, `${seed}:corpus`);
+    const scored = await callDimension(call, careerCorpus.document, jobDescription);
+    return [dimension.key, attributeCitation(scored.resumeQuote, nonResumeSources) ? scored.score : 0] as const;
+  }));
+  const support = new Map(corpusScores);
+  const bounded = dimensions.map((d) => ({ ...d, ceilingScore: support.get(d.dimension) ?? d.score }));
+  const rubric = assembleRubric(bounded);
+  // Keep the anchoring module in the real scoring path. It intentionally emits no fourth score.
+  anchor(rubric, []);
+  const current = rubric.total * 5;
+  const maximum = rubric.ceiling * 5;
+  const gap = maximum - current;
+  return {
+    current: { total: current, breakdown: bounded },
+    max: { total: maximum, breakdown: bounded, reachesTarget90: maximum >= 90 },
+    gap,
+    gapLine: gap === 0 ? 'Already maximal: the résumé states all truthfully supportable evidence.' : maximum >= 90 ? 'Tailoring pays: true career evidence can reach the ATS (Max) target of 90.' : 'Structural mismatch: true career evidence cannot reach the ATS (Max) target of 90.',
+  };
 }
