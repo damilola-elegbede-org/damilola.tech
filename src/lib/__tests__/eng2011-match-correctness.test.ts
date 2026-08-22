@@ -95,3 +95,26 @@ describe('B — a keyword never matches inside an unrelated longer word', () => 
       .toContain('leadership');
   });
 });
+
+describe('separator normalisation is symmetric — extraction AND matching', () => {
+  // Clara predicted this: fixing extraction alone OVER-corrected. Extraction
+  // folds "CI/CD" to "ci cd", then matching compared it against a raw résumé
+  // that writes "CI/CD Pipeline Design" — so the very terms an engineering JD
+  // asks for stopped matching. On a compound-heavy JD like Google's that is a
+  // silent score depression, and a false negative D never sees.
+  const RESUME =
+    'CI/CD Pipeline Design, GitHub Actions, Jenkins, cross-functional leadership, multi-site teams';
+
+  it.each([
+    ['ci cd', 'CI/CD in the résumé'],
+    ['cross functional', 'cross-functional in the résumé'],
+    ['ci/cd', 'slash form on both sides'],
+  ])('matches %s (%s)', (kw) => {
+    expect(matchKeywords([kw], RESUME).matched).toContain(kw);
+  });
+
+  it('does not invent a match the résumé has no form of', () => {
+    expect(matchKeywords(['multi quarter'], RESUME).matched).toEqual([]);
+    expect(matchKeywords(['open source'], RESUME).matched).toEqual([]);
+  });
+});

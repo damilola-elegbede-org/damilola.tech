@@ -1004,7 +1004,15 @@ export function matchKeywords(
     // is its own boundary.
     let exactMatch = false;
     if (isPhrase) {
-      exactMatch = resumeLower.includes(keywordLower);
+      // ENG-2011: normalise separators on BOTH sides. Extraction folds "CI/CD"
+      // to "ci cd" and "cross-functional" to "cross functional"; matching
+      // against a raw résumé then missed the very terms the JD asked for,
+      // because the résumé writes them "CI/CD Pipeline Design". Fixing
+      // extraction alone OVER-corrected — it depressed the score on exactly the
+      // compound-heavy engineering JDs this exists for.
+      exactMatch =
+        resumeLower.includes(keywordLower) ||
+        normalizeSeparators(resumeLower).includes(normalizeSeparators(keywordLower));
     } else {
       const escaped = keywordLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       exactMatch =
@@ -1055,7 +1063,9 @@ export function matchKeywords(
       // — the identical defect, one rung down and just as invisible.
       let synMatch = false;
       if (synLower.includes(' ')) {
-        synMatch = resumeLower.includes(synLower);
+        synMatch =
+          resumeLower.includes(synLower) ||
+          normalizeSeparators(resumeLower).includes(normalizeSeparators(synLower));
       } else {
         const escaped = synLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         synMatch = new RegExp(`\\b${escaped}\\b`).test(resumeLower);

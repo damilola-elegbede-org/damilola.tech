@@ -428,19 +428,40 @@ describe('POST /api/v1/score-job', () => {
       );
     });
 
-    it('surfaces an unverified ATS ceiling distinctly from a model outage', async () => {
-      // The endpoint used to fall through to "AI service error", so a caller
-      // could not separate a deterministic verification failure from an
-      // upstream outage. ENG-2010 AC3.
+    it('invalidates the ATS block, not the response, when the headroom assertion fires', async () => {
+      // The assertion is correct and must stay loud, but its blast radius was
+      // the whole request — so a known-pending ATS defect took Fit down with
+      // it. Fit is independent, working, and the score that decides whether a
+      // role reaches D at all. And the assertion fires only when the model
+      // happens to return gap 0, so whether a role scored was a coin flip.
       mockScoreAts.mockRejectedValue(new FakeHeadroomUnverified(['leadership_evidence']));
 
       const { POST } = await import('@/app/api/v1/score-job/route');
       const response = await POST(makeRequest(validBody));
-      const body = await response.json() as { error?: { message?: string } };
+      const data = await response.json() as {
+        data: {
+          fitScore: { total: number };
+          atsScore: unknown;
+          atsError: { code: string; message: string };
+          resumeGap: { achievable: number | null };
+        };
+      };
 
-      expect(response.status).toBe(500);
-      expect(JSON.stringify(body)).toMatch(/unattributable|zero headroom/i);
-      expect(JSON.stringify(body)).not.toMatch(/AI service error/);
+      expect(response.status).toBe(200);
+      // Fit survives, readable.
+      expect(data.data.fitScore.total).toBe(83);
+      // ATS is invalidated, and the failure stays loud rather than silent.
+      expect(data.data.atsScore).toBeNull();
+      expect(data.data.atsError.code).toBe('HEADROOM_INVARIANT');
+      expect(data.data.atsError.message).toMatch(/zero headroom/i);
+      expect(data.data.resumeGap.achievable).toBeNull();
+    });
+
+    it('still fails the request on an ATS error that is NOT the headroom assertion', async () => {
+      // Scoping the invariant must not swallow a genuine outage.
+      mockScoreAts.mockRejectedValue(new Error('Anthropic down'));
+      const { POST } = await import('@/app/api/v1/score-job/route');
+      expect((await POST(makeRequest(validBody))).status).toBe(500);
     });
 
     it('fails loudly when the career corpus cannot be loaded, rather than scoring the resume — A3', async () => {
