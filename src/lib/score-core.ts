@@ -13,7 +13,7 @@ import {
   type DimensionResult, type RawDimensionReply,
 } from '@/lib/resume-rubric';
 import { anchor } from '@/lib/resume-anchoring';
-import { attributeCitation, loadCareerCorpus, RESUME_SOURCE_LABEL, type CareerCorpus } from '@/lib/career-corpus';
+import { attributeCitation, buildCorpusDocument, loadCareerCorpus, RESUME_SOURCE_LABEL, type CareerCorpus } from '@/lib/career-corpus';
 
 /**
  * Shared Anthropic client configured with the extended cache TTL beta header.
@@ -45,6 +45,46 @@ export function extractTextContent(content: Array<{ type: string; text?: string 
  * Parses a JSON response that may be wrapped in a markdown code fence or
  * surrounded by prose. Throws if no valid JSON object can be extracted.
  */
+/**
+ * Extract the first COMPLETE JSON object, scanning braces.
+ *
+ * ENG-2010: the old fallback sliced `indexOf('{')` to `lastIndexOf('}')`. Models
+ * routinely emit a valid object and then keep talking — and any `{` or `}` in
+ * that trailing prose made the slice span junk, so the parse threw
+ * `Invalid JSON response`. Longer, denser job descriptions draw more commentary,
+ * which is why this looked like a JD-length or concurrency problem.
+ *
+ * The cost was not a visible error. `fit-experience` catches a failed dimension
+ * call and scores it **absent** — correct for a transport blip, ruinous here:
+ * the NVIDIA JD returned Fit experience 10/40 because `domain_evidence` had
+ * silently parsed-failed, not because D lacks the domain.
+ *
+ * String-aware so a brace inside a quoted value cannot end the object early.
+ */
+function firstJsonObject(text: string): string | null {
+  const start = text.indexOf('{');
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (c === '\\') escaped = true;
+      else if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') inString = true;
+    else if (c === '{') depth++;
+    else if (c === '}') {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
 export function parseJsonResponse(text: string): Record<string, unknown> {
   const parseObject = (value: string): Record<string, unknown> => {
     const parsed: unknown = JSON.parse(value);
@@ -62,14 +102,12 @@ export function parseJsonResponse(text: string): Record<string, unknown> {
   try {
     return parseObject(withoutFence);
   } catch {
-    const start = withoutFence.indexOf('{');
-    const end = withoutFence.lastIndexOf('}');
-    if (start >= 0 && end > start) {
-      return parseObject(withoutFence.slice(start, end + 1));
-    }
+    const candidate = firstJsonObject(withoutFence);
+    if (candidate) return parseObject(candidate);
     throw new Error('Invalid JSON response');
   }
 }
+
 
 /**
  * Derives total years of experience from the earliest experience startDate to
@@ -154,12 +192,35 @@ export function buildResumeText(): string {
  * Reads from the canonical resumeData singleton, matching the behaviour of
  * the original score-resume route.
  */
+/**
+ * 300 tokens truncated the reply mid-string on a long job description, leaving
+ * JSON with no closing brace — which surfaced as `Invalid JSON response` and a
+ * 500 for the whole role. The reply must carry a VERBATIM corpus quote and a
+ * verbatim JD quote, and both scale with the posting; the Google Cloud JD
+ * (6,399 chars) failed 3/3 while the shorter NVIDIA one succeeded, which is
+ * what made this look like a concurrency or rate limit (ENG-2010 AC7).
+ */
+const DIMENSION_MAX_TOKENS = 1024;
+
 async function callDimension(call: ReturnType<typeof buildDimensionCall>, source: string, jobDescription: string) {
-  const message = await scoringClient.messages.create({
-    model: 'claude-opus-4-6', max_tokens: 300, temperature: 0,
-    messages: [{ role: 'user', content: call.prompt }],
-  });
-  return scoreDimension(call, parseJsonResponse(extractTextContent(message.content as Array<{ type: string; text?: string }>)) as RawDimensionReply, source, jobDescription);
+  let reply: RawDimensionReply = {};
+  try {
+    const message = await scoringClient.messages.create({
+      model: 'claude-opus-4-6', max_tokens: DIMENSION_MAX_TOKENS, temperature: 0,
+      messages: [{ role: 'user', content: call.prompt }],
+    });
+    reply = parseJsonResponse(
+      extractTextContent(message.content as Array<{ type: string; text?: string }>)
+    ) as RawDimensionReply;
+  } catch (error) {
+    // One unparseable dimension must not cost the whole role — that is the 500
+    // D hit. But it must NOT silently read as "no evidence" either: that is
+    // exactly how Fit reported 10/40 on a JD squarely in his lane. Scored
+    // absent AND marked, so the caller can tell the two apart.
+    console.warn(`[scoreAts] dimension "${call.dimension.key}" failed, scoring absent:`, error);
+    return { ...scoreDimension(call, {}, source, jobDescription), callFailed: true };
+  }
+  return { ...scoreDimension(call, reply, source, jobDescription), callFailed: false };
 }
 
 /**
@@ -258,9 +319,23 @@ export async function scoreAts(jobDescription: string, corpus?: CareerCorpus): P
   // context (it's still part of `careerCorpus.document`); only attribution
   // excludes it.
   const nonResumeSources = careerCorpus.sources.filter((s) => s.file !== RESUME_SOURCE_LABEL);
+  // ENG-2010: the ceiling pass is given a document of NON-RÉSUMÉ sources only.
+  //
+  // It used to grade the full `careerCorpus.document`, which puts the résumé
+  // first, and then attribution excluded the résumé. So the model read
+  // top-down, quoted the most salient line — usually the résumé — and the
+  // citation correctly attributed to nothing. Ceiling 0. That read as "the
+  // corpus holds nothing more" when the truth was "we asked the wrong question":
+  // the pool was never empty, the model was pointed at the part of it that
+  // cannot, by definition, prove headroom.
+  //
+  // Narrowing the document also makes `scoreDimension`'s own citation check
+  // validate against the same text attribution will search, so the two can no
+  // longer disagree.
+  const ceilingDocument = buildCorpusDocument(nonResumeSources);
   const corpusScores = await mapWithLimit(addressable, ATS_CALL_CONCURRENCY, async (dimension) => {
-    const call = buildDimensionCall(dimension, careerCorpus.document, jobDescription, `${seed}:corpus`);
-    const scored = await callDimension(call, careerCorpus.document, jobDescription);
+    const call = buildDimensionCall(dimension, ceilingDocument, jobDescription, `${seed}:corpus`);
+    const scored = await callDimension(call, ceilingDocument, jobDescription);
     const sourceFile = attributeCitation(scored.resumeQuote, nonResumeSources);
     // AC3: a failed attribution and a genuine no-headroom verdict used to emit
     // byte-identical output, so a broken matcher read as a confident "already

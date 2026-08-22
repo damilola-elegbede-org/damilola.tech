@@ -51,7 +51,9 @@ import { attributeCitation, type CareerCorpus } from '@/lib/career-corpus';
 
 /** Same model the gap-analysis call already uses on this route. */
 export const FIT_EXPERIENCE_MODEL = 'claude-opus-4-6';
-const MAX_TOKENS = 400;
+// Same truncation trap as score-core's dimension calls: the reply carries a
+// verbatim corpus quote plus a JD quote, both of which scale with the posting.
+const MAX_TOKENS = 1024;
 
 const SYSTEM_PROMPT =
   'You grade one rubric dimension at a time against verbatim evidence drawn from a career-data corpus. Never infer a capability the corpus does not state. Return JSON only.';
